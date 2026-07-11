@@ -409,6 +409,151 @@ export default function Dashboard() {
     });
   }, [timeFrame, dateRange, invoices]);
 
+  // Reconciled Department Collections
+  const computedDepartmentCollections = useMemo(() => {
+    const now = new Date();
+    const filteredApts = appointments.filter((apt: any) => {
+      const dateVal = apt.appointment_date || apt.appointmentDate || apt.created_at;
+      if (!dateVal) return false;
+      const aptLocalDateStr = getLocalDateStrFromVal(dateVal);
+      if (!aptLocalDateStr) return false;
+      
+      const [y, m] = aptLocalDateStr.split('-').map(Number);
+      
+      if (timeFrame === 'today') {
+        const todayStr = getLocalDateStrFromVal(new Date());
+        return aptLocalDateStr === todayStr;
+      }
+      
+      if (timeFrame === 'month') {
+        return m === (now.getMonth() + 1) && y === now.getFullYear();
+      }
+      
+      if (timeFrame === 'quarter') {
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        const aptQuarter = Math.floor((m - 1) / 3);
+        return currentQuarter === aptQuarter && y === now.getFullYear();
+      }
+      
+      if (timeFrame === 'year') {
+        return y === now.getFullYear();
+      }
+
+      if (timeFrame === 'custom' && dateRange.start && dateRange.end) {
+        const start = getLocalDateStrFromVal(dateRange.start);
+        const end = getLocalDateStrFromVal(dateRange.end);
+        return aptLocalDateStr >= start && aptLocalDateStr <= end;
+      }
+      
+      return true; // default/all
+    });
+
+    let opdCollected = 0;
+    let ipdCollected = 0;
+    let pharmacyCollected = 0;
+    let labCollected = 0;
+    let radioCollected = 0;
+    let otCollected = 0;
+
+    filteredBilling.forEach(b => {
+      const typeUpper = (b.type || b.category || '').toUpperCase();
+      const items = b.invoice_items || b.items || [];
+      const billPaid = Number(b.paid_amount ?? b.paidAmount ?? 0);
+      const billTotal = Number(b.total_amount ?? b.totalAmount ?? 0) || 1;
+      const paymentRatio = billPaid / billTotal;
+
+      if (items.length > 0) {
+        items.forEach((item: any) => {
+          const cat = (item.category || '').toUpperCase();
+          const price = Number(item.total_price ?? item.amount ?? 0) * paymentRatio;
+
+          if (cat === 'PHARMACY') {
+            pharmacyCollected += price;
+          } else if (['PATHOLOGY', 'LAB', 'PATH'].includes(cat)) {
+            labCollected += price;
+          } else if (['RADIOLOGY', 'RADIO'].includes(cat)) {
+            radioCollected += price;
+          } else if (['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat)) {
+            opdCollected += price;
+          } else if (['IPD', 'ROOM', 'WARD', 'NURSING'].includes(cat)) {
+            ipdCollected += price;
+          } else if (['OT', 'SURGERY', 'ANESTHESIA'].includes(cat)) {
+            otCollected += price;
+          } else {
+            if (typeUpper === 'OPD') opdCollected += price;
+            else if (typeUpper === 'IPD') ipdCollected += price;
+            else if (typeUpper === 'PHARMACY') pharmacyCollected += price;
+            else if (typeUpper === 'LAB' || typeUpper === 'DIAGNOSTICS' || typeUpper === 'PATHOLOGY') labCollected += price;
+            else if (typeUpper === 'RADIOLOGY' || typeUpper === 'RADIO' || typeUpper === 'LAB/RAD') radioCollected += price;
+            else if (typeUpper === 'OT') otCollected += price;
+            else opdCollected += price;
+          }
+        });
+      } else {
+        if (typeUpper === 'OPD') opdCollected += billPaid;
+        else if (typeUpper === 'IPD') ipdCollected += billPaid;
+        else if (typeUpper === 'PHARMACY') pharmacyCollected += billPaid;
+        else if (typeUpper === 'LAB' || typeUpper === 'DIAGNOSTICS' || typeUpper === 'PATHOLOGY') labCollected += billPaid;
+        else if (typeUpper === 'RADIOLOGY' || typeUpper === 'RADIO' || typeUpper === 'LAB/RAD') radioCollected += billPaid;
+        else if (typeUpper === 'OT') otCollected += billPaid;
+        else opdCollected += billPaid;
+      }
+    });
+
+    const opdApts = filteredApts.filter((apt: any) => (!apt.type || apt.type === 'OPD') && (apt.payment_status === 'Paid' || apt.paymentStatus === 'Paid'));
+
+    const opdConsultationEarnings = opdApts.reduce((sum, apt) => {
+      const docName = apt.doctor || apt.doctorName || 'General Consultation';
+      let feeVal = Number(apt.fee);
+      if (!feeVal || isNaN(feeVal)) {
+        const foundDoc = users.find((u: any) => u.name === docName);
+        feeVal = foundDoc?.consultationFee ? Number(foundDoc.consultationFee) : 500;
+      }
+      const discountVal = Number(apt.discount_amount || apt.discountAmount || 0);
+      const finalFee = Math.max(0, feeVal - discountVal);
+      return sum + finalFee;
+    }, 0);
+
+    let billingOpdVal = 0;
+    filteredBilling.forEach(b => {
+      const typeUpper = (b.type || b.category || '').toUpperCase();
+      const items = b.invoice_items || b.items || [];
+      const billPaid = Number(b.paid_amount ?? b.paidAmount ?? 0);
+      const billTotal = Number(b.total_amount ?? b.totalAmount ?? 0) || 1;
+      const paymentRatio = billPaid / billTotal;
+
+      const hasOpdItem = items.some((i: any) => {
+        const cat = (i.category || '').toUpperCase();
+        return ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat) || (i.description || '').toUpperCase().includes('OPD');
+      });
+
+      if (hasOpdItem || typeUpper === 'OPD' || typeUpper === 'CONSULTATION') {
+        const opdItemsValue = items.filter((i: any) => {
+          const cat = (i.category || '').toUpperCase();
+          return ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat) || (i.description || '').toUpperCase().includes('OPD');
+        }).reduce((sum, item) => sum + Number(item.total_price ?? item.amount ?? 0), 0);
+
+        if (opdItemsValue > 0) {
+          billingOpdVal += opdItemsValue * paymentRatio;
+        } else {
+          billingOpdVal += billPaid;
+        }
+      }
+    });
+
+    const addtlOpd = Math.max(0, opdConsultationEarnings - billingOpdVal);
+    opdCollected += addtlOpd;
+
+    return {
+      OPD: opdCollected,
+      IPD: ipdCollected,
+      Pharmacy: pharmacyCollected,
+      Lab: labCollected,
+      Radio: radioCollected,
+      OT: otCollected
+    };
+  }, [filteredBilling, appointments, users, timeFrame, dateRange]);
+
   // Filter Logic for Expenses
   const filteredExpensesList = useMemo(() => {
     const now = new Date(); 
@@ -504,7 +649,7 @@ export default function Dashboard() {
     }, 0);
 
     // Dynamic OPD / IPD count and collection calculation from billing
-    let opdCollectionAmount = 0;
+    let loopOpdCollectionAmount = 0;
     let opdTransCount = 0;
     let ipdCount = 0;
 
@@ -542,23 +687,21 @@ export default function Dashboard() {
         }).reduce((sum, item) => sum + Number(item.total_price ?? item.amount ?? 0), 0);
 
         if (opdItemsValue > 0) {
-          opdCollectionAmount += opdItemsValue * paymentRatio;
+          loopOpdCollectionAmount += opdItemsValue * paymentRatio;
         } else {
-          opdCollectionAmount += billPaid;
+          loopOpdCollectionAmount += billPaid;
         }
       }
     });
 
-    // Ensure OPD consultation earnings from the OPD Summary (Rs 1,110 / 1,100) are fully accounted for, 
-    // removing any discrepancy with Dashboard Collections and Total Revenue.
-    const baseTotalRevenue = filteredBilling.reduce((acc, b) => acc + (Number(b.paid_amount ?? b.paidAmount ?? 0)), 0);
-    const billingOpdCollectionAmount = opdCollectionAmount;
-
-    // Use consultation earnings from OPD summary if they are higher, to guarantee zero mismatch!
-    const additionalOPDConsultationRevenue = Math.max(0, opdConsultationEarnings - billingOpdCollectionAmount);
-    
-    opdCollectionAmount += additionalOPDConsultationRevenue;
-    const totalRevenue = baseTotalRevenue + additionalOPDConsultationRevenue;
+    // Reconcile with Department Collections for zero mismatch
+    const opdCollectionAmount = computedDepartmentCollections.OPD;
+    const totalRevenue = computedDepartmentCollections.OPD + 
+                         computedDepartmentCollections.IPD + 
+                         computedDepartmentCollections.Pharmacy + 
+                         computedDepartmentCollections.Lab + 
+                         computedDepartmentCollections.Radio + 
+                         computedDepartmentCollections.OT;
     
     if (opdTransCount === 0 && appointments.length > 0) {
       opdTransCount = appointments.length;
@@ -733,7 +876,7 @@ export default function Dashboard() {
     }
 
     return baseStats;
-  }, [filteredBilling, patients, filteredExpensesList, appointments]);
+  }, [filteredBilling, patients, filteredExpensesList, appointments, computedDepartmentCollections]);
 
   // Derive Revenue breakdown for chart
   const revenueBreakdown = useMemo(() => {
@@ -769,142 +912,7 @@ export default function Dashboard() {
   }, [filteredBilling]);
 
   // Derive Department collections for operational report
-  const departmentCollections = useMemo(() => {
-    let opdCollected = 0;
-    let ipdCollected = 0;
-    let pharmacyCollected = 0;
-    let labCollected = 0;
-    let radioCollected = 0;
-    let otCollected = 0;
-
-    filteredBilling.forEach(b => {
-      const typeUpper = (b.type || b.category || '').toUpperCase();
-      const items = b.invoice_items || b.items || [];
-      const billPaid = Number(b.paid_amount ?? b.paidAmount ?? 0);
-      const billTotal = Number(b.total_amount ?? b.totalAmount ?? 0) || 1;
-      const paymentRatio = billPaid / billTotal;
-
-      if (items.length > 0) {
-        items.forEach((item: any) => {
-          const cat = (item.category || '').toUpperCase();
-          const price = Number(item.total_price ?? item.amount ?? 0) * paymentRatio;
-
-          if (cat === 'PHARMACY') {
-            pharmacyCollected += price;
-          } else if (['PATHOLOGY', 'LAB', 'PATH'].includes(cat)) {
-            labCollected += price;
-          } else if (['RADIOLOGY', 'RADIO'].includes(cat)) {
-            radioCollected += price;
-          } else if (['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat)) {
-            opdCollected += price;
-          } else if (['IPD', 'ROOM', 'WARD', 'NURSING'].includes(cat)) {
-            ipdCollected += price;
-          } else if (['OT', 'SURGERY', 'ANESTHESIA'].includes(cat)) {
-            otCollected += price;
-          } else {
-            if (typeUpper === 'OPD') opdCollected += price;
-            else if (typeUpper === 'IPD') ipdCollected += price;
-            else if (typeUpper === 'PHARMACY') pharmacyCollected += price;
-            else if (typeUpper === 'LAB' || typeUpper === 'DIAGNOSTICS' || typeUpper === 'PATHOLOGY') labCollected += price;
-            else if (typeUpper === 'RADIOLOGY' || typeUpper === 'RADIO' || typeUpper === 'LAB/RAD') radioCollected += price;
-            else if (typeUpper === 'OT') otCollected += price;
-            else opdCollected += price;
-          }
-        });
-      } else {
-        if (typeUpper === 'OPD') opdCollected += billPaid;
-        else if (typeUpper === 'IPD') ipdCollected += billPaid;
-        else if (typeUpper === 'PHARMACY') pharmacyCollected += billPaid;
-        else if (typeUpper === 'LAB' || typeUpper === 'DIAGNOSTICS' || typeUpper === 'PATHOLOGY') labCollected += billPaid;
-        else if (typeUpper === 'RADIOLOGY' || typeUpper === 'RADIO' || typeUpper === 'LAB/RAD') radioCollected += billPaid;
-        else if (typeUpper === 'OT') otCollected += billPaid;
-        else opdCollected += billPaid;
-      }
-    });
-
-    const opdApts = appointments.filter((apt: any) => {
-      const dateVal = apt.appointment_date || apt.appointmentDate || apt.created_at;
-      if (!dateVal) return false;
-      const aptDate = new Date(dateVal);
-      if (isNaN(aptDate.getTime())) return false;
-      
-      const now = new Date();
-      if (timeFrame === 'today') {
-        const today = new Date();
-        return aptDate.getDate() === today.getDate() && 
-               aptDate.getMonth() === today.getMonth() && 
-               aptDate.getFullYear() === today.getFullYear();
-      }
-      if (timeFrame === 'month') {
-        return aptDate.getMonth() === now.getMonth() && aptDate.getFullYear() === now.getFullYear();
-      }
-      if (timeFrame === 'quarter') {
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        const aptQuarter = Math.floor(aptDate.getMonth() / 3);
-        return currentQuarter === aptQuarter && aptDate.getFullYear() === now.getFullYear();
-      }
-      if (timeFrame === 'year') {
-        return aptDate.getFullYear() === now.getFullYear();
-      }
-      if (timeFrame === 'custom' && dateRange.start && dateRange.end) {
-        const start = new Date(dateRange.start);
-        const end = new Date(dateRange.end);
-        return aptDate >= start && aptDate <= end;
-      }
-      return true;
-    }).filter((apt: any) => (!apt.type || apt.type === 'OPD') && (apt.payment_status === 'Paid' || apt.paymentStatus === 'Paid'));
-
-    const opdConsultationEarnings = opdApts.reduce((sum, apt) => {
-      const docName = apt.doctor || apt.doctorName || 'General Consultation';
-      let feeVal = Number(apt.fee);
-      if (!feeVal || isNaN(feeVal)) {
-        const foundDoc = users.find((u: any) => u.name === docName);
-        feeVal = foundDoc?.consultationFee ? Number(foundDoc.consultationFee) : 500;
-      }
-      const discountVal = Number(apt.discount_amount || apt.discountAmount || 0);
-      const finalFee = Math.max(0, feeVal - discountVal);
-      return sum + finalFee;
-    }, 0);
-
-    let billingOpdVal = 0;
-    filteredBilling.forEach(b => {
-      const typeUpper = (b.type || b.category || '').toUpperCase();
-      const items = b.invoice_items || b.items || [];
-      const billPaid = Number(b.paid_amount ?? b.paidAmount ?? 0);
-      const billTotal = Number(b.total_amount ?? b.totalAmount ?? 0) || 1;
-      const paymentRatio = billPaid / billTotal;
-
-      const hasOpdItem = items.some((i: any) => {
-        const cat = (i.category || '').toUpperCase();
-        return ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat) || (i.description || '').toUpperCase().includes('OPD');
-      });
-
-      if (hasOpdItem || typeUpper === 'OPD' || typeUpper === 'CONSULTATION') {
-        const opdItemsValue = items.filter((i: any) => {
-          const cat = (i.category || '').toUpperCase();
-          return ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes(cat) || (i.description || '').toUpperCase().includes('OPD');
-        }).reduce((sum, item) => sum + Number(item.total_price ?? item.amount ?? 0), 0);
-
-        if (opdItemsValue > 0) {
-          billingOpdVal += opdItemsValue * paymentRatio;
-        } else {
-          billingOpdVal += billPaid;
-        }
-      }
-    });
-
-    const addtlOpd = Math.max(0, opdConsultationEarnings - billingOpdVal);
-    opdCollected += addtlOpd;
-
-    return {
-      OPD: opdCollected,
-      IPD: ipdCollected,
-      Pharmacy: pharmacyCollected,
-      Lab: labCollected,
-      Radio: radioCollected,
-      OT: otCollected
-    };
-  }, [filteredBilling, appointments, users, timeFrame, dateRange]);
+  const departmentCollections = computedDepartmentCollections;
 
   if (isLoading) {
     return (
