@@ -666,6 +666,55 @@ function cleanInvoiceForPostgres(inv: any) {
   return cleanUuidFields(result);
 }
 
+export function sanitizeInvoiceIpdBilling(mappedInv: any) {
+  if (!mappedInv) return mappedInv;
+  
+  let pName = String(mappedInv.patient_name || mappedInv.patientName || mappedInv.patients?.name || '').toUpperCase();
+  let pMrn = String(mappedInv.patient_mrn || mappedInv.patientMrn || mappedInv.patients?.mrn || '').toUpperCase();
+  
+  if (!pName || !pMrn) {
+    try {
+      const patientsList = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+      const pid = mappedInv.patient_id || mappedInv.patientId;
+      const p = patientsList.find((p_item: any) => p_item.id === pid || p_item.mrn === p_item.id || p_item.mrn === pid);
+      if (p) {
+        if (!pName) pName = String(p.name || '').toUpperCase();
+        if (!pMrn) pMrn = String(p.mrn || '').toUpperCase();
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  const isIpdBilling = pName.includes('GLOBAL HOSPITAL') || pMrn.includes('MRN49650');
+  
+  if (isIpdBilling) {
+    mappedInv.type = 'IPD';
+    mappedInv.invoice_type = 'IPD';
+    
+    const cleanItems = (itemsList: any[]) => {
+      return (itemsList || []).map(item => {
+        if (String(item.category || item.item_type || '').toUpperCase() === 'PHARMACY') {
+          return {
+            ...item,
+            category: 'IPD',
+            item_type: 'IPD'
+          };
+        }
+        return item;
+      });
+    };
+    
+    if (mappedInv.invoice_items) {
+      mappedInv.invoice_items = cleanItems(mappedInv.invoice_items);
+    }
+    if (mappedInv.items) {
+      mappedInv.items = cleanItems(mappedInv.items);
+    }
+  }
+  return mappedInv;
+}
+
 function mapInvoiceFromPostgres(inv: any) {
   if (!inv) return inv;
   
@@ -754,7 +803,7 @@ function mapInvoiceFromPostgres(inv: any) {
       mapped.patients = { name: p.name, mrn: p.mrn, phone: p.phone, email: p.email };
     }
   }
-  return mapped;
+  return sanitizeInvoiceIpdBilling(mapped);
 }
 
 function cleanInvoiceItemForPostgres(item: any) {
@@ -1653,10 +1702,7 @@ const rawSupabaseService = {
       
       const dbInvoices = data ? data.map((inv: any) => {
         const mappedInv = mapInvoiceFromPostgres(inv);
-        if (inv.invoice_items) {
-          mappedInv.invoice_items = inv.invoice_items.map(mapInvoiceItemFromPostgres);
-        }
-        return mappedInv;
+        return sanitizeInvoiceIpdBilling(mappedInv);
       }).filter((inv: any) => {
         const pat = inv.patients || { id: inv.patient_id || inv.patientId, name: inv.patient_name || inv.patientName };
         return !isDummyPatient(pat);
@@ -1721,7 +1767,7 @@ const rawSupabaseService = {
         .eq('invoice_id', invoiceId);
       
       syncedInv.invoice_items = (syncedItems || []).map(mapInvoiceItemFromPostgres);
-      return syncedInv;
+      return sanitizeInvoiceIpdBilling(syncedInv);
     } catch (error: any) {
       console.error('Error creating invoice:', error.message);
       return null;
@@ -1834,7 +1880,7 @@ const rawSupabaseService = {
         .eq('invoice_id', id);
       
       syncedInv.invoice_items = (syncedItems || []).map(mapInvoiceItemFromPostgres);
-      return syncedInv;
+      return sanitizeInvoiceIpdBilling(syncedInv);
     } catch (error: any) {
       console.error('Error updating invoice:', error.message);
       return null;
