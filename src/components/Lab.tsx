@@ -2826,7 +2826,7 @@ export default function Lab() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-slate-100">
-                      <TableHead className="whitespace-nowrap">Bill ID</TableHead>
+                      <TableHead className="whitespace-nowrap">Bill No.</TableHead>
                       <TableHead className="whitespace-nowrap">Patient</TableHead>
                       <TableHead className="whitespace-nowrap">Date</TableHead>
                       <TableHead className="whitespace-nowrap">Amount</TableHead>
