@@ -798,7 +798,9 @@ export default function PharmacyPOS() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 500);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>

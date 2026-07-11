@@ -1474,7 +1474,9 @@ export default function OPD() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 500);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -1725,7 +1727,7 @@ export default function OPD() {
             .footer { border-top: 2px dashed #333; margin-top: 22px; padding-top: 12px; font-size: 11px; line-height: 1.4; color: #555; }
           </style>
         </head>
-        <body onload="window.print(); window.close();">
+        <body onload="window.print(); window.onafterprint = function() { window.close(); };">
           <div class="header">
             <div class="hospital-name">GLOBAL HOSPITAL</div>
             <div style="font-size: 10px; font-weight: Bold; margin-top: 3px; color: #444;">OPD CLINIC APPOINTMENT SLIP</div>

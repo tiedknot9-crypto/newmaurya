@@ -856,7 +856,9 @@ export function generatePharmacyInvoiceHtml(
         <script>
           window.onload = () => {
             window.print();
-            setTimeout(() => { window.close(); }, 800);
+            window.onafterprint = () => {
+              window.close();
+            };
           }
         </script>
       </body>

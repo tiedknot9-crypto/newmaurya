@@ -1479,7 +1479,9 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 700);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -2687,7 +2689,7 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                             body { margin: 0; padding: 0; }
                           </style>
                         </head>
-                        <body onload="window.print(); window.close();">
+                        <body onload="window.print(); window.onafterprint = function() { window.close(); };">
                           <img src="${templateImage}" style="width: 100%; height: auto;" />
                         </body>
                       </html>

@@ -161,6 +161,45 @@ export default function Pharmacy() {
     );
   }, [inventory, searchQuery]);
 
+  const sequencedBills = useMemo(() => {
+    // Sort all bills by date ascending to assign stable chronological sequence numbers
+    const chronologicalBills = [...bills].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      return dateA - dateB;
+    });
+
+    // Create a map from bill.id to sequence number
+    const sequenceMap = new Map<string, string>();
+    chronologicalBills.forEach((bill, index) => {
+      const seqNum = `PHA-${String(1001 + index).padStart(4, '0')}`;
+      sequenceMap.set(bill.id, seqNum);
+    });
+
+    // Return bills mapped with sequenceNumber
+    return bills.map(bill => ({
+      ...bill,
+      sequenceNumber: sequenceMap.get(bill.id) || `PHA-${bill.id.slice(0, 8).toUpperCase()}`
+    }));
+  }, [bills]);
+
+  const [billingSearchQuery, setBillingSearchQuery] = useState('');
+
+  const filteredBills = useMemo(() => {
+    let result = sequencedBills;
+    if (billingSearchQuery.trim()) {
+      const q = billingSearchQuery.toLowerCase();
+      result = result.filter(bill => {
+        const patient = patients.find(p => p.id === bill.patient_id);
+        const name = (bill.patient_name || patient?.name || 'Walk-in Customer').toLowerCase();
+        const mrn = (patient?.mrn || '').toLowerCase();
+        const seqNum = (bill.sequenceNumber || '').toLowerCase();
+        return name.includes(q) || mrn.includes(q) || seqNum.includes(q) || bill.id.toLowerCase().includes(q);
+      });
+    }
+    return result;
+  }, [sequencedBills, billingSearchQuery, patients]);
+
   const [newItem, setNewItem] = useState({ 
     name: '', 
     category: 'Medicine', 
@@ -277,7 +316,12 @@ export default function Pharmacy() {
       gstin: patient?.gst_no || 'N/A'
     };
 
-    const invoiceHtml = generatePharmacyInvoiceHtml(bill, inventory, patientDetails, pharmacySettings);
+    const invoiceHtml = generatePharmacyInvoiceHtml(
+      { ...bill, invoiceId: bill.sequenceNumber || bill.id },
+      inventory,
+      patientDetails,
+      pharmacySettings
+    );
     printWindow.document.write(invoiceHtml);
     printWindow.document.close();
   };
@@ -1085,7 +1129,12 @@ export default function Pharmacy() {
               <div className="flex items-center gap-2">
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input placeholder="Search invoice or MRN..." className="pl-10 bg-slate-50 border-none h-9" />
+                  <Input 
+                    placeholder="Search invoice or MRN..." 
+                    className="pl-10 bg-slate-50 border-none h-9" 
+                    value={billingSearchQuery}
+                    onChange={(e) => setBillingSearchQuery(e.target.value)}
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -1094,7 +1143,7 @@ export default function Pharmacy() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-slate-100">
-                      <TableHead className="whitespace-nowrap">Invoice ID</TableHead>
+                      <TableHead className="whitespace-nowrap">Bill No.</TableHead>
                       <TableHead className="whitespace-nowrap">Patient</TableHead>
                       <TableHead className="whitespace-nowrap">Date</TableHead>
                       <TableHead className="whitespace-nowrap">Amount</TableHead>
@@ -1103,13 +1152,13 @@ export default function Pharmacy() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bills.map((bill) => {
+                    {filteredBills.map((bill) => {
                       const patient = patients.find(p => p.id === bill.patient_id);
                       return (
                         <TableRow key={bill.id} className="border-slate-50">
                           <TableCell className="font-medium text-medical-blue whitespace-nowrap">
                             <div className="flex flex-col gap-1 items-start">
-                              <span>#{bill.id.toUpperCase()}</span>
+                              <span>{bill.sequenceNumber}</span>
                               {(bill.is_edited || bill.tpa_approval_status === 'Edited') && (
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-50 text-amber-700 border-amber-200 font-bold select-none">
                                   Edited

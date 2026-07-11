@@ -936,7 +936,9 @@ export default function Lab() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 700);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -963,7 +965,7 @@ export default function Lab() {
     const billHtml = `
       <html>
         <head>
-          <title>Lab Bill - ${bill.id}</title>
+          <title>Lab Bill - ${bill.sequenceNumber || bill.id}</title>
           <style>
             @page { margin: 10mm; size: A4; }
             body { 
@@ -1033,7 +1035,7 @@ export default function Lab() {
               </div>
               <div style="text-align: right;">
                 <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Invoice Details:</div>
-                <div style="font-size: 14px; font-weight: 700;">Inv No: ${bill.id}</div>
+                <div style="font-size: 14px; font-weight: 700;">Inv No: ${bill.sequenceNumber || bill.id}</div>
                 <div style="font-size: 14px; font-weight: 700;">Date: ${formatDate(bill.date)}</div>
               </div>
             </div>
@@ -1066,7 +1068,9 @@ export default function Lab() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 700);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -1121,6 +1125,28 @@ export default function Lab() {
     document.body.removeChild(a);
     toast.success(`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} data exported successfully`);
   };
+
+  const sequencedBills = useMemo(() => {
+    // Sort all bills by date ascending to assign stable chronological sequence numbers
+    const chronologicalBills = [...bills].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      return dateA - dateB;
+    });
+
+    // Create a map from bill.id to sequence number
+    const sequenceMap = new Map<string, string>();
+    chronologicalBills.forEach((bill, index) => {
+      const seqNum = `LAB-${String(1001 + index).padStart(4, '0')}`;
+      sequenceMap.set(bill.id, seqNum);
+    });
+
+    // Attach the sequence number to each bill
+    return bills.map(bill => ({
+      ...bill,
+      sequenceNumber: sequenceMap.get(bill.id) || `LAB-${bill.id.slice(0, 8).toUpperCase()}`
+    }));
+  }, [bills]);
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -1955,12 +1981,12 @@ export default function Lab() {
                         <SelectValue placeholder="-- Select Outstanding Invoice --" />
                       </SelectTrigger>
                       <SelectContent>
-                        {bills.filter(b => b.status === 'Pending').length === 0 ? (
+                        {sequencedBills.filter(b => b.status === 'Pending').length === 0 ? (
                           <SelectItem value="none" disabled>No pending invoices found</SelectItem>
                         ) : (
-                          bills.filter(b => b.status === 'Pending').map((bill: any) => (
+                          sequencedBills.filter(b => b.status === 'Pending').map((bill: any) => (
                             <SelectItem key={bill.id} value={bill.id}>
-                              #{bill.id.slice(0, 8)} - {bill.patients?.name || bill.patient} ({formatCurrency(bill.paid_amount || bill.total_amount)})
+                              {bill.sequenceNumber} - {bill.patients?.name || bill.patient} ({formatCurrency(bill.paid_amount || bill.total_amount)})
                             </SelectItem>
                           ))
                         )}
@@ -1970,14 +1996,14 @@ export default function Lab() {
 
                   {selectedBillId && selectedBillId !== 'none' ? (
                     (() => {
-                      const activeBill = bills.find(b => b.id === selectedBillId);
+                      const activeBill = sequencedBills.find(b => b.id === selectedBillId);
                       if (!activeBill) return null;
                       return (
                         <div className="p-4 bg-emerald-50/40 rounded-xl border border-emerald-100/50 space-y-3 animate-in slide-in-from-top-1 duration-200">
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="text-xs font-black text-slate-800">{activeBill.patients?.name || activeBill.patient}</p>
-                              <p className="text-[10px] text-muted-foreground">Invoice #{activeBill.id.slice(0, 8)}</p>
+                              <p className="text-[10px] text-muted-foreground">Invoice {activeBill.sequenceNumber}</p>
                             </div>
                             <Badge className="bg-amber-100 text-amber-700 border-none text-[9px] hover:bg-amber-100 uppercase font-black">
                               Outstanding Payment
@@ -2835,9 +2861,9 @@ export default function Lab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bills.map((bill) => (
+                    {sequencedBills.map((bill) => (
                       <TableRow key={bill.id} className="border-slate-50">
-                        <TableCell className="font-medium text-medical-blue whitespace-nowrap">#{bill.id.slice(0, 8)}</TableCell>
+                        <TableCell className="font-medium text-medical-blue whitespace-nowrap">{bill.sequenceNumber}</TableCell>
                         <TableCell className="whitespace-nowrap">{bill.patients?.name}</TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(bill.created_at)}</TableCell>
                         <TableCell className="font-bold whitespace-nowrap">{formatCurrency(bill.paid_amount)}</TableCell>

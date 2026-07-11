@@ -1612,7 +1612,9 @@ export default function Billing() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 700);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -1841,7 +1843,9 @@ export default function Billing() {
           <script>
             window.onload = () => {
               window.print();
-              setTimeout(() => window.close(), 1000);
+              window.onafterprint = () => {
+                window.close();
+              };
             };
           </script>
         </body>
@@ -2164,6 +2168,16 @@ export default function Billing() {
                           </SelectContent>
                         </Select>
                       </div>
+                    ) : currentItem.category === 'custom' ? (
+                      <div className="space-y-1.5 flex flex-col animate-in fade-in zoom-in-95">
+                        <Label className="text-xs font-semibold text-slate-600">Service / Item</Label>
+                        <Input 
+                          placeholder="Type custom service/item name"
+                          className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
+                          value={currentItem.description} 
+                          onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                        />
+                      </div>
                     ) : (
                       <div className="space-y-1.5 flex flex-col justify-end">
                         <Label className="text-xs font-semibold text-slate-600 opacity-50">Service / Item</Label>
@@ -2388,6 +2402,16 @@ export default function Billing() {
                             {currentItem.category === 'pharmacy' && <SelectItem value="Pharmacy Bill">Manual Pharma Entry</SelectItem>}
                           </SelectContent>
                         </Select>
+                      </div>
+                    ) : currentItem.category === 'custom' ? (
+                      <div className="space-y-1.5 flex flex-col animate-in fade-in zoom-in-95">
+                        <Label className="text-xs font-semibold text-slate-600">Service / Item</Label>
+                        <Input 
+                          placeholder="Type custom service/item name"
+                          className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
+                          value={currentItem.description} 
+                          onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                        />
                       </div>
                     ) : (
                       <div className="space-y-1.5 flex flex-col justify-end">
