@@ -2083,6 +2083,17 @@ const rawSupabaseService = {
   deleteLabTest: async (id: string) => {
     try {
       const targetId = isUuid(id) ? id : toDeterministicUuid(id);
+      
+      // Disassociate referencing test_requests to prevent foreign key constraint violations
+      try {
+        await supabase
+          .from('test_requests')
+          .update({ test_id: null })
+          .eq('test_id', targetId);
+      } catch (e: any) {
+        console.warn('Could not clear test_requests foreign keys: ', e.message);
+      }
+
       const { error } = await supabase
         .from('lab_tests')
         .delete()

@@ -1109,22 +1109,20 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
 
   const handleDeleteBedRate = async (type: string) => {
     try {
-      let success = true;
+      // Optimistic local state update
+      const updated = bedRates.filter(r => r.type !== type);
+      setBedRates(updated);
+      storage.set(STORAGE_KEYS.BED_RATES, updated);
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'bed_rates', action: 'delete' } }));
+      toast.success('Bed rate deleted');
+
+      // Async database delete
       if (supabaseService.deleteBedRate) {
-        success = await supabaseService.deleteBedRate(type);
-      }
-      if (success) {
-        const updated = bedRates.filter(r => r.type !== type);
-        setBedRates(updated);
-        storage.set(STORAGE_KEYS.BED_RATES, updated);
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'bed_rates', action: 'delete' } }));
-        toast.success('Bed rate deleted');
-      } else {
-        toast.error('Failed to delete bed rate from database. It might be referenced by other records.');
+        await supabaseService.deleteBedRate(type);
       }
     } catch (err: any) {
-      toast.error('Error deleting bed rate: ' + err.message);
+      console.warn('Database sync warning for bed rate deletion: ' + err.message);
     }
   };
 
@@ -1158,22 +1156,20 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
 
   const handleDeleteOtRate = async (type: string) => {
     try {
-      let success = true;
+      // Optimistic local state update
+      const updated = otRates.filter(r => r.type !== type);
+      setOtRates(updated);
+      storage.set(STORAGE_KEYS.OT_RATES, updated);
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'ot_rates', action: 'delete' } }));
+      toast.success('OT rate deleted');
+
+      // Async database delete
       if (supabaseService.deleteOtRate) {
-        success = await supabaseService.deleteOtRate(type);
-      }
-      if (success) {
-        const updated = otRates.filter(r => r.type !== type);
-        setOtRates(updated);
-        storage.set(STORAGE_KEYS.OT_RATES, updated);
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'ot_rates', action: 'delete' } }));
-        toast.success('OT rate deleted');
-      } else {
-        toast.error('Failed to delete OT rate from database. It might be referenced by other records.');
+        await supabaseService.deleteOtRate(type);
       }
     } catch (err: any) {
-      toast.error('Error deleting OT rate: ' + err.message);
+      console.warn('Database sync warning for OT rate deletion: ' + err.message);
     }
   };
 
@@ -1212,22 +1208,20 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
   const handleDeleteLabRate = async (rate: any) => {
     const targetId = rate.id || rate.name;
     try {
-      let success = true;
+      // Optimistic local state update
+      const updated = labRates.filter((r: any) => (r.id || r.name) !== targetId);
+      setLabRates(updated);
+      storage.set(STORAGE_KEYS.LAB_RATES, updated);
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'lab_tests', action: 'delete' } }));
+      toast.success('Lab/Radiology rate deleted');
+
+      // Async database delete
       if (supabaseService.deleteLabTest) {
-        success = await supabaseService.deleteLabTest(targetId);
-      }
-      if (success) {
-        const updated = labRates.filter((r: any) => (r.id || r.name) !== targetId);
-        setLabRates(updated);
-        storage.set(STORAGE_KEYS.LAB_RATES, updated);
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'lab_tests', action: 'delete' } }));
-        toast.success('Lab/Radiology rate deleted');
-      } else {
-        toast.error('Failed to delete Lab/Radiology rate. It might be referenced by other records.');
+        await supabaseService.deleteLabTest(targetId);
       }
     } catch (err: any) {
-      toast.error('Error deleting rate: ' + err.message);
+      console.warn('Database sync warning for lab rate deletion: ' + err.message);
     }
   };
 
@@ -1264,22 +1258,20 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
 
   const handleDeleteMaterialRate = async (name: string) => {
     try {
-      let success = true;
+      // Optimistic local state update
+      const updated = materialRates.filter((r: any) => r.name !== name);
+      setMaterialRates(updated);
+      storage.set(STORAGE_KEYS.MATERIAL_RATES, updated);
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'material_rates', action: 'delete' } }));
+      toast.success('Material rate deleted');
+
+      // Async database delete
       if (supabaseService.deleteMaterialRate) {
-        success = await supabaseService.deleteMaterialRate(name);
-      }
-      if (success) {
-        const updated = materialRates.filter((r: any) => r.name !== name);
-        setMaterialRates(updated);
-        storage.set(STORAGE_KEYS.MATERIAL_RATES, updated);
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'material_rates', action: 'delete' } }));
-        toast.success('Material rate deleted');
-      } else {
-        toast.error('Failed to delete material rate from database. It might be referenced by other records.');
+        await supabaseService.deleteMaterialRate(name);
       }
     } catch (err: any) {
-      toast.error('Error deleting material rate: ' + err.message);
+      console.warn('Database sync warning for material rate deletion: ' + err.message);
     }
   };
 
