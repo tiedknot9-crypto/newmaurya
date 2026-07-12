@@ -2229,7 +2229,14 @@ export default function Billing() {
                       <Input 
                         className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
                         value={currentItem.description} 
-                        onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCurrentItem({
+                            ...currentItem, 
+                            description: val, 
+                            serviceItem: val 
+                          });
+                        }} 
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -2471,7 +2478,14 @@ export default function Billing() {
                       <Input 
                         className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
                         value={currentItem.description} 
-                        onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCurrentItem({
+                            ...currentItem, 
+                            description: val, 
+                            serviceItem: val 
+                          });
+                        }} 
                       />
                     </div>
                     <div className="space-y-1.5">
