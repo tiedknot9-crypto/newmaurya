@@ -1281,8 +1281,15 @@ export default function OPD() {
     }
 
     const patient = patients.find(p => p.id === newAppointment.patientId);
-    const tokenNumber = `APT-${Math.floor(Math.random() * 900) + 100}`;
     const appointmentDate = newAppointment.date || getLocalDateString();
+    
+    // Calculate sequential daily token starting from 1 on this date
+    const sameDayCount = appointments.filter(a => {
+      const d = (a.appointment_date || a.date || '').split('T')[0];
+      return d === appointmentDate;
+    }).length;
+    const nextDailyToken = sameDayCount + 1;
+    const tokenNumber = `#${nextDailyToken}`;
     
     const synced = await supabaseService.createAppointment({
       patient_id: newAppointment.patientId,
@@ -1296,7 +1303,8 @@ export default function OPD() {
       doctor: newAppointment.doctor,
       fee: selectedDocObj && selectedDocObj.consultationFee ? Number(selectedDocObj.consultationFee) : appointmentFee,
       discount_amount: Number(newAppointment.discountAmount || 0),
-      discount_given_by: newAppointment.discountGivenBy || currentUser?.name || null
+      discount_given_by: newAppointment.discountGivenBy || currentUser?.name || null,
+      token_number: nextDailyToken
     });
 
     if (synced) {
@@ -1308,7 +1316,7 @@ export default function OPD() {
             patient_id: newAppointment.patientId,
             doctor_id: doctorId,
             appointment_id: synced.id,
-            token_number: Math.floor(Math.random() * 100) + 1,
+            token_number: nextDailyToken,
             status: 'Waiting',
             urgency: newAppointment.urgency
           });
@@ -1704,6 +1712,46 @@ export default function OPD() {
     });
   };
 
+  const getDailyTokenNumber = (apt: any) => {
+    if (!apt) return 1;
+    const aptDate = (apt.appointment_date || apt.date || '').split('T')[0];
+    const sameDayAppointments = appointments.filter(a => {
+      const d = (a.appointment_date || a.date || '').split('T')[0];
+      return d === aptDate;
+    });
+
+    sameDayAppointments.sort((a, b) => {
+      if (a.created_at && b.created_at) {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      const timeA = parseTimeToMinutes(a.appointment_time || a.time);
+      const timeB = parseTimeToMinutes(b.appointment_time || b.time);
+      if (timeA !== timeB) return timeA - timeB;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+    const idx = sameDayAppointments.findIndex(a => a.id === apt.id);
+    return idx !== -1 ? idx + 1 : 1;
+  };
+
+  const getBookingSequentialTokenNumber = (apt: any) => {
+    if (!apt) return 1;
+    const sortedAll = [...appointments].sort((a, b) => {
+      if (a.created_at && b.created_at) {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      const dateA = (a.appointment_date || a.date || '').split('T')[0];
+      const dateB = (b.appointment_date || b.date || '').split('T')[0];
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      const timeA = parseTimeToMinutes(a.appointment_time || a.time);
+      const timeB = parseTimeToMinutes(b.appointment_time || b.time);
+      return timeA - timeB;
+    });
+
+    const idx = sortedAll.findIndex(a => a.id === apt.id);
+    return idx !== -1 ? idx + 1 : 1;
+  };
+
   const printAppointmentToken = (apt: any) => {
     const printWindow = window.open('', '_blank', 'width=400,height=550');
     if (!printWindow) {
@@ -1734,7 +1782,7 @@ export default function OPD() {
           </div>
           <div>
             <div style="font-size: 12px; font-weight: Bold;">SESSION DATE: ${apt.appointment_date || apt.date || new Date().toISOString().split('T')[0]}</div>
-            <div class="token-num">${apt.token || 'TK-' + (apt.id ? String(apt.id).slice(-3).toUpperCase() : '099')}</div>
+            <div class="token-num">#${getDailyTokenNumber(apt)}</div>
           </div>
           <div style="margin: 20px 0; border: 1px solid #eee; padding: 10px; border-radius: 4px;">
             <div class="info-row"><span class="info-label">PATIENT NAME :</span> ${patName}</div>
@@ -2974,7 +3022,9 @@ export default function OPD() {
                     <TableBody>
                       {paginatedAppointments.map((apt, i) => (
                         <TableRow key={apt.id} className="border-slate-50">
-                          <TableCell className="font-bold text-medical-blue whitespace-nowrap">#{100 + i + 1 + startIndex}</TableCell>
+                          <TableCell className="font-bold text-medical-blue whitespace-nowrap">
+                            #{activeTab === 'queue' ? getDailyTokenNumber(apt) : getBookingSequentialTokenNumber(apt)}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div>
                               <p className="font-medium">{apt.patientName}</p>

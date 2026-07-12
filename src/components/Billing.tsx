@@ -391,7 +391,8 @@ export default function Billing() {
       'PATH': 'Pathology',
       'RADIO': 'Radiology Services',
       'PHARMACY': 'Pharmacy POS',
-      'OT': 'Operation Theatre'
+      'OT': 'Operation Theatre',
+      'INDEPENDENT': 'Independent'
     };
     const categoryData = Object.entries(categoryTotals).map(([cat, total]) => ({
       name: catLabels[cat] || cat,
@@ -1028,6 +1029,7 @@ export default function Billing() {
   
   const [currentItem, setCurrentItem] = useState({
     category: '',
+    serviceItem: '',
     description: '',
     amount: '',
     subType: ''
@@ -1043,7 +1045,7 @@ export default function Billing() {
       amount: parseInt(currentItem.amount), 
       category: currentItem.category 
     }]);
-    setCurrentItem({ category: '', description: '', amount: '', subType: '' });
+    setCurrentItem({ category: '', serviceItem: '', description: '', amount: '', subType: '' });
   };
 
   const removeItem = (index: number) => {
@@ -1128,7 +1130,7 @@ export default function Billing() {
   };
 
   const handleCategoryChange = (val: string) => {
-    setCurrentItem({ category: val, description: '', amount: '', subType: '' });
+    setCurrentItem({ category: val, serviceItem: '', description: '', amount: '', subType: '' });
   };
 
   const handleSubTypeChange = (val: string) => {
@@ -1163,6 +1165,7 @@ export default function Billing() {
       ...currentItem, 
       subType: val, 
       amount: rate.toString(), 
+      serviceItem: val,
       description: description 
     });
   };
@@ -2174,8 +2177,15 @@ export default function Billing() {
                         <Input 
                           placeholder="Type custom service/item name"
                           className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
-                          value={currentItem.description} 
-                          onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                          value={currentItem.serviceItem || ''} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCurrentItem({
+                              ...currentItem, 
+                              serviceItem: val, 
+                              description: val 
+                            });
+                          }} 
                         />
                       </div>
                     ) : (
@@ -2409,8 +2419,15 @@ export default function Billing() {
                         <Input 
                           placeholder="Type custom service/item name"
                           className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
-                          value={currentItem.description} 
-                          onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})} 
+                          value={currentItem.serviceItem || ''} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCurrentItem({
+                              ...currentItem, 
+                              serviceItem: val, 
+                              description: val 
+                            });
+                          }} 
                         />
                       </div>
                     ) : (
@@ -3407,7 +3424,7 @@ export default function Billing() {
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <Badge variant="outline" className={`text-[10px] font-semibold border-blue-100 ${bill.isExpense ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700'}`}>
-                              {bill.type || 'General'}
+                              {String(bill.type || '').toUpperCase() === 'INDEPENDENT' ? 'Independent' : (bill.type || 'General')}
                             </Badge>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">

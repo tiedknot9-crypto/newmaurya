@@ -341,6 +341,14 @@ function QuickRegisterForm({ currentUser }: { currentUser: UserType | null }) {
             consult: 500
           });
 
+          // Calculate sequential daily token starting from 1 on this date
+          const existingAppointments = storage.get(STORAGE_KEYS.APPOINTMENTS, []);
+          const sameDayCount = existingAppointments.filter((a: any) => {
+            const d = (a.appointment_date || a.date || '').split('T')[0];
+            return d === appointmentDate;
+          }).length;
+          const nextDailyToken = sameDayCount + 1;
+
           const appointmentSynced = await supabaseService.createAppointment({
             patient_id: result.id,
             patientName: result.name,
@@ -350,7 +358,8 @@ function QuickRegisterForm({ currentUser }: { currentUser: UserType | null }) {
             appointment_time: appointmentTime,
             status: 'Scheduled',
             urgency: 'Routine',
-            fee: opdCharges.consult // Dynamic fee directly saved on appointment
+            fee: opdCharges.consult, // Dynamic fee directly saved on appointment
+            token_number: nextDailyToken
           });
 
           if (appointmentSynced) {
@@ -359,7 +368,7 @@ function QuickRegisterForm({ currentUser }: { currentUser: UserType | null }) {
               patient_id: result.id,
               doctor_id: null,
               appointment_id: appointmentSynced.id,
-              token_number: Math.floor(Math.random() * 100) + 1,
+              token_number: nextDailyToken,
               status: 'Waiting',
               urgency: 'Routine'
             });
