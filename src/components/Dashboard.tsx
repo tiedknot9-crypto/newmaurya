@@ -135,6 +135,29 @@ export default function Dashboard() {
 
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   
+  const getSequentialInvoiceId = (bill: any) => {
+    if (!bill) return '';
+    const idStr = String(bill.id || '');
+    if (idStr.startsWith('exp') || idStr.startsWith('note-')) {
+      return idStr.toUpperCase();
+    }
+    const patientInvoices = invoices.filter(b => {
+      const bId = String(b?.id || '');
+      return !bId.startsWith('exp') && !bId.startsWith('note-');
+    });
+    const sorted = [...patientInvoices].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+    const index = sorted.findIndex(b => b.id === bill.id);
+    if (index === -1) {
+      return `#${idStr.slice(0, 8).toUpperCase()}`;
+    }
+    return `#${String(index + 1).padStart(4, '0')}`;
+  };
+  
   const displayAppointments = useMemo(() => {
     let filteredList = appointments;
     if (currentUser) {
@@ -1105,7 +1128,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <p className="text-xs font-bold text-slate-800">Payment {bill.payment_method || bill.paymentMode || bill.payment_mode || 'Cash'}</p>
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">Invoice #{bill.invoice_number || bill.id || 'N/A'} • {formatCurrency(bill.paid_amount ?? bill.paidAmount ?? 0)}</p>
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">Invoice {getSequentialInvoiceId(bill) || 'N/A'} • {formatCurrency(bill.paid_amount ?? bill.paidAmount ?? 0)}</p>
                         <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
                           <CalendarIcon className="w-2.5 h-2.5" />
                           {new Date(bill.created_at || bill.date).toLocaleDateString()}

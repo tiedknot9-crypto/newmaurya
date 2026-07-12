@@ -262,6 +262,29 @@ export default function Billing() {
     return !isAddedByAdmin(record);
   };
 
+  const getSequentialInvoiceId = (bill: any) => {
+    if (!bill) return '';
+    const idStr = String(bill.id || '');
+    if (idStr.startsWith('exp') || idStr.startsWith('note-')) {
+      return idStr.toUpperCase();
+    }
+    const patientInvoices = bills.filter(b => {
+      const bId = String(b?.id || '');
+      return !bId.startsWith('exp') && !bId.startsWith('note-');
+    });
+    const sorted = [...patientInvoices].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+    const index = sorted.findIndex(b => b.id === bill.id);
+    if (index === -1) {
+      return `#${idStr.slice(0, 8).toUpperCase()}`;
+    }
+    return `#${String(index + 1).padStart(4, '0')}`;
+  };
+
   const logAudit = (action: string, entityId: string, details: any) => {
     const logs = storage.get(STORAGE_KEYS.AUDIT_LOGS, []);
     const newLog = {
@@ -1558,7 +1581,7 @@ export default function Billing() {
               </div>
               <div style="text-align: right;">
                 <span class="info-label">Invoice Details:</span>
-                <div class="info-value">Inv No: #${bill.id.toUpperCase()}</div>
+                <div class="info-value">Inv No: ${getSequentialInvoiceId(bill)}</div>
                 <div class="info-value">Date: ${formatDate(bill.date)}</div>
                 <div class="info-value" style="color: #059669; font-weight: 800;">Status: ${bill.status}</div>
               </div>
@@ -2006,7 +2029,7 @@ export default function Billing() {
                                 return (
                                   <div key={bill.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
                                     <div className="flex items-center gap-4">
-                                      <div className="text-xs font-bold text-medical-blue">#{bill.id.split('-')[1]?.substring(0, 6) || bill.id.substring(bill.id.length-6)}</div>
+                                      <div className="text-xs font-bold text-medical-blue">{getSequentialInvoiceId(bill)}</div>
                                       <div>
                                         <p className="text-sm font-semibold">{patient?.name || bill.patient_name || bill.patients?.name || 'Walk-in Patient'}</p>
                                         <p className="text-[10px] text-muted-foreground uppercase">{bill.invoice_items?.[0]?.category || 'General'} Charge</p>
@@ -2364,7 +2387,7 @@ export default function Billing() {
           <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
             <DialogContent className="max-w-[95vw] sm:max-w-[760px] md:max-w-[850px] lg:max-w-[920px] w-full">
               <DialogHeader>
-                <DialogTitle>Edit Invoice #{editingBill?.id.split('-')[1]?.substring(0, 6)}</DialogTitle>
+                <DialogTitle>Edit Invoice {getSequentialInvoiceId(editingBill)}</DialogTitle>
                 <DialogDescription>Modify services and items for this existing invoice.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -2606,7 +2629,7 @@ export default function Billing() {
                     {/* Invoice Info Block */}
                     <div className="flex justify-between items-center bg-slate-50 border border-slate-150 px-4 py-2.5 rounded-xl text-xs font-semibold">
                       <span className="text-slate-500">Invoice ID:</span>
-                      <span className="font-extrabold text-medical-blue">#{paymentTargetBill.id.split('-')[1]?.substring(0, 6) || paymentTargetBill.id}</span>
+                      <span className="font-extrabold text-medical-blue">{getSequentialInvoiceId(paymentTargetBill)}</span>
                     </div>
 
                     {/* Patient Context Block */}
@@ -2761,7 +2784,7 @@ export default function Billing() {
                     {/* Invoice Info Block */}
                     <div className="flex justify-between items-center bg-slate-50 border border-slate-150 px-4 py-2.5 rounded-xl text-xs font-semibold">
                       <span className="text-slate-500">Invoice ID:</span>
-                      <span className="font-extrabold text-medical-blue">#{refundTargetBill.id.split('-')[1]?.substring(0, 6) || refundTargetBill.id}</span>
+                      <span className="font-extrabold text-medical-blue">{getSequentialInvoiceId(refundTargetBill)}</span>
                     </div>
 
                     {/* Patient Context Block */}
@@ -3414,7 +3437,7 @@ export default function Billing() {
                       return (
                         <TableRow key={bill.id} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
                           <TableCell className="font-bold text-medical-blue whitespace-nowrap">
-                            {bill.id.startsWith('exp') || bill.id.startsWith('note-') ? bill.id.toUpperCase() : `#${bill.id.slice(0, 8).toUpperCase()}`}
+                            {getSequentialInvoiceId(bill)}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div className="flex flex-col">
@@ -3782,7 +3805,7 @@ export default function Billing() {
                                                 <span className="text-xs font-black text-medical-blue uppercase bg-blue-50 px-2 py-0.5 rounded mr-2">
                                                   {bill.type || 'HOSPITAL'} BILL
                                                 </span>
-                                                <span className="text-xs text-slate-400 font-bold">#{bill.id.slice(0, 8).toUpperCase()}</span>
+                                                <span className="text-xs text-slate-400 font-bold">{getSequentialInvoiceId(bill)}</span>
                                               </div>
                                               <div className="text-right">
                                                 <span className="text-sm font-bold text-slate-800">

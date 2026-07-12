@@ -188,6 +188,29 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
   
   const [appointments, setAppointments] = useState<any[]>([]);
   const [billing, setBilling] = useState<any[]>([]);
+
+  const getSequentialInvoiceId = (bill: any) => {
+    if (!bill) return '';
+    const idStr = String(bill.id || '');
+    if (idStr.startsWith('exp') || idStr.startsWith('note-')) {
+      return idStr.toUpperCase();
+    }
+    const patientInvoices = billing.filter(b => {
+      const bId = String(b?.id || '');
+      return !bId.startsWith('exp') && !bId.startsWith('note-');
+    });
+    const sorted = [...patientInvoices].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+    const index = sorted.findIndex(b => b.id === bill.id);
+    if (index === -1) {
+      return `#${idStr.slice(0, 8).toUpperCase()}`;
+    }
+    return `#${String(index + 1).padStart(4, '0')}`;
+  };
   const [beds, setBeds] = useState<any[]>([]);
   const [labOrders, setLabOrders] = useState<any[]>([]);
   const [radiologyRecords, setRadiologyRecords] = useState<any[]>([]);
@@ -1932,7 +1955,7 @@ View full details at: ${shareUrl}
                                 {bill.status === 'Paid' ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                               </div>
                               <div>
-                                 <p className="text-sm font-bold">Invoice #{bill.invoice_number || bill.id.toUpperCase()}</p>
+                                 <p className="text-sm font-bold">Invoice {getSequentialInvoiceId(bill)}</p>
                                  <p className="text-[10px] text-slate-500">{formatDate(bill.created_at)} • {bill.payment_method || 'N/A'}</p>
                                </div>
                              </div>
