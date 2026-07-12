@@ -1230,6 +1230,8 @@ export default function Billing() {
         categoryMatch = (bill.status || '').toLowerCase() === 'refunded' || 
                         (bill.payment_status || '').toLowerCase() === 'refunded' || 
                         (bill.payment_remarks || '').includes('[Refunded');
+      } else if (filterCategory === 'independent') {
+        categoryMatch = bType === 'independent' || hasItemCategory('independent');
       }
     }
     
@@ -3376,6 +3378,7 @@ export default function Billing() {
                     <SelectItem value="ot">OT Management</SelectItem>
                     <SelectItem value="insurance">Insurance Claims</SelectItem>
                     <SelectItem value="refunds">Refunds Issued</SelectItem>
+                    <SelectItem value="independent">Independent Invoices</SelectItem>
                     <SelectItem value="expenses">Facility Expenses</SelectItem>
                   </SelectContent>
                 </Select>
