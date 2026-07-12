@@ -2235,8 +2235,7 @@ export default function Billing() {
                           const val = e.target.value;
                           setCurrentItem({
                             ...currentItem, 
-                            description: val, 
-                            serviceItem: val 
+                            description: val
                           });
                         }} 
                       />
@@ -2484,8 +2483,7 @@ export default function Billing() {
                           const val = e.target.value;
                           setCurrentItem({
                             ...currentItem, 
-                            description: val, 
-                            serviceItem: val 
+                            description: val
                           });
                         }} 
                       />
