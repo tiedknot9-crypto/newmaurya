@@ -1481,16 +1481,19 @@ export default function OPD() {
           
           <script>
             window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
+              setTimeout(() => {
+                window.print();
+                window.onafterprint = () => {
+                  window.close();
+                };
+              }, 150);
             };
           </script>
         </body>
       </html>
     `;
 
+    printWindow.document.write(tokenHtml);
     printWindow.document.close();
   };
 
@@ -1775,7 +1778,7 @@ export default function OPD() {
             .footer { border-top: 2px dashed #333; margin-top: 22px; padding-top: 12px; font-size: 11px; line-height: 1.4; color: #555; }
           </style>
         </head>
-        <body onload="window.print(); window.onafterprint = function() { window.close(); };">
+        <body>
           <div class="header">
             <div class="hospital-name">GLOBAL HOSPITAL</div>
             <div style="font-size: 10px; font-weight: Bold; margin-top: 3px; color: #444;">OPD CLINIC APPOINTMENT SLIP</div>
@@ -1795,6 +1798,16 @@ export default function OPD() {
             <p>Please present this slip at OPD Consultation chamber outer disk. Wait for your turn token call.</p>
             <p style="font-weight: 900; color: #000; margin-top: 5px;">HAVE A HEALTHY DAY!</p>
           </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                };
+              }, 150);
+            };
+          </script>
         </body>
       </html>
     `;
@@ -1812,12 +1825,12 @@ export default function OPD() {
       .filter(rx => rx.patientId === patient.id || rx.patient_id === patient.id)
       .sort((a, b) => new Date(b.date || b.prescription_date || 0).getTime() - new Date(a.date || a.prescription_date || 0).getTime());
 
-    if (patientPrescriptions.length === 0) {
-      toast.error('No Record found');
-      return;
-    }
-
-    const latestRx = patientPrescriptions[0];
+    const latestRx = patientPrescriptions.length > 0 ? patientPrescriptions[0] : {
+      date: new Date().toISOString().split('T')[0],
+      medicines: [],
+      advice: '',
+      vitals: undefined
+    };
     const printWindow = window.open('', '_blank', 'width=800,height=1000');
     if (!printWindow) {
       toast.error('Please allow popups to print prescription');

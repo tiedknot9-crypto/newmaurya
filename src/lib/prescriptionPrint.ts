@@ -451,10 +451,12 @@ export function getPrescriptionPrintHtml(
         
         <script>
           window.onload = () => {
-            window.print();
-            window.onafterprint = () => {
-              window.close();
-            };
+            setTimeout(() => {
+              window.print();
+              window.onafterprint = () => {
+                window.close();
+              };
+            }, 150);
           }
         </script>
       </body>
