@@ -43,6 +43,23 @@ export interface PrintDoctor {
   id?: string;
 }
 
+export function parseStoredImage(val: string | null | undefined): string | null {
+  if (!val || typeof val !== 'string') return null;
+  let clean = val.trim();
+  while ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+    try {
+      clean = JSON.parse(clean);
+    } catch {
+      clean = clean.slice(1, -1).trim();
+    }
+  }
+  if (!clean || clean === 'null' || clean === 'undefined') return null;
+  if (clean.startsWith('http') || clean.startsWith('data:image') || clean.startsWith('/') || clean.startsWith('blob:')) {
+    return clean;
+  }
+  return null;
+}
+
 export function getPrescriptionPrintHtml(
   patient: PrintPatient,
   prescription: PrintPrescription,
@@ -52,37 +69,18 @@ export function getPrescriptionPrintHtml(
   headerImage?: string | null,
   footerImage?: string | null
 ): string {
-  const actualTemplateImage = templateImage !== undefined ? templateImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_template_image') : null);
-  const actualHeaderImage = headerImage !== undefined ? headerImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_header_image') : null);
-  const actualFooterImage = footerImage !== undefined ? footerImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_footer_image') : null);
+  const rawTemplate = templateImage !== undefined ? templateImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_template_image')) : null);
+  const rawHeader = headerImage !== undefined ? headerImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_header_image')) : null);
+  const rawFooter = footerImage !== undefined ? footerImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_footer_image')) : null);
+
+  const actualTemplateImage = parseStoredImage(rawTemplate);
+  const actualHeaderImage = parseStoredImage(rawHeader);
+  const actualFooterImage = parseStoredImage(rawFooter);
 
   // Parse whether there is a valid custom preprinted background letterhead image (to overlay on)
-  const isValidTemplateImage = !!(
-    actualTemplateImage &&
-    typeof actualTemplateImage === 'string' &&
-    actualTemplateImage.trim() !== '' &&
-    actualTemplateImage !== 'null' &&
-    actualTemplateImage !== 'undefined' &&
-    (actualTemplateImage.startsWith('http') || actualTemplateImage.startsWith('data:image') || actualTemplateImage.startsWith('/'))
-  );
-
-  const isValidHeaderImage = !!(
-    actualHeaderImage &&
-    typeof actualHeaderImage === 'string' &&
-    actualHeaderImage.trim() !== '' &&
-    actualHeaderImage !== 'null' &&
-    actualHeaderImage !== 'undefined' &&
-    (actualHeaderImage.startsWith('http') || actualHeaderImage.startsWith('data:image') || actualHeaderImage.startsWith('/'))
-  );
-
-  const isValidFooterImage = !!(
-    actualFooterImage &&
-    typeof actualFooterImage === 'string' &&
-    actualFooterImage.trim() !== '' &&
-    actualFooterImage !== 'null' &&
-    actualFooterImage !== 'undefined' &&
-    (actualFooterImage.startsWith('http') || actualFooterImage.startsWith('data:image') || actualFooterImage.startsWith('/'))
-  );
+  const isValidTemplateImage = !!actualTemplateImage;
+  const isValidHeaderImage = !!actualHeaderImage;
+  const isValidFooterImage = !!actualFooterImage;
 
   const hospName = hospitalInfo?.name || 'GLOBAL HOSPITAL';
   const hospAddress = hospitalInfo?.address || '123 Healthcare Way, Medical City';

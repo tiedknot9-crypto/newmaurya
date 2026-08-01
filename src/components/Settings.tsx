@@ -46,7 +46,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { MOCK_USERS, MOCK_PATIENTS, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES } from '@/mockData';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { getPrescriptionPrintHtml } from '@/lib/prescriptionPrint';
+import { getPrescriptionPrintHtml, parseStoredImage } from '@/lib/prescriptionPrint';
 import { syncOfflineDataWithSupabase, getSupabaseUnreachable, setSupabaseUnreachable, supabaseService } from '@/services/supabaseService';
 import { DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
 import { normalizeRole } from '@/utils/rbac';
@@ -234,9 +234,21 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
   const isFrontOffice = resolvedUser?.role === 'RECEPTION' || resolvedUser?.role === 'RECEPTIONIST' || resolvedUser?.role === 'FRONT_DESK' || (resolvedUser?.email && (resolvedUser.email.toLowerCase().includes('frontoffice') || resolvedUser.email.toLowerCase().includes('frontdesk')));
   currentUser = resolvedUser;
 
-  const [templateImage, setTemplateImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.TEMPLATE_IMAGE, null));
-  const [prescriptionHeaderImage, setPrescriptionHeaderImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, null));
-  const [prescriptionFooterImage, setPrescriptionFooterImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, null));
+  const [templateImage, setTemplateImage] = useState<string | null>(() => {
+    const val = storage.get<string | null>(STORAGE_KEYS.TEMPLATE_IMAGE, null);
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('hms_template_image') : null;
+    return parseStoredImage(val) || parseStoredImage(raw);
+  });
+  const [prescriptionHeaderImage, setPrescriptionHeaderImage] = useState<string | null>(() => {
+    const val = storage.get<string | null>(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, null);
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_header_image') : null;
+    return parseStoredImage(val) || parseStoredImage(raw);
+  });
+  const [prescriptionFooterImage, setPrescriptionFooterImage] = useState<string | null>(() => {
+    const val = storage.get<string | null>(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, null);
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_footer_image') : null;
+    return parseStoredImage(val) || parseStoredImage(raw);
+  });
 
   // Supabase SQL Editor State
   const [sqlTab, setSqlTab] = useState<'all' | 'tax_slabs' | 'billing' | 'pharmacy'>('all');
