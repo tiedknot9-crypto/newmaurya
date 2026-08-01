@@ -315,61 +315,49 @@ export function getPrescriptionPrintHtml(
         <div class="container">
           ${isValidTemplateImage ? `<div class="template-bg"><img src="${actualTemplateImage}" style="width: 100%;" /></div>` : ''}
           
-          <!-- Custom Header matching Image 1: Global Hospital & Maternity Center -->
-          <div class="header" style="margin-bottom: 18px; page-break-inside: avoid;">
-            <div style="position: relative; width: 100%; min-height: 110px; background: #ffffff; border-bottom: 2px solid #2563eb; overflow: hidden; display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; box-sizing: border-box;">
-              <!-- Top-Right Blue Curved Gradient Background Shape from Image 1 -->
-              <svg viewBox="0 0 500 120" preserveAspectRatio="none" style="position: absolute; top: 0; right: 0; width: 45%; height: 100%; pointer-events: none; z-index: 1;">
-                <defs>
-                  <linearGradient id="headerBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.85" />
-                    <stop offset="100%" stop-color="#1d4ed8" stop-opacity="1" />
-                  </linearGradient>
-                </defs>
-                <path d="M 120 0 C 180 60, 240 120, 320 120 L 500 120 L 500 0 Z" fill="url(#headerBlueGrad)" />
-              </svg>
-
-              <!-- Left: Circular Hospital Emblem Logo from Image 1 -->
-              <div style="position: relative; z-index: 2; flex-shrink: 0; display: flex; align-items: center; gap: 12px;">
-                <svg viewBox="0 0 100 100" style="width: 86px; height: 86px;">
-                  <!-- Outer Blue Band with white border -->
-                  <circle cx="50" cy="50" r="48" fill="#1e40af" />
-                  <circle cx="50" cy="50" r="41" fill="#ffffff" />
-                  
-                  <!-- Circular Text along arc: GLOBAL HOSPITAL & MATERNITY CENTRE -->
-                  <path id="circleTextPath" d="M 18, 50 A 32,32 0 1,1 82, 50" fill="none" />
-                  <text font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="6.5" fill="#1e40af" letter-spacing="1">
-                    <textPath href="#circleTextPath" startOffset="50%" text-anchor="middle">GLOBAL HOSPITAL</textPath>
-                  </text>
-                  
-                  <!-- Inner Red Dotted Ring -->
-                  <circle cx="50" cy="50" r="33" fill="none" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="3,1.5" />
-                  
-                  <!-- Red Cross Icon -->
-                  <path d="M 46 22 H 54 V 78 H 46 Z" fill="#dc2626" opacity="0.85" />
-                  <path d="M 22 46 H 78 V 54 H 22 Z" fill="#dc2626" opacity="0.85" />
-                  
-                  <!-- Orbital Blue Swoosh and Inner Circle -->
-                  <ellipse cx="50" cy="50" rx="26" ry="12" fill="none" stroke="#2563eb" stroke-width="2" transform="rotate(-25 50 50)" />
-                  <circle cx="50" cy="50" r="18" fill="#ffffff" stroke="#2563eb" stroke-width="1.5" />
-                  
-                  <!-- Center "GH" Bold Text -->
-                  <text x="50" y="54" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="16" fill="#1d4ed8" text-anchor="middle" dominant-baseline="middle">GH</text>
-                </svg>
-              </div>
-
-              <!-- Center: Bold Hindi Header Text from Image 1 -->
-              <div style="position: relative; z-index: 2; flex-grow: 1; text-align: center; margin: 0 10px;">
-                <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 38px; color: #dc2626; text-shadow: 2px 2px 0px #ffffff, -2px -2px 0px #ffffff, 2px -2px 0px #ffffff, -2px 2px 0px #ffffff, 3px 3px 4px rgba(0,0,0,0.18); line-height: 1.1; letter-spacing: 0.5px;">
-                  ग्लोबल हॉस्पिटल
+          <!-- Custom Bilingual Premium Letterhead from Image 2 -->
+          <div class="header">
+            <div style="position: relative; padding: 15px 20px; display: flex; align-items: center; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 60%, #e0f2fe 100%); border-bottom: 3.5px solid #b91c1c; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); overflow: hidden;">
+              <!-- Top blue gradient accent bar -->
+              <div style="position: absolute; top: 0; left: 0; right: 0; height: 8px; background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #1d4ed8 100%);"></div>
+              
+              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 5px;">
+                <!-- Left: Circular Logo -->
+                <div style="flex-shrink: 0; margin-right: 15px;">
+                  <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                    <!-- Outer Blue Ring with double lines -->
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="#1d4ed8" stroke-width="3.5" />
+                    <circle cx="50" cy="50" r="41" fill="none" stroke="#ef4444" stroke-width="1.5" />
+                    <circle cx="50" cy="50" r="40" fill="#ffffff" />
+                    <!-- Medical Cross symbol faint in center -->
+                    <path d="M44 28 H56 V72 H44 Z" fill="#ef4444" opacity="0.1" />
+                    <path d="M28 44 H72 V56 H28 Z" fill="#ef4444" opacity="0.1" />
+                    <!-- Inner red dotted/dashed circle -->
+                    <circle cx="50" cy="50" r="34" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,2" />
+                    <!-- Letters GH in bold blue -->
+                    <text x="50" y="53" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="22" fill="#1d4ed8" text-anchor="middle" dominant-baseline="middle" style="letter-spacing: -0.5px;">GH</text>
+                    <!-- Hindi curved text at top -->
+                    <text x="50" y="24" font-family="'Noto Sans Devanagari', sans-serif" font-weight="700" font-size="5.5" fill="#ef4444" text-anchor="middle">ग्लोबल हॉस्पिटल</text>
+                    <!-- English curved text at bottom -->
+                    <text x="50" y="80" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="5.5" fill="#1d4ed8" text-anchor="middle">MATERNITY CENTRE</text>
+                  </svg>
                 </div>
-                <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 22px; color: #dc2626; text-shadow: 1.5px 1.5px 0px #ffffff, -1.5px -1.5px 0px #ffffff; margin-top: 2px; line-height: 1.1; letter-spacing: 0.5px;">
-                  एण्ड मैटरनिटी सेंटर
+                
+                <!-- Middle: Center Title with Red & White Styling from Image 2 -->
+                <div style="flex-grow: 1; text-align: center;">
+                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 38px; color: #ef4444; text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff, 3px 3px 5px rgba(0,0,0,0.2); text-transform: uppercase; margin: 0; line-height: 1; letter-spacing: 0.5px;">ग्लोबल हॉस्पिटल</div>
+                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 21px; color: #ef4444; margin-top: 5px; text-shadow: 1px 1px 0px #fff; letter-spacing: 0.5px; line-height: 1;">एण्ड मैटरनिटी सेंटर</div>
+                  <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; opacity: 0.9;">Global Hospital & Maternity Centre</div>
+                </div>
+
+                <!-- Right: Extra spacing for visual symmetry, or we can put a beautiful caduceus/hospital icon -->
+                <div style="flex-shrink: 0; width: 80px; text-align: right; opacity: 0.15;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.5" style="width: 55px; height: 55px; margin-left: auto;">
+                    <path d="M19 10.5H13.5V5C13.5 4.17157 12.8284 3.5 12 3.5C11.1716 3.5 10.5 4.17157 10.5 5V10.5H5C4.17157 10.5 3.5 11.1716 3.5 12C3.5 12.8284 4.17157 13.5 5 13.5H10.5V19C10.5 19.8284 11.1716 20.5 12 20.5C12.8284 20.5 13.5 19.8284 13.5 19V13.5H19C19.8284 13.5 20.5 12.8284 20.5 12C20.5 11.1716 19.8284 10.5 19 10.5Z" fill="#e0f2fe"/>
+                    <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" />
+                  </svg>
                 </div>
               </div>
-
-              <!-- Right Spacer for visual symmetry -->
-              <div style="position: relative; z-index: 2; width: 80px; flex-shrink: 0;"></div>
             </div>
           </div>
           
@@ -467,102 +455,42 @@ export function getPrescriptionPrintHtml(
             </div>
           </div>
 
-          <!-- Bottom Custom Footer matching Image 2 -->
-          <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; background-color: #ffffff;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 4px 10px; border-top: 1px solid #e2e8f0; width: 100%; box-sizing: border-box;">
-              
-              <!-- 1. Left: 24/7 Services Logo Badge matching Image 2 -->
-              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                <!-- Red 3 Slashes -->
-                <div style="display: flex; gap: 2px; transform: skewX(-15deg);">
-                  <div style="width: 3px; height: 16px; background-color: #dc2626;"></div>
-                  <div style="width: 3px; height: 16px; background-color: #dc2626;"></div>
-                  <div style="width: 3px; height: 16px; background-color: #dc2626;"></div>
+          <!-- Bottom Custom Footer from Image 2 -->
+          <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 10px 5px 10px; border-top: 1.5px solid #e2e8f0;">
+              <!-- Left: 24/7 Services Badge -->
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="position: relative; width: 44px; height: 44px; background-color: #1d4ed8; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ef4444; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ffffff; position: absolute; top: 6px; left: 6px;">24</span>
+                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ef4444; position: absolute; bottom: 6px; right: 6px;">7</span>
+                  <div style="position: absolute; width: 28px; height: 1.5px; background-color: #ffffff; transform: rotate(-45deg);"></div>
                 </div>
-                <!-- 24/7 Badge Ring -->
-                <div style="position: relative; width: 48px; height: 48px;">
-                  <svg viewBox="0 0 100 100" style="width: 100%; height: 100%;">
-                    <!-- Outer Dark Blue Oval Ring -->
-                    <circle cx="50" cy="50" r="46" fill="#1e3a8a" stroke="#ffffff" stroke-width="2" />
-                    <circle cx="50" cy="50" r="38" fill="none" stroke="#2563eb" stroke-width="3" />
-                    <!-- Diagonal Slash Line -->
-                    <line x1="25" y1="75" x2="75" y2="25" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
-                    <!-- Text 24 -->
-                    <text x="32" y="42" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="28" fill="#ffffff">24</text>
-                    <!-- Text 7 -->
-                    <text x="68" y="72" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="28" fill="#dc2626" text-anchor="end">7</text>
-                    <!-- SERVICES Banner Pill -->
-                    <rect x="10" y="70" width="80" height="22" rx="11" fill="#1d4ed8" stroke="#ffffff" stroke-width="2" />
-                    <text x="50" y="85" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="12" fill="#ffffff" text-anchor="middle">SERVICES</text>
-                  </svg>
+                <div style="display: flex; flex-direction: column;">
+                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">Emergency</span>
+                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 12px; color: #ef4444; text-transform: uppercase; line-height: 1.1;">Services</span>
                 </div>
               </div>
 
-              <!-- 2. Center-Left: Location Address in Crimson Red from Image 2 -->
-              <div style="display: flex; align-items: flex-start; gap: 5px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 800; max-width: 310px; line-height: 1.35; padding: 0 8px;">
-                <span style="font-size: 15px; color: #dc2626; flex-shrink: 0; margin-top: -1px;">📍</span>
-                <span>Near-Aura In Hotel, Bargadwa Badeban, Bansi & Dumariyaganj Road-Basti 272001</span>
+              <!-- Middle/Left: Location Address (Reddish brown/crimson) -->
+              <div style="display: flex; align-items: center; gap: 6px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; max-width: 320px; line-height: 1.4;">
+                <span style="font-size: 14px; color: #ef4444;">📍</span>
+                <span>Near-Aura Inn Hotel, Bargadwa Badeban, Bansi & Dumariyaganj Road-Basti 272001</span>
               </div>
 
-              <!-- 3. Vertical Separator Line -->
-              <div style="width: 1.5px; height: 38px; background-color: #cbd5e1; flex-shrink: 0; margin: 0 4px;"></div>
-
-              <!-- 4. Center-Right: Telephone Numbers with Red Phone Circle Icon from Image 2 -->
-              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                <div style="display: flex; flex-direction: column; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12.5px; font-weight: 900; color: #1d4ed8; line-height: 1.35; letter-spacing: 0.2px;">
-                  <span>+91- 8299713820</span>
-                  <span>+91- 7007128144</span>
+              <!-- Right: Telephone Numbers with red circular icon -->
+              <div style="display: flex; align-items: center; gap: 10px; border-left: 1.5px solid #e2e8f0; padding-left: 15px;">
+                <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 800; color: #1d4ed8; line-height: 1.3;">
+                  <span style="display: flex; align-items: center; gap: 4px;">+91-8299713820</span>
+                  <span style="display: flex; align-items: center; gap: 4px;">+91-7007128144</span>
                 </div>
-                <div style="width: 32px; height: 32px; background-color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 16px; box-shadow: 0 2px 4px rgba(220,38,38,0.3); flex-shrink: 0;">
+                <div style="width: 28px; height: 28px; background-color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                   📞
                 </div>
               </div>
-
-              <!-- 5. Right: Vector Doctors Graphic from Image 2 -->
-              <div style="flex-shrink: 0; width: 110px; height: 48px; display: flex; align-items: flex-end; justify-content: flex-end; overflow: hidden;">
-                <svg viewBox="0 0 160 80" style="width: 100%; height: 100%;">
-                  <defs>
-                    <linearGradient id="docCoat" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#ffffff" />
-                      <stop offset="100%" stop-color="#f1f5f9" />
-                    </linearGradient>
-                  </defs>
-                  
-                  <!-- Female Doctor (Left) -->
-                  <g transform="translate(10, 8)">
-                    <circle cx="20" cy="20" r="12" fill="#fbcfe8" /> <!-- Hair -->
-                    <circle cx="20" cy="18" r="10" fill="#fde047" /> <!-- Face -->
-                    <path d="M 8 40 C 8 28, 32 28, 32 40 L 32 75 L 8 75 Z" fill="url(#docCoat)" stroke="#94a3b8" stroke-width="1" />
-                    <path d="M 14 38 L 20 48 L 26 38" fill="none" stroke="#2563eb" stroke-width="1.5" />
-                  </g>
-                  
-                  <!-- Lead Male Doctor with Clipboard (Center) -->
-                  <g transform="translate(55, 0)">
-                    <circle cx="25" cy="18" r="12" fill="#1e293b" /> <!-- Hair -->
-                    <circle cx="25" cy="19" r="10" fill="#fed7aa" /> <!-- Face -->
-                    <path d="M 8 38 C 8 25, 42 25, 42 38 L 42 80 L 8 80 Z" fill="url(#docCoat)" stroke="#64748b" stroke-width="1.2" />
-                    <path d="M 18 36 L 25 48 L 32 36" fill="none" stroke="#dc2626" stroke-width="1.5" />
-                    <!-- Stethoscope -->
-                    <path d="M 15 36 C 15 50, 35 50, 35 36" fill="none" stroke="#334155" stroke-width="2" />
-                    <!-- Clipboard -->
-                    <rect x="28" y="42" width="14" height="20" rx="2" fill="#d97706" />
-                    <rect x="30" y="45" width="10" height="14" fill="#ffffff" />
-                  </g>
-                  
-                  <!-- Male Doctor (Right) -->
-                  <g transform="translate(105, 10)">
-                    <circle cx="20" cy="18" r="11" fill="#475569" /> <!-- Hair -->
-                    <circle cx="20" cy="18" r="9" fill="#fde047" /> <!-- Face -->
-                    <path d="M 6 36 C 6 26, 34 26, 34 36 L 34 70 L 6 70 Z" fill="url(#docCoat)" stroke="#94a3b8" stroke-width="1" />
-                    <path d="M 14 34 L 20 44 L 26 34" fill="none" stroke="#2563eb" stroke-width="1.5" />
-                  </g>
-                </svg>
-              </div>
-
             </div>
             
-            <!-- Solid Navy Blue Horizontal Bar at the very bottom from Image 2 -->
-            <div style="height: 16px; background-color: #0d3b75; width: 100%;"></div>
+            <!-- Dark blue solid strip at the very bottom -->
+            <div style="height: 12px; background-color: #1e3a8a; margin-top: 10px; border-radius: 2px; width: 100%;"></div>
           </div>
         </div>
         
