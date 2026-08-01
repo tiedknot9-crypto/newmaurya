@@ -82,9 +82,40 @@ export function getPrescriptionPrintHtml(
   const weightVal = vts?.weight !== undefined ? String(vts.weight) : '';
   const rrVal = vts?.rr !== undefined && vts?.rr !== 0 ? String(vts.rr) : '';
 
-  const docName = doctor?.name || 'Attending Doctor';
-  const docReg = doctor?.degree ? `Reg No: MC-${doctor.id?.toUpperCase() || '1234567'}` : 'Reg No: MC1234567';
-  const docSpecialty = doctor?.specialization || doctor?.department || 'Senior Consultant';
+  let rawDocName = '';
+  let docDept = '';
+  let docSpec = '';
+  let docDegree = '';
+  let docReg = '';
+
+  if (typeof doctor === 'string') {
+    rawDocName = doctor;
+  } else if (doctor && typeof doctor === 'object') {
+    rawDocName = doctor.name || '';
+    docDept = doctor.department || '';
+    docSpec = doctor.specialization || '';
+    docDegree = doctor.degree || '';
+    if (doctor.id) {
+      docReg = `Reg No: MC-${doctor.id.toString().toUpperCase()}`;
+    } else if (doctor.degree) {
+      docReg = `Reg No: MC-1234567`;
+    }
+  }
+
+  const docName = rawDocName ? (rawDocName.trim().startsWith('Dr.') ? rawDocName.trim() : `Dr. ${rawDocName.trim()}`) : 'Dr. Attending Doctor';
+
+  if (!docDept && docSpec) {
+    docDept = docSpec;
+  }
+  if (!docDept) {
+    docDept = 'General OPD / Clinical Services';
+  }
+  if (!docSpec) {
+    docSpec = docDept;
+  }
+  if (!docReg) {
+    docReg = 'Reg No: MC1234567';
+  }
 
   // Format Medicines content
   let medContent = '';
@@ -360,6 +391,17 @@ export function getPrescriptionPrintHtml(
                 <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patMRN}</span>
               </div>
             </div>
+            <!-- Row 3: Doctor Name & Department -->
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
+              <div style="flex: 1.5; min-width: 250px; display: flex; align-items: flex-end;">
+                <span>Doctor Name:</span>
+                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${docName}</span>
+              </div>
+              <div style="flex: 1; min-width: 200px; display: flex; align-items: flex-end;">
+                <span>Department:</span>
+                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${docDept}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Vitals / On Examination (O/E) Box -->
@@ -406,7 +448,7 @@ export function getPrescriptionPrintHtml(
               <div class="sig-line"></div>
               <h3 class="doc-name">${docName}</h3>
               <p class="doc-reg">${docReg}</p>
-              <p class="doc-spec">${docSpecialty}</p>
+              <p class="doc-spec">${docDegree ? `${docDegree} • ` : ''}${docDept ? `Dept. of ${docDept}` : docSpec}</p>
             </div>
           </div>
 

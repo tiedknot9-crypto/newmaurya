@@ -700,7 +700,7 @@ export default function OPD() {
       return;
     }
 
-    const doctor = users.find(u => u.name === prescription.doctor);
+    const doctor = users.find(u => u.name === prescription.doctor || u.id === prescription.doctor) || (prescription.doctor ? { name: prescription.doctor, department: 'General OPD' } : undefined);
     const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
 
     // Use edited vitals if present, otherwise fall back to latestVitals from history
