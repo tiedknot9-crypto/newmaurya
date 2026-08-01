@@ -23,6 +23,7 @@ export interface PrintVitals {
   spo2?: string | number;
   weight?: string | number;
   rr?: string | number;
+  rbs?: string | number;
 }
 
 export interface PrintPrescription {
@@ -81,6 +82,7 @@ export function getPrescriptionPrintHtml(
   const spo2Val = vts?.spo2 !== undefined && vts?.spo2 !== 0 ? String(vts.spo2) : '';
   const weightVal = vts?.weight !== undefined ? String(vts.weight) : '';
   const rrVal = vts?.rr !== undefined && vts?.rr !== 0 ? String(vts.rr) : '';
+  const rbsVal = vts?.rbs !== undefined && vts?.rbs !== 0 && vts?.rbs !== '' ? String(vts.rbs) : '';
 
   let rawDocName = '';
   let docDept = '';
@@ -414,6 +416,7 @@ export function getPrescriptionPrintHtml(
               <div>SpO2: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${spo2Val || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> %</div>
               <div>Weight: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${weightVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> kg</div>
               <div>Resp Rate: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${rrVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> /min</div>
+              <div>RBS: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${rbsVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> mg/dL</div>
             </div>
           </div>
           

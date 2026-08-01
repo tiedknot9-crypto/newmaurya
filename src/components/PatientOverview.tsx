@@ -628,7 +628,8 @@ View full details at: ${shareUrl}
       temp: latestVitals.temp,
       spo2: latestVitals.spo2,
       weight: latestVitals.weight,
-      rr: latestVitals.rr || latestVitals.respiration
+      rr: latestVitals.rr || latestVitals.respiration,
+      rbs: latestVitals.rbs
     } : undefined);
 
     const html = getPrescriptionPrintHtml(
@@ -713,7 +714,8 @@ View full details at: ${shareUrl}
         newPrescription.vitals.temp ||
         newPrescription.vitals.spo2 ||
         newPrescription.vitals.weight ||
-        newPrescription.vitals.rr
+        newPrescription.vitals.rr ||
+        newPrescription.vitals.rbs
       )) {
         try {
           const vData = {
@@ -724,6 +726,7 @@ View full details at: ${shareUrl}
             spo2: newPrescription.vitals.spo2 ? Number(newPrescription.vitals.spo2) : null,
             weight: newPrescription.vitals.weight ? Number(newPrescription.vitals.weight) : null,
             rr: newPrescription.vitals.rr ? Number(newPrescription.vitals.rr) : null,
+            rbs: newPrescription.vitals.rbs || null,
             recorded_by: currentUser?.id || null,
             recorded_at: new Date().toISOString()
           };
@@ -737,7 +740,7 @@ View full details at: ${shareUrl}
               medicines: [{ name: '', dosage: '', frequency: '' }],
               diagnosis: '',
               advice: '',
-              vitals: { bp: '', pulse: '', temp: '', spo2: '', weight: '', rr: '' }
+              vitals: { bp: '', pulse: '', temp: '', spo2: '', weight: '', rr: '', rbs: '' }
             });
           } else {
             toast.error('Failed to save vitals');
@@ -780,7 +783,8 @@ View full details at: ${shareUrl}
         newPrescription.vitals.temp ||
         newPrescription.vitals.spo2 ||
         newPrescription.vitals.weight ||
-        newPrescription.vitals.rr
+        newPrescription.vitals.rr ||
+        newPrescription.vitals.rbs
       )) {
         try {
           const vData = {
@@ -791,6 +795,7 @@ View full details at: ${shareUrl}
             spo2: newPrescription.vitals.spo2 ? Number(newPrescription.vitals.spo2) : null,
             weight: newPrescription.vitals.weight ? Number(newPrescription.vitals.weight) : null,
             rr: newPrescription.vitals.rr ? Number(newPrescription.vitals.rr) : null,
+            rbs: newPrescription.vitals.rbs || null,
             recorded_by: currentUser?.id || null,
             recorded_at: new Date().toISOString()
           };
@@ -816,7 +821,8 @@ View full details at: ${shareUrl}
           temp: '',
           spo2: '',
           weight: '',
-          rr: ''
+          rr: '',
+          rbs: ''
         }
       });
       toast.success('Prescription saved successfully');
@@ -2152,6 +2158,18 @@ View full details at: ${shareUrl}
                     onChange={(e) => setNewPrescription({
                       ...newPrescription,
                       vitals: { ...(newPrescription.vitals || {}), rr: e.target.value }
+                    })}
+                    className="h-9 bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-slate-500 uppercase font-semibold">RBS (mg/dL)</Label>
+                  <Input 
+                    placeholder="e.g. 110" 
+                    value={newPrescription.vitals?.rbs || ''} 
+                    onChange={(e) => setNewPrescription({
+                      ...newPrescription,
+                      vitals: { ...(newPrescription.vitals || {}), rbs: e.target.value }
                     })}
                     className="h-9 bg-white"
                   />

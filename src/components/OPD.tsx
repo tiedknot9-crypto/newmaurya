@@ -313,7 +313,8 @@ export default function OPD() {
       temp: '',
       spo2: '',
       weight: '',
-      rr: ''
+      rr: '',
+      rbs: ''
     }
   });
 
@@ -481,7 +482,8 @@ export default function OPD() {
         prescription.vitals.temp ||
         prescription.vitals.spo2 ||
         prescription.vitals.weight ||
-        prescription.vitals.rr
+        prescription.vitals.rr ||
+        prescription.vitals.rbs
       )) {
         try {
           const vData = {
@@ -492,6 +494,7 @@ export default function OPD() {
             spo2: prescription.vitals.spo2 ? Number(prescription.vitals.spo2) : null,
             weight: prescription.vitals.weight ? Number(prescription.vitals.weight) : null,
             rr: prescription.vitals.rr ? Number(prescription.vitals.rr) : null,
+            rbs: prescription.vitals.rbs || null,
             recorded_by: currentUser?.id || null,
             recorded_at: new Date().toISOString()
           };
@@ -541,7 +544,8 @@ export default function OPD() {
         prescription.vitals.temp ||
         prescription.vitals.spo2 ||
         prescription.vitals.weight ||
-        prescription.vitals.rr
+        prescription.vitals.rr ||
+        prescription.vitals.rbs
       )) {
         try {
           const vData = {
@@ -552,6 +556,7 @@ export default function OPD() {
             spo2: prescription.vitals.spo2 ? Number(prescription.vitals.spo2) : null,
             weight: prescription.vitals.weight ? Number(prescription.vitals.weight) : null,
             rr: prescription.vitals.rr ? Number(prescription.vitals.rr) : null,
+            rbs: prescription.vitals.rbs || null,
             recorded_by: currentUser?.id || null,
             recorded_at: new Date().toISOString()
           };
@@ -584,7 +589,8 @@ export default function OPD() {
           temp: '',
           spo2: '',
           weight: '',
-          rr: ''
+          rr: '',
+          rbs: ''
         }
       });
     } else {
@@ -666,7 +672,8 @@ export default function OPD() {
           temp: '',
           spo2: '',
           weight: '',
-          rr: ''
+          rr: '',
+          rbs: ''
         }
       });
     } else {
@@ -683,7 +690,8 @@ export default function OPD() {
           temp: '',
           spo2: '',
           weight: '',
-          rr: ''
+          rr: '',
+          rbs: ''
         }
       });
     }
@@ -710,21 +718,24 @@ export default function OPD() {
       prescription.vitals.temp ||
       prescription.vitals.spo2 ||
       prescription.vitals.weight ||
-      prescription.vitals.rr
+      prescription.vitals.rr ||
+      prescription.vitals.rbs
     )) ? {
       bp: prescription.vitals.bp,
       pulse: prescription.vitals.pulse,
       temp: prescription.vitals.temp,
       spo2: prescription.vitals.spo2,
       weight: prescription.vitals.weight,
-      rr: prescription.vitals.rr
+      rr: prescription.vitals.rr,
+      rbs: prescription.vitals.rbs
     } : (latestVitals ? {
       bp: latestVitals.bp,
       pulse: latestVitals.pulse,
       temp: latestVitals.temp,
       spo2: latestVitals.spo2,
       weight: latestVitals.weight,
-      rr: latestVitals.rr || latestVitals.respiration
+      rr: latestVitals.rr || latestVitals.respiration,
+      rbs: latestVitals.rbs
     } : undefined);
 
     const html = getPrescriptionPrintHtml(
@@ -772,7 +783,8 @@ export default function OPD() {
               temp: latest.temp || '',
               spo2: latest.spo2 || '',
               weight: latest.weight || '',
-              rr: latest.rr || latest.respiration || ''
+              rr: latest.rr || latest.respiration || '',
+              rbs: latest.rbs || ''
             }
           }));
         }
@@ -1859,7 +1871,8 @@ export default function OPD() {
           temp: latestVitals.temp,
           spo2: latestVitals.spo2,
           weight: latestVitals.weight,
-          rr: latestVitals.rr || latestVitals.respiration
+          rr: latestVitals.rr || latestVitals.respiration,
+          rbs: latestVitals.rbs
         } : undefined)
       },
       docObj,
@@ -3581,6 +3594,18 @@ export default function OPD() {
                       className="h-9 bg-white"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-slate-500 uppercase font-semibold">RBS (mg/dL)</Label>
+                    <Input 
+                      placeholder="e.g. 110" 
+                      value={prescription.vitals?.rbs || ''} 
+                      onChange={(e) => setPrescription({
+                        ...prescription,
+                        vitals: { ...(prescription.vitals || {}), rbs: e.target.value }
+                      })}
+                      className="h-9 bg-white"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -3651,7 +3676,8 @@ export default function OPD() {
                         temp: latestVitals.temp,
                         spo2: latestVitals.spo2,
                         weight: latestVitals.weight,
-                        rr: latestVitals.rr || latestVitals.respiration
+                        rr: latestVitals.rr || latestVitals.respiration,
+                        rbs: latestVitals.rbs
                       } : undefined
                     },
                     docObj,
@@ -3725,7 +3751,8 @@ export default function OPD() {
                       temp: latestVitals.temp,
                       spo2: latestVitals.spo2,
                       weight: latestVitals.weight,
-                      rr: latestVitals.rr || latestVitals.respiration
+                      rr: latestVitals.rr || latestVitals.respiration,
+                      rbs: latestVitals.rbs
                     } : undefined
                   },
                   docObj,

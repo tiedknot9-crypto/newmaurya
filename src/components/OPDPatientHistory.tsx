@@ -256,6 +256,24 @@ export default function OPDPatientHistory({
                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">SpO2</p>
                             <p className="text-xs font-black text-slate-800 mt-0.5">{v.spo2 ? `${v.spo2}%` : '98%'}</p>
                           </div>
+                          {v.weight && (
+                            <div className="bg-slate-50 p-2 rounded-lg">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Weight</p>
+                              <p className="text-xs font-black text-slate-800 mt-0.5">{v.weight} kg</p>
+                            </div>
+                          )}
+                          {(v.rr || v.respiration) && (
+                            <div className="bg-slate-50 p-2 rounded-lg">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Resp Rate</p>
+                              <p className="text-xs font-black text-slate-800 mt-0.5">{v.rr || v.respiration} /min</p>
+                            </div>
+                          )}
+                          {v.rbs && (
+                            <div className="bg-slate-50 p-2 rounded-lg">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">RBS</p>
+                              <p className="text-xs font-black text-slate-800 mt-0.5">{v.rbs} mg/dL</p>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

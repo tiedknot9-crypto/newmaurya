@@ -201,5 +201,9 @@ export interface PatientVitals {
   pulse: number;
   temp: string;
   spo2: number;
+  weight?: number | string;
+  rr?: number | string;
+  respiration?: number | string;
+  rbs?: number | string;
   lastUpdated: string;
 }

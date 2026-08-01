@@ -1060,6 +1060,9 @@ function cleanVitalsForPostgres(vitals: any) {
   if ('weight' in cleaned && cleaned.weight !== '' && cleaned.weight !== null && cleaned.weight !== undefined) {
     cleaned.weight = parseFloat(cleaned.weight);
   }
+  if ('rbs' in cleaned && cleaned.rbs !== '' && cleaned.rbs !== null && cleaned.rbs !== undefined) {
+    cleaned.rbs = String(cleaned.rbs);
+  }
 
   if ('timestamp' in cleaned && !('recorded_at' in cleaned)) {
     cleaned.recorded_at = cleaned.timestamp;
@@ -1070,7 +1073,7 @@ function cleanVitalsForPostgres(vitals: any) {
 
   const validColumns = [
     'id', 'patient_id', 'recorded_by', 'temperature', 'temp', 'blood_pressure', 'bp',
-    'pulse', 'respiration', 'rr', 'spo2', 'weight', 'recorded_at', 'updated_at'
+    'pulse', 'respiration', 'rr', 'spo2', 'weight', 'rbs', 'recorded_at', 'updated_at'
   ];
 
   const result: any = {};
@@ -1101,6 +1104,7 @@ function mapVitalsFromPostgres(vitals: any) {
     spo2: vitals.spo2 || 0,
     rr: vitals.respiration !== null && vitals.respiration !== undefined ? vitals.respiration : (vitals.rr || 0),
     respiration: vitals.respiration !== null && vitals.respiration !== undefined ? vitals.respiration : (vitals.rr || 0),
+    rbs: vitals.rbs || '',
     lastUpdated: vitals.recorded_at,
     timestamp: vitals.recorded_at
   };
