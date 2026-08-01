@@ -487,44 +487,7 @@ export function getPrescriptionPrintHtml(
             <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
               <img src="${actualFooterImage}" style="width: 100%; max-height: 150px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px;" />
             </div>
-          ` : `
-            <!-- Bottom Custom Footer from Image 2 -->
-            <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 10px 5px 10px; border-top: 1.5px solid #e2e8f0;">
-                <!-- Left: 24/7 Services Badge -->
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <div style="position: relative; width: 44px; height: 44px; background-color: #1d4ed8; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ef4444; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ffffff; position: absolute; top: 6px; left: 6px;">24</span>
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ef4444; position: absolute; bottom: 6px; right: 6px;">7</span>
-                    <div style="position: absolute; width: 28px; height: 1.5px; background-color: #ffffff; transform: rotate(-45deg);"></div>
-                  </div>
-                  <div style="display: flex; flex-direction: column;">
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">Emergency</span>
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 12px; color: #ef4444; text-transform: uppercase; line-height: 1.1;">Services</span>
-                  </div>
-                </div>
-
-                <!-- Middle/Left: Location Address (Reddish brown/crimson) -->
-                <div style="display: flex; align-items: center; gap: 6px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; max-width: 320px; line-height: 1.4;">
-                  <span style="font-size: 14px; color: #ef4444;">📍</span>
-                  <span>${hospAddress}</span>
-                </div>
-
-                <!-- Right: Telephone Numbers with red circular icon -->
-                <div style="display: flex; align-items: center; gap: 10px; border-left: 1.5px solid #e2e8f0; padding-left: 15px;">
-                  <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 800; color: #1d4ed8; line-height: 1.3;">
-                    <span style="display: flex; align-items: center; gap: 4px;">${hospPhone}</span>
-                  </div>
-                  <div style="width: 28px; height: 28px; background-color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    📞
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Dark blue solid strip at the very bottom -->
-              <div style="height: 12px; background-color: #1e3a8a; margin-top: 10px; border-radius: 2px; width: 100%;"></div>
-            </div>
-          `}
+          ` : ''}
         </div>
         
         <script>
