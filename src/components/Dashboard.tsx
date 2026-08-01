@@ -45,7 +45,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { supabaseService, toDeterministicUuid } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { Loader2 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getLocalDateStr } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { canUserViewFinancials } from '@/utils/rbac';
 import { toast } from 'sonner';
@@ -67,26 +67,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const getLocalDateString = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const getLocalDateString = () => getLocalDateStr(new Date());
 
-const getLocalDateStrFromVal = (val: any): string => {
-  if (!val) return '';
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
-    return val.substring(0, 10);
-  }
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return '';
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const getLocalDateStrFromVal = (val: any): string => getLocalDateStr(val);
 
 function parseTimeToMinutes(timeStr: string | null | undefined): number {
   if (!timeStr) return 0;

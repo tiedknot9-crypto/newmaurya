@@ -41,7 +41,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalDateStr } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_USERS, MOCK_BILLING, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES } from '@/mockData';
 import { supabaseService, isDummyPatient, toDeterministicUuid } from '@/services/supabaseService';
@@ -162,13 +162,13 @@ export default function Billing() {
           if (aptPaymentStatus === 'Cancelled') return;
 
           const pId = apt.patient_id || apt.patientId;
-          const aptDateStr = apt.appointment_date || (apt.created_at ? new Date(apt.created_at).toISOString().split('T')[0] : '');
+          const aptDateStr = getLocalDateStr(apt.appointment_date || apt.created_at);
 
           const hasInvoice = enrichedInvoices.some((inv: any) => {
             const invPid = inv.patient_id || inv.patientId;
             const cleanInvPid = toDeterministicUuid(invPid);
             const cleanAptPid = toDeterministicUuid(pId);
-            const invDateStr = inv.created_at ? new Date(inv.created_at).toISOString().split('T')[0] : '';
+            const invDateStr = getLocalDateStr(inv.created_at || inv.date);
             return cleanInvPid === cleanAptPid && (invDateStr === aptDateStr || inv.type === 'OPD');
           });
 
@@ -305,9 +305,9 @@ export default function Billing() {
   const [opdStartDate, setOpdStartDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    return getLocalDateStr(d);
   });
-  const [opdEndDate, setOpdEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [opdEndDate, setOpdEndDate] = useState<string>(() => getLocalDateStr(new Date()));
   const [opdDoctorFilter, setOpdDoctorFilter] = useState<string>('all');
   
   const [recentInvoicesStartDate, setRecentInvoicesStartDate] = useState<string>('');
@@ -395,7 +395,7 @@ export default function Billing() {
       methodTotals[method] = (methodTotals[method] || 0) + paidVal;
 
       // Trend mapping (by date)
-      const dateStr = (b.created_at || b.date || new Date().toISOString()).split('T')[0];
+      const dateStr = getLocalDateStr(b.created_at || b.date) || getLocalDateStr(new Date());
       if (!trendMap[dateStr]) {
         trendMap[dateStr] = { date: formatDate(b.created_at || b.date), billed: 0, collected: 0 };
       }
@@ -753,21 +753,12 @@ export default function Billing() {
         if (!isPidMatch) return false;
 
         const dateVal = b.created_at || b.date;
-        if (!dateVal) return true; // Include if no date is set
-
-        const bDate = new Date(dateVal);
-        if (isNaN(bDate.getTime())) return true;
-
-        if (ledgerStartDate) {
-          const start = new Date(ledgerStartDate);
-          if (bDate < start) return false;
-        }
-
-        if (ledgerEndDate) {
-          const end = new Date(ledgerEndDate);
-          // Set to end of day
-          end.setHours(23, 59, 59, 999);
-          if (bDate > end) return false;
+        if (dateVal) {
+          const bDateStr = getLocalDateStr(dateVal);
+          if (bDateStr) {
+            if (ledgerStartDate && bDateStr < ledgerStartDate) return false;
+            if (ledgerEndDate && bDateStr > ledgerEndDate) return false;
+          }
         }
 
         return true;
@@ -1235,14 +1226,13 @@ export default function Billing() {
       }
     }
     
-    const billDateStr = bill.created_at || bill.date || '';
-    const billDate = billDateStr ? billDateStr.split('T')[0] : '';
+    const billDate = getLocalDateStr(bill.created_at || bill.date || bill.invoice_date);
     
     let dateRangeMatch = true;
-    if (recentInvoicesStartDate) {
+    if (recentInvoicesStartDate && billDate) {
       dateRangeMatch = dateRangeMatch && billDate >= recentInvoicesStartDate;
     }
-    if (recentInvoicesEndDate) {
+    if (recentInvoicesEndDate && billDate) {
       dateRangeMatch = dateRangeMatch && billDate <= recentInvoicesEndDate;
     }
     
@@ -1250,17 +1240,7 @@ export default function Billing() {
   });
 
   const groupedBillsByDate = bills.reduce((acc: Record<string, any[]>, bill) => {
-    let dateKey = bill.date || '';
-    if (!dateKey && bill.created_at) {
-      try {
-        dateKey = new Date(bill.created_at).toISOString().split('T')[0];
-      } catch (e) {
-        dateKey = '';
-      }
-    }
-    if (!dateKey) {
-      dateKey = new Date().toISOString().split('T')[0];
-    }
+    let dateKey = getLocalDateStr(bill.created_at || bill.date) || getLocalDateStr(new Date());
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(bill);
     return acc;
@@ -3304,14 +3284,13 @@ export default function Billing() {
                   (exp.description || '').toLowerCase().includes(searchQuery.toLowerCase());
                 if (!matchesSearch) return false;
 
-                const expDateStr = exp.expense_date || exp.created_at || '';
-                const expDate = expDateStr ? expDateStr.split('T')[0] : '';
+                const expDate = getLocalDateStr(exp.expense_date || exp.created_at);
 
                 let dateRangeMatch = true;
-                if (recentInvoicesStartDate) {
+                if (recentInvoicesStartDate && expDate) {
                   dateRangeMatch = dateRangeMatch && expDate >= recentInvoicesStartDate;
                 }
-                if (recentInvoicesEndDate) {
+                if (recentInvoicesEndDate && expDate) {
                   dateRangeMatch = dateRangeMatch && expDate <= recentInvoicesEndDate;
                 }
                 return dateRangeMatch;

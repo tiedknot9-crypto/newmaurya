@@ -29,7 +29,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalDateStr } from '@/lib/utils';
 import { supabaseService } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
@@ -242,18 +242,7 @@ export default function Expenses() {
     toast.success('Expenses exported as CSV');
   };
 
-  const getLocalDateStrFromVal = (val: any): string => {
-    if (!val) return '';
-    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) {
-      return val.substring(0, 10);
-    }
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return '';
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  const getLocalDateStrFromVal = (val: any): string => getLocalDateStr(val);
 
   const getPeriodLabel = () => {
     switch (period) {

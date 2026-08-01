@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { isDummyPatient } from '@/services/supabaseService';
+import { getLocalDateStr } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,8 +85,8 @@ export function OPDCollectionTab({
         (u.id && docId && String(u.id).replace(/[^0-9a-zA-Z]/g, '') === String(docId).replace(/[^0-9a-zA-Z]/g, ''))
       );
       
-      const aptDate = apt.appointment_date || apt.date || '';
-      const dateStr = typeof aptDate === 'string' ? aptDate.split('T')[0] : '';
+      const aptDate = apt.appointment_date || apt.date || apt.created_at || '';
+      const dateStr = getLocalDateStr(aptDate);
       
       return {
         ...apt,
