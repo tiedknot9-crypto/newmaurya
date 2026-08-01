@@ -235,6 +235,8 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
   currentUser = resolvedUser;
 
   const [templateImage, setTemplateImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.TEMPLATE_IMAGE, null));
+  const [prescriptionHeaderImage, setPrescriptionHeaderImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, null));
+  const [prescriptionFooterImage, setPrescriptionFooterImage] = useState<string | null>(() => storage.get(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, null));
 
   // Supabase SQL Editor State
   const [sqlTab, setSqlTab] = useState<'all' | 'tax_slabs' | 'billing' | 'pharmacy'>('all');
@@ -742,6 +744,38 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
     };
     syncTemplateToDB();
   }, [templateImage]);
+
+  useEffect(() => {
+    storage.set(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, prescriptionHeaderImage);
+  }, [prescriptionHeaderImage]);
+
+  useEffect(() => {
+    storage.set(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, prescriptionFooterImage);
+  }, [prescriptionFooterImage]);
+
+  const handleHeaderUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPrescriptionHeaderImage(reader.result as string);
+        toast.success('Prescription Header uploaded successfully');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFooterUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPrescriptionFooterImage(reader.result as string);
+        toast.success('Prescription Footer uploaded successfully');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleTemplateUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2609,13 +2643,215 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
         </TabsContent>
 
         {/* Templates Tab */}
-        <TabsContent value="templates">
+        <TabsContent value="templates" className="space-y-6">
+          {/* Prescription Header & Footer Upload Section */}
           <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Document Letterhead Template</CardTitle>
-              <CardDescription>Upload a background image for prescriptions, bills, and reports.</CardDescription>
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                    Prescription Header & Footer
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    Upload distinct Header (top banner) and Footer (bottom banner) images for your OPD prescriptions.
+                  </CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="bg-white border-blue-200 text-blue-700 hover:bg-blue-50 gap-2 shadow-xs"
+                  onClick={() => {
+                    const printWindow = window.open('', '_blank');
+                    if (!printWindow) return;
+                    const samplePatient = {
+                      name: 'Rahul Sharma',
+                      age: 32,
+                      gender: 'Male',
+                      mrn: 'MRN-2026-8812',
+                      phone: '+91 98765 43210',
+                      fatherName: 'Suresh Sharma'
+                    };
+                    const samplePrescription = {
+                      date: new Date().toISOString().split('T')[0],
+                      vitals: {
+                        bp: '120/80',
+                        pulse: 76,
+                        temp: 98.6,
+                        spo2: 99,
+                        weight: 68,
+                        rr: 18,
+                        rbs: 110
+                      },
+                      medicines: [
+                        { name: 'Tab Paracetamol 650mg', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', time: 'After food' },
+                        { name: 'Tab Amoxicillin 500mg', dosage: '1 Tab', frequency: '1-1-1', duration: '5 Days', time: 'After food' },
+                        { name: 'Syr Gelusil MPS', dosage: '2 Tsp', frequency: '1-0-1', duration: '7 Days', time: 'Before food' }
+                      ],
+                      advice: 'Drink plenty of warm water. Rest well for 3 days. Follow up after 5 days if fever persists.'
+                    };
+                    const sampleDoctor = {
+                      name: 'Dr. A. K. Verma',
+                      degree: 'MBBS, MD (Medicine)',
+                      specialization: 'Senior Consultant Physician',
+                      department: 'General Medicine',
+                      regNo: 'MCI-882190'
+                    };
+                    const html = getPrescriptionPrintHtml(
+                      samplePatient,
+                      samplePrescription,
+                      sampleDoctor,
+                      hospitalInfo,
+                      templateImage,
+                      prescriptionHeaderImage,
+                      prescriptionFooterImage
+                    );
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                  }}
+                >
+                  <Printer className="w-4 h-4 text-blue-600" />
+                  Preview Prescription
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-6">
+
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Header Upload Box */}
+                <div className="flex flex-col space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Upload className="w-4 h-4 text-blue-600" />
+                        Header Image (Top Banner)
+                      </p>
+                      <p className="text-xs text-slate-500">Appears at the top of the prescription page.</p>
+                    </div>
+                    {prescriptionHeaderImage && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                        Header Active
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-white gap-3 min-h-[160px]">
+                    {prescriptionHeaderImage ? (
+                      <div className="relative group w-full">
+                        <img 
+                          src={prescriptionHeaderImage} 
+                          alt="Prescription Header" 
+                          className="w-full max-h-[120px] object-contain rounded-lg border border-slate-200 shadow-xs" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg gap-2">
+                          <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5" onClick={() => document.getElementById('header-upload')?.click()}>
+                            <Upload className="w-3.5 h-3.5" />
+                            Replace
+                          </Button>
+                          <Button variant="destructive" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setPrescriptionHeaderImage(null)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center space-y-3">
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">No Header Image Uploaded</p>
+                          <p className="text-[11px] text-slate-400 max-w-xs mt-0.5">Upload banner with Hospital Logo, Doctor Details & Address.</p>
+                        </div>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-8 text-xs" onClick={() => document.getElementById('header-upload')?.click()}>
+                          <Upload className="w-3.5 h-3.5" />
+                          Upload Header Image
+                        </Button>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      id="header-upload" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleHeaderUpload} 
+                    />
+                  </div>
+                </div>
+
+                {/* Footer Upload Box */}
+                <div className="flex flex-col space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Upload className="w-4 h-4 text-emerald-600" />
+                        Footer Image (Bottom Banner)
+                      </p>
+                      <p className="text-xs text-slate-500">Appears at the very bottom of the prescription page.</p>
+                    </div>
+                    {prescriptionFooterImage && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                        Footer Active
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-white gap-3 min-h-[160px]">
+                    {prescriptionFooterImage ? (
+                      <div className="relative group w-full">
+                        <img 
+                          src={prescriptionFooterImage} 
+                          alt="Prescription Footer" 
+                          className="w-full max-h-[120px] object-contain rounded-lg border border-slate-200 shadow-xs" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg gap-2">
+                          <Button variant="secondary" size="sm" className="h-8 text-xs gap-1.5" onClick={() => document.getElementById('footer-upload')?.click()}>
+                            <Upload className="w-3.5 h-3.5" />
+                            Replace
+                          </Button>
+                          <Button variant="destructive" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setPrescriptionFooterImage(null)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center space-y-3">
+                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">No Footer Image Uploaded</p>
+                          <p className="text-[11px] text-slate-400 max-w-xs mt-0.5">Upload banner with Emergency Contact, Location & Timings.</p>
+                        </div>
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-8 text-xs" onClick={() => document.getElementById('footer-upload')?.click()}>
+                          <Upload className="w-3.5 h-3.5" />
+                          Upload Footer Image
+                        </Button>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      id="footer-upload" 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleFooterUpload} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Full Background Letterhead Card */}
+          <Card className="border-none shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
+              <CardTitle className="text-lg font-bold text-slate-800">Document Watermark / Full Background Letterhead</CardTitle>
+              <CardDescription className="text-xs text-slate-500">
+                Optionally upload a full A4 background image for pre-printed letterheads.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 gap-4">
                 {templateImage ? (
                   <div className="relative group w-full max-w-md">
@@ -2637,12 +2873,12 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                       <ImageIcon className="w-8 h-8" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-600">No template uploaded</p>
-                      <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">Upload a high-quality JPG or PNG of your hospital letterhead.</p>
+                      <p className="text-sm font-bold text-slate-600">No background letterhead uploaded</p>
+                      <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">Upload a high-quality JPG or PNG of your full hospital letterhead page.</p>
                     </div>
-                    <Button className="bg-medical-blue gap-2" onClick={() => document.getElementById('template-upload')?.click()}>
+                    <Button className="bg-slate-800 hover:bg-slate-900 gap-2" onClick={() => document.getElementById('template-upload')?.click()}>
                       <Upload className="w-4 h-4" />
-                      Upload Letterhead
+                      Upload Full Letterhead Page
                     </Button>
                   </div>
                 )}

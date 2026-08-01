@@ -244,6 +244,8 @@ export const STORAGE_KEYS = {
   PHARMACY_BILLS: 'hms_pharmacy_billing',
   PRESCRIPTIONS: 'hms_prescriptions',
   TEMPLATE_IMAGE: 'hms_template_image',
+  PRESCRIPTION_HEADER_IMAGE: 'hms_prescription_header_image',
+  PRESCRIPTION_FOOTER_IMAGE: 'hms_prescription_footer_image',
   BED_RATES: 'hms_bed_rates',
   OT_RATES: 'hms_ot_rates',
   LAB_RATES: 'hms_lab_rates',

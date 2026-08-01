@@ -48,9 +48,13 @@ export function getPrescriptionPrintHtml(
   prescription: PrintPrescription,
   doctor?: PrintDoctor,
   hospitalInfo?: { name: string; address: string; phone: string },
-  templateImage?: string | null
+  templateImage?: string | null,
+  headerImage?: string | null,
+  footerImage?: string | null
 ): string {
   const actualTemplateImage = templateImage !== undefined ? templateImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_template_image') : null);
+  const actualHeaderImage = headerImage !== undefined ? headerImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_header_image') : null);
+  const actualFooterImage = footerImage !== undefined ? footerImage : (typeof window !== 'undefined' ? localStorage.getItem('hms_prescription_footer_image') : null);
 
   // Parse whether there is a valid custom preprinted background letterhead image (to overlay on)
   const isValidTemplateImage = !!(
@@ -60,6 +64,24 @@ export function getPrescriptionPrintHtml(
     actualTemplateImage !== 'null' &&
     actualTemplateImage !== 'undefined' &&
     (actualTemplateImage.startsWith('http') || actualTemplateImage.startsWith('data:image') || actualTemplateImage.startsWith('/'))
+  );
+
+  const isValidHeaderImage = !!(
+    actualHeaderImage &&
+    typeof actualHeaderImage === 'string' &&
+    actualHeaderImage.trim() !== '' &&
+    actualHeaderImage !== 'null' &&
+    actualHeaderImage !== 'undefined' &&
+    (actualHeaderImage.startsWith('http') || actualHeaderImage.startsWith('data:image') || actualHeaderImage.startsWith('/'))
+  );
+
+  const isValidFooterImage = !!(
+    actualFooterImage &&
+    typeof actualFooterImage === 'string' &&
+    actualFooterImage.trim() !== '' &&
+    actualFooterImage !== 'null' &&
+    actualFooterImage !== 'undefined' &&
+    (actualFooterImage.startsWith('http') || actualFooterImage.startsWith('data:image') || actualFooterImage.startsWith('/'))
   );
 
   const hospName = hospitalInfo?.name || 'GLOBAL HOSPITAL';
@@ -315,51 +337,57 @@ export function getPrescriptionPrintHtml(
         <div class="container">
           ${isValidTemplateImage ? `<div class="template-bg"><img src="${actualTemplateImage}" style="width: 100%;" /></div>` : ''}
           
-          <!-- Custom Bilingual Premium Letterhead from Image 2 -->
-          <div class="header">
-            <div style="position: relative; padding: 15px 20px; display: flex; align-items: center; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 60%, #e0f2fe 100%); border-bottom: 3.5px solid #b91c1c; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); overflow: hidden;">
-              <!-- Top blue gradient accent bar -->
-              <div style="position: absolute; top: 0; left: 0; right: 0; height: 8px; background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #1d4ed8 100%);"></div>
-              
-              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 5px;">
-                <!-- Left: Circular Logo -->
-                <div style="flex-shrink: 0; margin-right: 15px;">
-                  <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
-                    <!-- Outer Blue Ring with double lines -->
-                    <circle cx="50" cy="50" r="46" fill="none" stroke="#1d4ed8" stroke-width="3.5" />
-                    <circle cx="50" cy="50" r="41" fill="none" stroke="#ef4444" stroke-width="1.5" />
-                    <circle cx="50" cy="50" r="40" fill="#ffffff" />
-                    <!-- Medical Cross symbol faint in center -->
-                    <path d="M44 28 H56 V72 H44 Z" fill="#ef4444" opacity="0.1" />
-                    <path d="M28 44 H72 V56 H28 Z" fill="#ef4444" opacity="0.1" />
-                    <!-- Inner red dotted/dashed circle -->
-                    <circle cx="50" cy="50" r="34" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,2" />
-                    <!-- Letters GH in bold blue -->
-                    <text x="50" y="53" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="22" fill="#1d4ed8" text-anchor="middle" dominant-baseline="middle" style="letter-spacing: -0.5px;">GH</text>
-                    <!-- Hindi curved text at top -->
-                    <text x="50" y="24" font-family="'Noto Sans Devanagari', sans-serif" font-weight="700" font-size="5.5" fill="#ef4444" text-anchor="middle">ग्लोबल हॉस्पिटल</text>
-                    <!-- English curved text at bottom -->
-                    <text x="50" y="80" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="5.5" fill="#1d4ed8" text-anchor="middle">MATERNITY CENTRE</text>
-                  </svg>
-                </div>
+          ${isValidHeaderImage ? `
+            <div class="header" style="margin-bottom: 18px; width: 100%; text-align: center; page-break-inside: avoid;">
+              <img src="${actualHeaderImage}" style="width: 100%; max-height: 200px; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;" />
+            </div>
+          ` : `
+            <!-- Custom Bilingual Premium Letterhead from Image 2 -->
+            <div class="header">
+              <div style="position: relative; padding: 15px 20px; display: flex; align-items: center; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 60%, #e0f2fe 100%); border-bottom: 3.5px solid #b91c1c; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); overflow: hidden;">
+                <!-- Top blue gradient accent bar -->
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 8px; background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #1d4ed8 100%);"></div>
                 
-                <!-- Middle: Center Title with Red & White Styling from Image 2 -->
-                <div style="flex-grow: 1; text-align: center;">
-                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 38px; color: #ef4444; text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff, 3px 3px 5px rgba(0,0,0,0.2); text-transform: uppercase; margin: 0; line-height: 1; letter-spacing: 0.5px;">ग्लोबल हॉस्पिटल</div>
-                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 21px; color: #ef4444; margin-top: 5px; text-shadow: 1px 1px 0px #fff; letter-spacing: 0.5px; line-height: 1;">एण्ड मैटरनिटी सेंटर</div>
-                  <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; opacity: 0.9;">Global Hospital & Maternity Centre</div>
-                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 5px;">
+                  <!-- Left: Circular Logo -->
+                  <div style="flex-shrink: 0; margin-right: 15px;">
+                    <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                      <!-- Outer Blue Ring with double lines -->
+                      <circle cx="50" cy="50" r="46" fill="none" stroke="#1d4ed8" stroke-width="3.5" />
+                      <circle cx="50" cy="50" r="41" fill="none" stroke="#ef4444" stroke-width="1.5" />
+                      <circle cx="50" cy="50" r="40" fill="#ffffff" />
+                      <!-- Medical Cross symbol faint in center -->
+                      <path d="M44 28 H56 V72 H44 Z" fill="#ef4444" opacity="0.1" />
+                      <path d="M28 44 H72 V56 H28 Z" fill="#ef4444" opacity="0.1" />
+                      <!-- Inner red dotted/dashed circle -->
+                      <circle cx="50" cy="50" r="34" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,2" />
+                      <!-- Letters GH in bold blue -->
+                      <text x="50" y="53" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="22" fill="#1d4ed8" text-anchor="middle" dominant-baseline="middle" style="letter-spacing: -0.5px;">GH</text>
+                      <!-- Hindi curved text at top -->
+                      <text x="50" y="24" font-family="'Noto Sans Devanagari', sans-serif" font-weight="700" font-size="5.5" fill="#ef4444" text-anchor="middle">ग्लोबल हॉस्पिटल</text>
+                      <!-- English curved text at bottom -->
+                      <text x="50" y="80" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="5.5" fill="#1d4ed8" text-anchor="middle">MATERNITY CENTRE</text>
+                    </svg>
+                  </div>
+                  
+                  <!-- Middle: Center Title with Red & White Styling from Image 2 -->
+                  <div style="flex-grow: 1; text-align: center;">
+                    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 38px; color: #ef4444; text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff, 3px 3px 5px rgba(0,0,0,0.2); text-transform: uppercase; margin: 0; line-height: 1; letter-spacing: 0.5px;">${hospName === 'GLOBAL HOSPITAL' ? 'ग्लोबल हॉस्पिटल' : hospName}</div>
+                    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 21px; color: #ef4444; margin-top: 5px; text-shadow: 1px 1px 0px #fff; letter-spacing: 0.5px; line-height: 1;">एण्ड मैटरनिटी सेंटर</div>
+                    <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; opacity: 0.9;">Global Hospital & Maternity Centre</div>
+                  </div>
 
-                <!-- Right: Extra spacing for visual symmetry, or we can put a beautiful caduceus/hospital icon -->
-                <div style="flex-shrink: 0; width: 80px; text-align: right; opacity: 0.15;">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.5" style="width: 55px; height: 55px; margin-left: auto;">
-                    <path d="M19 10.5H13.5V5C13.5 4.17157 12.8284 3.5 12 3.5C11.1716 3.5 10.5 4.17157 10.5 5V10.5H5C4.17157 10.5 3.5 11.1716 3.5 12C3.5 12.8284 4.17157 13.5 5 13.5H10.5V19C10.5 19.8284 11.1716 20.5 12 20.5C12.8284 20.5 13.5 19.8284 13.5 19V13.5H19C19.8284 13.5 20.5 12.8284 20.5 12C20.5 11.1716 19.8284 10.5 19 10.5Z" fill="#e0f2fe"/>
-                    <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" />
-                  </svg>
+                  <!-- Right: Extra spacing for visual symmetry, or we can put a beautiful caduceus/hospital icon -->
+                  <div style="flex-shrink: 0; width: 80px; text-align: right; opacity: 0.15;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.5" style="width: 55px; height: 55px; margin-left: auto;">
+                      <path d="M19 10.5H13.5V5C13.5 4.17157 12.8284 3.5 12 3.5C11.1716 3.5 10.5 4.17157 10.5 5V10.5H5C4.17157 10.5 3.5 11.1716 3.5 12C3.5 12.8284 4.17157 13.5 5 13.5H10.5V19C10.5 19.8284 11.1716 20.5 12 20.5C12.8284 20.5 13.5 19.8284 13.5 19V13.5H19C19.8284 13.5 20.5 12.8284 20.5 12C20.5 11.1716 19.8284 10.5 19 10.5Z" fill="#e0f2fe"/>
+                      <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          `}
           
           <!-- Dotted Line Patient Information Grid from Image 2 -->
           <div style="border-top: 1.5px solid #e2e8f0; border-bottom: 1.5px solid #e2e8f0; padding: 12px 10px; margin-bottom: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 700; color: #1e293b; display: flex; flex-direction: column; gap: 12px;">
@@ -455,43 +483,48 @@ export function getPrescriptionPrintHtml(
             </div>
           </div>
 
-          <!-- Bottom Custom Footer from Image 2 -->
-          <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 10px 5px 10px; border-top: 1.5px solid #e2e8f0;">
-              <!-- Left: 24/7 Services Badge -->
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="position: relative; width: 44px; height: 44px; background-color: #1d4ed8; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ef4444; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
-                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ffffff; position: absolute; top: 6px; left: 6px;">24</span>
-                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ef4444; position: absolute; bottom: 6px; right: 6px;">7</span>
-                  <div style="position: absolute; width: 28px; height: 1.5px; background-color: #ffffff; transform: rotate(-45deg);"></div>
-                </div>
-                <div style="display: flex; flex-direction: column;">
-                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">Emergency</span>
-                  <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 12px; color: #ef4444; text-transform: uppercase; line-height: 1.1;">Services</span>
-                </div>
-              </div>
-
-              <!-- Middle/Left: Location Address (Reddish brown/crimson) -->
-              <div style="display: flex; align-items: center; gap: 6px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; max-width: 320px; line-height: 1.4;">
-                <span style="font-size: 14px; color: #ef4444;">📍</span>
-                <span>Near-Aura Inn Hotel, Bargadwa Badeban, Bansi & Dumariyaganj Road-Basti 272001</span>
-              </div>
-
-              <!-- Right: Telephone Numbers with red circular icon -->
-              <div style="display: flex; align-items: center; gap: 10px; border-left: 1.5px solid #e2e8f0; padding-left: 15px;">
-                <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 800; color: #1d4ed8; line-height: 1.3;">
-                  <span style="display: flex; align-items: center; gap: 4px;">+91-8299713820</span>
-                  <span style="display: flex; align-items: center; gap: 4px;">+91-7007128144</span>
-                </div>
-                <div style="width: 28px; height: 28px; background-color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  📞
-                </div>
-              </div>
+          ${isValidFooterImage ? `
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
+              <img src="${actualFooterImage}" style="width: 100%; max-height: 150px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px;" />
             </div>
-            
-            <!-- Dark blue solid strip at the very bottom -->
-            <div style="height: 12px; background-color: #1e3a8a; margin-top: 10px; border-radius: 2px; width: 100%;"></div>
-          </div>
+          ` : `
+            <!-- Bottom Custom Footer from Image 2 -->
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 10px 5px 10px; border-top: 1.5px solid #e2e8f0;">
+                <!-- Left: 24/7 Services Badge -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="position: relative; width: 44px; height: 44px; background-color: #1d4ed8; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #ef4444; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ffffff; position: absolute; top: 6px; left: 6px;">24</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 13px; color: #ef4444; position: absolute; bottom: 6px; right: 6px;">7</span>
+                    <div style="position: absolute; width: 28px; height: 1.5px; background-color: #ffffff; transform: rotate(-45deg);"></div>
+                  </div>
+                  <div style="display: flex; flex-direction: column;">
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1;">Emergency</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; font-size: 12px; color: #ef4444; text-transform: uppercase; line-height: 1.1;">Services</span>
+                  </div>
+                </div>
+
+                <!-- Middle/Left: Location Address (Reddish brown/crimson) -->
+                <div style="display: flex; align-items: center; gap: 6px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; max-width: 320px; line-height: 1.4;">
+                  <span style="font-size: 14px; color: #ef4444;">📍</span>
+                  <span>${hospAddress}</span>
+                </div>
+
+                <!-- Right: Telephone Numbers with red circular icon -->
+                <div style="display: flex; align-items: center; gap: 10px; border-left: 1.5px solid #e2e8f0; padding-left: 15px;">
+                  <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 800; color: #1d4ed8; line-height: 1.3;">
+                    <span style="display: flex; align-items: center; gap: 4px;">${hospPhone}</span>
+                  </div>
+                  <div style="width: 28px; height: 28px; background-color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    📞
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Dark blue solid strip at the very bottom -->
+              <div style="height: 12px; background-color: #1e3a8a; margin-top: 10px; border-radius: 2px; width: 100%;"></div>
+            </div>
+          `}
         </div>
         
         <script>
