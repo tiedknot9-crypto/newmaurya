@@ -1694,6 +1694,43 @@ const rawSupabaseService = {
     }
   },
 
+  updatePrescription: async (id: string, updates: any) => {
+    try {
+      const dbPayload = cleanUuidFields(updates);
+      const { data, error } = await supabase
+        .from('prescriptions')
+        .update(dbPayload)
+        .eq('id', id)
+        .select();
+      
+      if (error) throw error;
+      return data && data[0] ? data[0] : updates;
+    } catch (error: any) {
+      console.warn('Handling local fallback for update prescription:', error.message);
+      const localData = storage.get(STORAGE_KEYS.PRESCRIPTIONS, MOCK_PRESCRIPTIONS);
+      const updated = localData.map((rx: any) => (rx.id === id ? { ...rx, ...updates, updated_at: new Date().toISOString() } : rx));
+      storage.set(STORAGE_KEYS.PRESCRIPTIONS, updated);
+      return updates;
+    }
+  },
+
+  deletePrescription: async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('prescriptions')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.warn('Handling local fallback for delete prescription:', error.message);
+      const localData = storage.get(STORAGE_KEYS.PRESCRIPTIONS, MOCK_PRESCRIPTIONS);
+      const filtered = localData.filter((rx: any) => rx.id !== id);
+      storage.set(STORAGE_KEYS.PRESCRIPTIONS, filtered);
+      return true;
+    }
+  },
+
   // Invoices / Billing
   getInvoices: async () => {
     try {

@@ -2,12 +2,29 @@
 -- Run this in your Supabase SQL Editor
 --
 -- === MIGRATION/UPDATE FOR INSTALLED DATABASES ===
--- If you already ran this schema previously, please execute the following statements to update patients, invoices, profiles and staff tables:
+-- If you already ran this schema previously, please execute the following statements to update patients, invoices, profiles, staff, hospital_info and prescriptions tables:
 -- ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS attending_doctor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_remarks TEXT;
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
 -- ALTER TABLE public.staff ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS header_image TEXT;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS footer_image TEXT;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS template_image TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS patient_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS doctor_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS prescription_date TIMESTAMPTZ DEFAULT NOW();
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS diagnosis TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS symptoms TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS advice TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS notes TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS vitals JSONB DEFAULT '{}'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medications JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS lab_tests JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
 -- ===============================================
 
 -- 1. Profiles / Users (Optional reference to auth.users handled manually without FK block constraint)
@@ -169,6 +186,9 @@ CREATE TABLE IF NOT EXISTS public.hospital_info (
   tagline TEXT,
   registration_number TEXT,
   tax_id TEXT,
+  header_image TEXT,
+  footer_image TEXT,
+  template_image TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -427,15 +447,21 @@ CREATE TABLE IF NOT EXISTS public.clinical_notes (
 CREATE TABLE IF NOT EXISTS public.prescriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+  patient_name TEXT,
   doctor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   doctor_name TEXT,
   prescription_date TIMESTAMPTZ DEFAULT NOW(),
   diagnosis TEXT,
+  symptoms TEXT,
   advice TEXT,
+  notes TEXT,
+  vitals JSONB DEFAULT '{}'::jsonb,
   medicines JSONB DEFAULT '[]'::jsonb,
   medications JSONB DEFAULT '[]'::jsonb,
+  lab_tests JSONB DEFAULT '[]'::jsonb,
   attachment_url TEXT,
   attachment_name TEXT,
+  status TEXT DEFAULT 'Active',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1122,6 +1148,9 @@ CREATE TRIGGER update_profiles_modtime BEFORE UPDATE ON public.profiles FOR EACH
 DROP TRIGGER IF EXISTS update_patients_modtime ON public.patients;
 CREATE TRIGGER update_patients_modtime BEFORE UPDATE ON public.patients FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_prescriptions_modtime ON public.prescriptions;
+CREATE TRIGGER update_prescriptions_modtime BEFORE UPDATE ON public.prescriptions FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_pharmacy_items_modtime ON public.pharmacy_items;
 CREATE TRIGGER update_pharmacy_items_modtime BEFORE UPDATE ON public.pharmacy_items FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
@@ -1504,6 +1533,22 @@ ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS urgency TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS result_value TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS clinical_notes TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS findings TEXT;
+
+-- Ensure prescriptions table contains all fields for OPD/IPD prescription management
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS patient_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS doctor_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS prescription_date TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS diagnosis TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS symptoms TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS advice TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS vitals JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medications JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS lab_tests JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
 
 -- 19. Pathology LIMS Relational Schema
 -- Category Master Table

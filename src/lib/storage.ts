@@ -131,7 +131,32 @@ export const storage = {
   get: <T>(key: string, defaultValue: T): T => {
     try {
       const item = localStorage.getItem(key);
-      const parsed = item ? JSON.parse(item) : defaultValue;
+      if (item === null || item === undefined) return defaultValue;
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(item);
+      } catch {
+        // If JSON.parse fails, the value in localStorage is an un-JSON-encoded raw string
+        // (such as raw base64 "data:image/...", raw plain text, URLs, etc.).
+        parsed = item;
+      }
+
+      // If defaultValue is an Array, ensure parsed is an Array
+      if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
+        return sanitizeStorageValue(key, defaultValue) as T;
+      }
+
+      // If defaultValue is a plain object (not null, not array), ensure parsed is an object
+      if (
+        defaultValue !== null &&
+        typeof defaultValue === 'object' &&
+        !Array.isArray(defaultValue) &&
+        (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      ) {
+        return sanitizeStorageValue(key, defaultValue) as T;
+      }
+
       return sanitizeStorageValue(key, parsed) as T;
     } catch (error) {
       console.error(`Error reading storage key "${key}":`, error);

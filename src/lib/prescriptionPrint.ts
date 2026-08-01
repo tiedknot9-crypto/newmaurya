@@ -96,9 +96,21 @@ export function getPrescriptionPrintHtml(
   const isValidHeaderImage = !!actualHeaderImage;
   const isValidFooterImage = !!actualFooterImage;
 
+  const defaultAddress = 'Near-Aura Inn Hotel, Bargadwa Badeban, Bansi & Dumariyaganj Road-Basti 272001';
+  const defaultPhone = '+91- 8299713820 / +91- 7007128144';
+
   const hospName = hospitalInfo?.name || 'GLOBAL HOSPITAL';
-  const hospAddress = hospitalInfo?.address || '123 Healthcare Way, Medical City';
-  const hospPhone = hospitalInfo?.phone || '+91 98765 43210';
+  const rawHospAddress = hospitalInfo?.address || '';
+  const hospAddress = (rawHospAddress && rawHospAddress.trim() && !rawHospAddress.toLowerCase().includes('123 healthcare way'))
+    ? rawHospAddress
+    : defaultAddress;
+
+  const rawHospPhone = hospitalInfo?.phone || '';
+  const hospPhone = (rawHospPhone && rawHospPhone.trim() && !rawHospPhone.includes('98765 43210'))
+    ? rawHospPhone
+    : defaultPhone;
+
+  const phoneList = hospPhone.split(/[,/\n]/).map(p => p.trim()).filter(Boolean);
   const hospEmail = `contact@${hospName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'globalhospital'}.com`;
   
   const patName = patient?.name || 'N/A';
@@ -501,7 +513,29 @@ export function getPrescriptionPrintHtml(
             <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
               <img src="${actualFooterImage}" style="width: 100%; max-height: 150px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px;" />
             </div>
-          ` : ''}
+          ` : `
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; background-color: #ffffff; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 4px 2px 4px; border-top: 1.5px solid #e2e8f0;">
+                <!-- Left: Location address with red pin -->
+                <div style="display: flex; align-items: flex-start; gap: 5px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 10.5px; font-weight: 700; max-width: 420px; line-height: 1.35;">
+                  <span style="font-size: 13px; color: #ef4444; flex-shrink: 0; margin-top: -1px;">📍</span>
+                  <span>${hospAddress}</span>
+                </div>
+
+                <!-- Right: Telephone numbers with vertical divider and red phone button -->
+                <div style="display: flex; align-items: center; gap: 8px; border-left: 1.5px solid #94a3b8; padding-left: 10px;">
+                  <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 800; color: #1e3a8a; line-height: 1.25;">
+                    ${phoneList.map(p => `<div>${p}</div>`).join('')}
+                  </div>
+                  <div style="width: 24px; height: 24px; background-color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; flex-shrink: 0; font-weight: bold;">
+                    📞
+                  </div>
+                </div>
+              </div>
+              <!-- Bottom solid dark blue banner -->
+              <div style="height: 12px; background-color: #1e3a8a; margin-top: 4px; width: 100%;"></div>
+            </div>
+          `}
         </div>
         
         <script>
