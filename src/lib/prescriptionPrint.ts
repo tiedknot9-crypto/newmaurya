@@ -399,7 +399,7 @@ export function getPrescriptionPrintHtml(
             <div class="footer-left">
               <h3 style="font-size: 11px; font-weight: 800; color: #1d4ed8; margin: 0 0 3px 0; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Plus Jakarta Sans', sans-serif;">Digital Health Record</h3>
               <p style="font-size: 10px; color: #64748b; margin: 0; line-height: 1.5; font-weight: 500;">
-                This document is an authorized clinical prescription registered under hospital safety guidelines. Valid for 7 days.
+                Not for Medicolegal purpose
               </p>
             </div>
             <div class="footer-right">
