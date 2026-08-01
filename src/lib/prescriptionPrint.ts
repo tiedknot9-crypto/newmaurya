@@ -387,62 +387,64 @@ export function getPrescriptionPrintHtml(
             </div>
           `}
           
-          <!-- Dotted Line Patient Information Grid from Image 2 -->
-          <div style="border-top: 1.5px solid #e2e8f0; border-bottom: 1.5px solid #e2e8f0; padding: 12px 10px; margin-bottom: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 700; color: #1e293b; display: flex; flex-direction: column; gap: 12px;">
+          <!-- Clean Patient Information Card (No Dotted Lines) -->
+          <div style="background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; color: #1e293b; page-break-inside: avoid;">
             <!-- Row 1 -->
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
-              <div style="flex: 1.8; min-width: 240px; display: flex; align-items: flex-end;">
-                <span>Patient Name:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patName}</span>
+            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start;">
+              <div style="flex: 2; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Patient Name</div>
+                <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${patName}</div>
               </div>
-              <div style="flex: 1; min-width: 130px; display: flex; align-items: flex-end;">
-                <span>Age / Sex:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patAgeGender}</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Age / Gender</div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${patAgeGender}</div>
               </div>
-              <div style="flex: 1; min-width: 120px; display: flex; align-items: flex-end;">
-                <span>Date:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${presDate}</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Date</div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${presDate}</div>
               </div>
             </div>
+
             <!-- Row 2 -->
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
-              <div style="flex: 1.5; min-width: 250px; display: flex; align-items: flex-end;">
-                <span>Father / Husband Name:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patFatherName || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span>
+            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+              <div style="flex: 2; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Father / Husband Name</div>
+                <div style="font-size: 13px; font-weight: 700; color: #334155;">${patFatherName || '—'}</div>
               </div>
-              <div style="flex: 1; min-width: 150px; display: flex; align-items: flex-end;">
-                <span>Mobile No:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patPhone || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Mobile No.</div>
+                <div style="font-size: 13px; font-weight: 700; color: #334155;">${patPhone || '—'}</div>
               </div>
-              <div style="flex: 0.8; min-width: 110px; display: flex; align-items: flex-end;">
-                <span>MRN:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${patMRN}</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">MRN / Reg. No</div>
+                <div style="font-size: 13px; font-weight: 800; color: #1d4ed8;">${patMRN || '—'}</div>
               </div>
             </div>
-            <!-- Row 3: Doctor Name & Department -->
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
-              <div style="flex: 1.5; min-width: 250px; display: flex; align-items: flex-end;">
-                <span>Doctor Name:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${docName}</span>
+
+            <!-- Row 3 -->
+            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+              <div style="flex: 2; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Consulting Doctor</div>
+                <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${docName}</div>
               </div>
-              <div style="flex: 1; min-width: 200px; display: flex; align-items: flex-end;">
-                <span>Department:</span>
-                <span style="flex-grow: 1; border-bottom: 1.5px dotted #94a3b8; margin-left: 8px; padding-bottom: 2px; font-weight: 800; color: #1d4ed8; padding-left: 5px;">${docDept}</span>
+              <div style="flex: 2; min-width: 0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Department</div>
+                <div style="font-size: 13px; font-weight: 700; color: #334155;">${docDept}</div>
               </div>
             </div>
           </div>
 
           <!-- Vitals / On Examination (O/E) Box -->
-          <div style="display: flex; gap: 15px; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; margin-bottom: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11.5px; font-weight: 700; color: #334155; background-color: #f8fafc; align-items: center; page-break-inside: avoid;">
-            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; letter-spacing: 0.05em; border-right: 1.5px solid #cbd5e1; padding-right: 10px; margin-right: 5px;">Vitals / O/E</span>
-            <div style="flex: 1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-              <div>BP: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 60px; display: inline-block; text-align: center; padding-bottom: 1px;">${bpVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> mmHg</div>
-              <div>Pulse: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${pulseVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> /min</div>
-              <div>Temp: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${tempVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> °F</div>
-              <div>SpO2: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${spo2Val || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> %</div>
-              <div>Weight: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${weightVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> kg</div>
-              <div>Resp Rate: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${rrVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> /min</div>
-              <div>RBS: <span style="font-weight: 800; color: #1d4ed8; border-bottom: 1px dotted #94a3b8; min-width: 45px; display: inline-block; text-align: center; padding-bottom: 1px;">${rbsVal || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> mg/dL</div>
+          <div style="display: flex; gap: 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 700; color: #334155; background-color: #ffffff; align-items: center; page-break-inside: avoid;">
+            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; letter-spacing: 0.05em; border-right: 1.5px solid #cbd5e1; padding-right: 10px; margin-right: 5px; flex-shrink: 0;">Vitals / O/E</span>
+            <div style="flex: 1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div><span style="color: #64748b; font-size: 11px;">BP:</span> <span style="font-weight: 800; color: #0f172a;">${bpVal || '—'}</span> ${bpVal ? 'mmHg' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">Pulse:</span> <span style="font-weight: 800; color: #0f172a;">${pulseVal || '—'}</span> ${pulseVal ? '/min' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">Temp:</span> <span style="font-weight: 800; color: #0f172a;">${tempVal || '—'}</span> ${tempVal ? '°F' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">SpO2:</span> <span style="font-weight: 800; color: #0f172a;">${spo2Val || '—'}</span> ${spo2Val ? '%' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">Weight:</span> <span style="font-weight: 800; color: #0f172a;">${weightVal || '—'}</span> ${weightVal ? 'kg' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">Resp Rate:</span> <span style="font-weight: 800; color: #0f172a;">${rrVal || '—'}</span> ${rrVal ? '/min' : ''}</div>
+              <div><span style="color: #64748b; font-size: 11px;">RBS:</span> <span style="font-weight: 800; color: #0f172a;">${rbsVal || '—'}</span> ${rbsVal ? 'mg/dL' : ''}</div>
             </div>
           </div>
           
