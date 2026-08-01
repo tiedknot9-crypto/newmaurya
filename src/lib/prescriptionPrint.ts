@@ -69,9 +69,23 @@ export function getPrescriptionPrintHtml(
   headerImage?: string | null,
   footerImage?: string | null
 ): string {
-  const rawTemplate = templateImage !== undefined ? templateImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_template_image')) : null);
-  const rawHeader = headerImage !== undefined ? headerImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_header_image')) : null);
-  const rawFooter = footerImage !== undefined ? footerImage : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_footer_image')) : null);
+  const rawTemplate = (templateImage !== undefined && templateImage !== null)
+    ? templateImage
+    : ((hospitalInfo as any)?.template_image
+      ? (hospitalInfo as any).template_image
+      : (typeof window !== 'undefined' ? (localStorage.getItem('hms_template_image')) : null));
+
+  const rawHeader = (headerImage !== undefined && headerImage !== null)
+    ? headerImage
+    : ((hospitalInfo as any)?.header_image
+      ? (hospitalInfo as any).header_image
+      : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_header_image')) : null));
+
+  const rawFooter = (footerImage !== undefined && footerImage !== null)
+    ? footerImage
+    : ((hospitalInfo as any)?.footer_image
+      ? (hospitalInfo as any).footer_image
+      : (typeof window !== 'undefined' ? (localStorage.getItem('hms_prescription_footer_image')) : null));
 
   const actualTemplateImage = parseStoredImage(rawTemplate);
   const actualHeaderImage = parseStoredImage(rawHeader);
@@ -491,14 +505,40 @@ export function getPrescriptionPrintHtml(
         </div>
         
         <script>
-          window.onload = () => {
-            setTimeout(() => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            }, 150);
+          function triggerPrint() {
+            const images = Array.from(document.images);
+            if (images.length === 0) {
+              setTimeout(() => { window.print(); }, 200);
+              return;
+            }
+            let loaded = 0;
+            const checkAllLoaded = () => {
+              loaded++;
+              if (loaded >= images.length) {
+                setTimeout(() => { window.print(); }, 250);
+              }
+            };
+            images.forEach(img => {
+              if (img.complete) {
+                checkAllLoaded();
+              } else {
+                img.onload = checkAllLoaded;
+                img.onerror = checkAllLoaded;
+              }
+            });
           }
+
+          if (document.readyState === 'complete') {
+            triggerPrint();
+          } else {
+            window.addEventListener('load', triggerPrint);
+            // Fallback timeout in case load event already fired
+            setTimeout(triggerPrint, 500);
+          }
+
+          window.onafterprint = () => {
+            setTimeout(() => { window.close(); }, 300);
+          };
         </script>
       </body>
     </html>

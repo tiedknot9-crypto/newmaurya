@@ -759,10 +759,34 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
 
   useEffect(() => {
     storage.set(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, prescriptionHeaderImage);
+    const syncHeaderToDB = async () => {
+      try {
+        const currentInfo = storage.get(STORAGE_KEYS.HOSPITAL_INFO, {});
+        await supabaseService.updateHospitalInfo({
+          ...currentInfo,
+          header_image: prescriptionHeaderImage
+        });
+      } catch (err) {
+        console.error("Failed to sync header image to DB:", err);
+      }
+    };
+    syncHeaderToDB();
   }, [prescriptionHeaderImage]);
 
   useEffect(() => {
     storage.set(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, prescriptionFooterImage);
+    const syncFooterToDB = async () => {
+      try {
+        const currentInfo = storage.get(STORAGE_KEYS.HOSPITAL_INFO, {});
+        await supabaseService.updateHospitalInfo({
+          ...currentInfo,
+          footer_image: prescriptionFooterImage
+        });
+      } catch (err) {
+        console.error("Failed to sync footer image to DB:", err);
+      }
+    };
+    syncFooterToDB();
   }, [prescriptionFooterImage]);
 
   const handleHeaderUpload = (e: ChangeEvent<HTMLInputElement>) => {

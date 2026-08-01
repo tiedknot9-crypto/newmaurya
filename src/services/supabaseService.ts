@@ -2581,11 +2581,38 @@ const rawSupabaseService = {
       if (data) {
         const rawLogo = data.logo_url || data.logo || null;
         const validLogo = (typeof rawLogo === 'string' && rawLogo.trim() !== '' && rawLogo !== 'null' && rawLogo !== 'undefined') ? rawLogo : null;
+        
+        let templateImg = null;
+        let headerImg = null;
+        let footerImg = null;
+
+        if (data.registration_number) {
+          const regStr = String(data.registration_number).trim();
+          if (regStr.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(regStr);
+              templateImg = parsed.template_image || null;
+              headerImg = parsed.header_image || null;
+              footerImg = parsed.footer_image || null;
+            } catch (e) {
+              templateImg = regStr;
+            }
+          } else {
+            templateImg = regStr;
+          }
+        }
+
+        if (data.header_image) headerImg = data.header_image;
+        if (data.footer_image) footerImg = data.footer_image;
+        if (data.template_image) templateImg = data.template_image;
+
         return {
           ...data,
           gst: data.tax_id || data.gst || '',
           logo: validLogo,
-          template_image: data.registration_number || null
+          template_image: templateImg,
+          header_image: headerImg,
+          footer_image: footerImg
         };
       }
       return {
@@ -2596,7 +2623,9 @@ const rawSupabaseService = {
         website: 'www.medicarehospital.com',
         gst: '27AAAAA0000A1Z5',
         logo: null,
-        template_image: null
+        template_image: null,
+        header_image: null,
+        footer_image: null
       };
     } catch (error: any) {
       console.error('Error fetching hospital info:', error.message);
@@ -2609,13 +2638,49 @@ const rawSupabaseService = {
       if (!info) return null;
       const { data: existing, error: fetchErr } = await supabase
         .from('hospital_info')
-        .select('id')
+        .select('id, registration_number')
         .limit(1);
 
       if (fetchErr) throw fetchErr;
 
       const rawLogo = info.logo || info.logo_url || null;
       const validLogo = (typeof rawLogo === 'string' && rawLogo.trim() !== '' && rawLogo !== 'null' && rawLogo !== 'undefined') ? rawLogo : null;
+
+      // Extract existing template/header/footer if present
+      let existingTemplate = null;
+      let existingHeader = null;
+      let existingFooter = null;
+
+      if (existing && existing.length > 0 && existing[0].registration_number) {
+        const regStr = String(existing[0].registration_number).trim();
+        if (regStr.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(regStr);
+            existingTemplate = parsed.template_image || null;
+            existingHeader = parsed.header_image || null;
+            existingFooter = parsed.footer_image || null;
+          } catch (e) {
+            existingTemplate = regStr;
+          }
+        } else {
+          existingTemplate = regStr;
+        }
+      }
+
+      const finalTemplate = info.template_image !== undefined ? info.template_image : existingTemplate;
+      const finalHeader = info.header_image !== undefined ? info.header_image : existingHeader;
+      const finalFooter = info.footer_image !== undefined ? info.footer_image : existingFooter;
+
+      let templatePayload: string | null = null;
+      if (finalTemplate || finalHeader || finalFooter) {
+        templatePayload = JSON.stringify({
+          template_image: finalTemplate || null,
+          header_image: finalHeader || null,
+          footer_image: finalFooter || null
+        });
+      } else if (info.registration_number !== undefined) {
+        templatePayload = info.registration_number;
+      }
 
       const payload = {
         name: info.name || 'Medicare Multispeciality Hospital',
@@ -2625,7 +2690,7 @@ const rawSupabaseService = {
         website: info.website || '',
         logo_url: validLogo,
         tax_id: info.gst || info.tax_id || null,
-        registration_number: info.template_image !== undefined ? info.template_image : null,
+        registration_number: templatePayload,
         updated_at: new Date().toISOString()
       };
 
@@ -2657,7 +2722,9 @@ const rawSupabaseService = {
           ...result,
           gst: result.tax_id || result.gst || '',
           logo: validResLogo,
-          template_image: result.registration_number || null
+          template_image: finalTemplate,
+          header_image: finalHeader,
+          footer_image: finalFooter
         };
       }
       return null;

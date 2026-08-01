@@ -584,6 +584,19 @@ export default function App() {
         if (dbHospitalInfo) {
           storage.set(STORAGE_KEYS.HOSPITAL_INFO, dbHospitalInfo);
           setHospitalInfo(dbHospitalInfo);
+
+          if (dbHospitalInfo.template_image) {
+            storage.set(STORAGE_KEYS.TEMPLATE_IMAGE, dbHospitalInfo.template_image);
+            if (typeof window !== 'undefined') localStorage.setItem('hms_template_image', dbHospitalInfo.template_image);
+          }
+          if (dbHospitalInfo.header_image) {
+            storage.set(STORAGE_KEYS.PRESCRIPTION_HEADER_IMAGE, dbHospitalInfo.header_image);
+            if (typeof window !== 'undefined') localStorage.setItem('hms_prescription_header_image', dbHospitalInfo.header_image);
+          }
+          if (dbHospitalInfo.footer_image) {
+            storage.set(STORAGE_KEYS.PRESCRIPTION_FOOTER_IMAGE, dbHospitalInfo.footer_image);
+            if (typeof window !== 'undefined') localStorage.setItem('hms_prescription_footer_image', dbHospitalInfo.footer_image);
+          }
         }
       } catch (err) {
         console.warn('Could not fetch hospital info from database:', err);
