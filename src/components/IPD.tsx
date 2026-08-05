@@ -30,7 +30,12 @@ import {
   Home,
   HeartPulse,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  BarChart3,
+  Building2,
+  UserCheck,
+  AlertTriangle,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -324,7 +329,7 @@ export default function IPD() {
   const isDeleteForbidden = false;
 
   // --- NEW WORKFLOWS STATE ---
-  const [activeTab, setActiveTab] = useState<'registration' | 'beds' | 'surgery' | 'discharge'>('beds');
+  const [activeTab, setActiveTab] = useState<'registration' | 'beds' | 'surgery' | 'discharge' | 'summary'>('beds');
 
   useEffect(() => {
     if (isDoctor && activeTab === 'registration') {
@@ -755,6 +760,148 @@ export default function IPD() {
       return isMySurgery || isMyPatient;
     });
   }, [otSchedules, displayPatients, currentUser, isDoctor]);
+
+  // Category-wise & Ward-wise Bed Status Summary (Auto-updated on discharge/transfer/admission)
+  const categoryBedSummary = useMemo(() => {
+    const categoriesMap: Record<string, {
+      category: string;
+      totalBeds: number;
+      occupiedBeds: number;
+      availableBeds: number;
+      maintenanceBeds: number;
+      occupancyRate: number;
+      occupiedPatientsList: { bedNumber: string; ward: string; patientName: string; mrn: string; phone?: string; doctorName?: string }[];
+    }> = {};
+
+    beds.forEach(bed => {
+      const cat = bed.type || bed.ward || 'General';
+      if (!categoriesMap[cat]) {
+        categoriesMap[cat] = {
+          category: cat,
+          totalBeds: 0,
+          occupiedBeds: 0,
+          availableBeds: 0,
+          maintenanceBeds: 0,
+          occupancyRate: 0,
+          occupiedPatientsList: []
+        };
+      }
+
+      categoriesMap[cat].totalBeds += 1;
+
+      if (bed.status === 'Occupied') {
+        categoriesMap[cat].occupiedBeds += 1;
+        const pId = bed.patient_id || bed.patientId;
+        const pat = patients.find(p => p.id === pId);
+        if (pat) {
+          categoriesMap[cat].occupiedPatientsList.push({
+            bedNumber: bed.number,
+            ward: bed.ward || cat,
+            patientName: pat.name,
+            mrn: pat.mrn || 'N/A',
+            phone: pat.phone || '',
+            doctorName: pat.attending_doctor_name || pat.doctor || ''
+          });
+        }
+      } else if (bed.status === 'Maintenance' || bed.status === 'Cleaning') {
+        categoriesMap[cat].maintenanceBeds += 1;
+      } else {
+        categoriesMap[cat].availableBeds += 1;
+      }
+    });
+
+    Object.values(categoriesMap).forEach(item => {
+      item.occupancyRate = item.totalBeds > 0 ? Math.round((item.occupiedBeds / item.totalBeds) * 100) : 0;
+    });
+
+    return Object.values(categoriesMap).sort((a, b) => b.totalBeds - a.totalBeds);
+  }, [beds, patients]);
+
+  const handlePrintBedSummary = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print the bed summary report.');
+      return;
+    }
+
+    const rowsHtml = categoryBedSummary.map(cat => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; font-size: 13px;">${cat.category}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 13px;">${cat.totalBeds}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #dc2626; font-weight: bold; font-size: 13px;">${cat.occupiedBeds}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #16a34a; font-weight: bold; font-size: 13px;">${cat.availableBeds}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #d97706; font-size: 13px;">${cat.maintenanceBeds}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; font-weight: bold; font-size: 13px;">${cat.occupancyRate}%</td>
+      </tr>
+    `).join('');
+
+    const totalTotal = categoryBedSummary.reduce((acc, c) => acc + c.totalBeds, 0);
+    const totalOccupied = categoryBedSummary.reduce((acc, c) => acc + c.occupiedBeds, 0);
+    const totalAvailable = categoryBedSummary.reduce((acc, c) => acc + c.availableBeds, 0);
+    const totalMaint = categoryBedSummary.reduce((acc, c) => acc + c.maintenanceBeds, 0);
+    const overallRate = totalTotal > 0 ? Math.round((totalOccupied / totalTotal) * 100) : 0;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bed Status Summary Report - IPD</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 25px; color: #0f172a; max-width: 900px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 22px; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
+            .header p { margin: 4px 0 0 0; font-size: 12px; color: #64748b; font-weight: 500; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th { background-color: #f1f5f9; text-align: left; padding: 10px; border-bottom: 2px solid #cbd5e1; font-size: 11px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px; }
+            tfoot td { font-weight: bold; background-color: #f8fafc; border-top: 2px solid #94a3b8; padding: 12px 10px; font-size: 13px; }
+            .meta { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Bed Status Category-Wise Summary Report</h1>
+            <p>Inpatient Department (IPD) - Real-Time Bed Availability & Occupancy Statement</p>
+          </div>
+          <div class="meta">
+            <div><strong>Report Date:</strong> ${new Date().toLocaleString()}</div>
+            <div><strong>Status:</strong> Live Auto-Updated (Discharge / Transfer Sync)</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Bed Category / Type</th>
+                <th style="text-align: center;">Total Beds</th>
+                <th style="text-align: center;">Occupied Beds</th>
+                <th style="text-align: center;">Available Beds</th>
+                <th style="text-align: center;">Maintenance</th>
+                <th style="text-align: center;">Occupancy Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>TOTAL HOSPITAL CAPACITY</td>
+                <td style="text-align: center;">${totalTotal}</td>
+                <td style="text-align: center; color: #dc2626;">${totalOccupied}</td>
+                <td style="text-align: center; color: #16a34a;">${totalAvailable}</td>
+                <td style="text-align: center; color: #d97706;">${totalMaint}</td>
+                <td style="text-align: center;">${overallRate}%</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div style="margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8;">
+            Report generated from IPD Bed Management System. Automatically updated on patient admission, transfer, and discharge.
+          </div>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Auto load/save lists on update
   useEffect(() => {
@@ -2051,6 +2198,19 @@ export default function IPD() {
           }`}
         >
           Bed Allotment
+        </Button>
+        <Button 
+          variant="ghost"
+          size="sm" 
+          onClick={() => setActiveTab('summary')}
+          className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+            activeTab === 'summary' 
+              ? 'bg-teal-600 text-white shadow-md hover:bg-teal-700' 
+              : 'text-slate-600 hover:bg-slate-200/60'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          Bed Status Summary
         </Button>
         {!isReceptionist && (
           <Button 
@@ -4020,6 +4180,227 @@ export default function IPD() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'summary' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Card */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-slate-900">IPD Bed Status & Occupancy Summary Report</h2>
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 font-bold text-[10px]">
+                  ● Live Auto-Updated
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Category-wise summary report showing total beds, occupied beds, and available beds. Auto-updated upon discharge or transfer of patients.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrintBedSummary} className="gap-2 rounded-xl font-bold border-slate-300">
+                <Printer className="w-4 h-4 text-blue-600" />
+                Print Summary Report
+              </Button>
+            </div>
+          </div>
+
+          {/* Top KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="border-slate-200 shadow-xs bg-gradient-to-br from-blue-50/50 to-indigo-50/50">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Total Capacity</p>
+                  <p className="text-2xl font-black text-slate-900 mt-0.5">{totalBeds} Beds</p>
+                  <p className="text-[10px] text-slate-500 mt-1">Across {categoryBedSummary.length} categories</p>
+                </div>
+                <div className="p-3 bg-blue-100 text-blue-700 rounded-2xl">
+                  <BedIcon className="w-6 h-6" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-xs bg-gradient-to-br from-rose-50/50 to-amber-50/50">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Occupied Beds</p>
+                  <p className="text-2xl font-black text-rose-700 mt-0.5">{occupiedBeds}</p>
+                  <p className="text-[10px] text-rose-600 font-semibold mt-1">
+                    {totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0}% Overall Occupancy
+                  </p>
+                </div>
+                <div className="p-3 bg-rose-100 text-rose-700 rounded-2xl">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-xs bg-gradient-to-br from-emerald-50/50 to-teal-50/50">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Available Beds</p>
+                  <p className="text-2xl font-black text-emerald-700 mt-0.5">{totalBeds - occupiedBeds}</p>
+                  <p className="text-[10px] text-emerald-600 font-semibold mt-1">Ready for patient allotment</p>
+                </div>
+                <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-xs bg-gradient-to-br from-slate-50 to-amber-50/40">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Maintenance</p>
+                  <p className="text-2xl font-black text-amber-700 mt-0.5">
+                    {displayBeds.filter(b => b.status === 'Maintenance' || b.status === 'Cleaning').length}
+                  </p>
+                  <p className="text-[10px] text-amber-600 font-semibold mt-1">Cleaning / Servicing</p>
+                </div>
+                <div className="p-3 bg-amber-100 text-amber-700 rounded-2xl">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Category Wise Summary Table */}
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/80 border-b border-slate-100 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-teal-600" />
+                    Category-Wise Bed Summary Breakdown
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Real-time status report grouped by category (General, ICU, Maternity, Deluxe, Emergency, Private, etc.)
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-slate-100/70">
+                    <TableRow>
+                      <TableHead className="font-extrabold text-xs text-slate-700 uppercase">Bed Category</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Total Beds</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Occupied Beds</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Available Beds</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Maintenance</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Occupancy Rate</TableHead>
+                      <TableHead className="text-center font-extrabold text-xs text-slate-700 uppercase">Category Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categoryBedSummary.map((cat) => {
+                      const isHighOccupancy = cat.occupancyRate >= 85;
+                      const isModerateOccupancy = cat.occupancyRate >= 50 && cat.occupancyRate < 85;
+
+                      return (
+                        <TableRow key={cat.category} className="hover:bg-slate-50/80 transition-colors">
+                          <TableCell className="font-bold text-sm text-slate-900 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                              {cat.category}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-sm text-slate-800">
+                            {cat.totalBeds}
+                          </TableCell>
+                          <TableCell className="text-center font-extrabold text-sm text-rose-600">
+                            <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg border border-rose-100">
+                              {cat.occupiedBeds}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center font-extrabold text-sm text-emerald-600">
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg border border-emerald-100">
+                              {cat.availableBeds}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center font-semibold text-xs text-amber-700">
+                            {cat.maintenanceBeds}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex flex-col items-center gap-1 min-w-[120px]">
+                              <div className="flex items-center justify-between w-full text-[11px] font-bold">
+                                <span>{cat.occupancyRate}%</span>
+                              </div>
+                              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${
+                                    isHighOccupancy 
+                                      ? 'bg-rose-500' 
+                                      : isModerateOccupancy 
+                                        ? 'bg-amber-500' 
+                                        : 'bg-emerald-500'
+                                  }`} 
+                                  style={{ width: `${cat.occupancyRate}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              cat.availableBeds === 0 
+                                ? 'bg-rose-100 text-rose-800 border border-rose-200' 
+                                : isHighOccupancy 
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}>
+                              {cat.availableBeds === 0 ? 'Full' : isHighOccupancy ? 'High Demand' : 'Beds Available'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Admitted Patient Details Per Category */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-600" />
+              Occupied Beds & Active Admitted Patients Roster
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categoryBedSummary.map((cat) => (
+                <Card key={cat.category} className="border-slate-200 shadow-2xs">
+                  <CardHeader className="py-3 px-4 bg-slate-50 border-b border-slate-100 flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xs font-bold text-slate-800 uppercase">{cat.category} Ward</CardTitle>
+                      <p className="text-[10px] text-slate-500">{cat.occupiedBeds} occupied / {cat.totalBeds} total beds</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-mono bg-emerald-50 text-emerald-800 border-emerald-200">
+                      {cat.availableBeds} Available
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="p-3 max-h-[200px] overflow-y-auto space-y-2">
+                    {cat.occupiedPatientsList.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2 text-center">No patients currently admitted in {cat.category}.</p>
+                    ) : (
+                      cat.occupiedPatientsList.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded text-[10px]">Bed {p.bedNumber}</span>
+                              <p className="font-bold text-slate-900">{p.patientName}</p>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-0.5">MRN: {p.mrn} {p.doctorName ? `• Doc: ${p.doctorName}` : ''}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
       )}

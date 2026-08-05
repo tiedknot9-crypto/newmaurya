@@ -1436,9 +1436,9 @@ export default function Dashboard() {
                   </span>
                 </div>
 
-                <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 min-h-[300px] border border-slate-800/80 shadow-inner overflow-hidden flex flex-col justify-between">
+                <div className="bg-[#fde3b3] text-[#3a2002] rounded-2xl p-4 min-h-[300px] border border-[#f3c98b] shadow-sm overflow-hidden flex flex-col justify-between">
                   <div>
-                    <div className="grid grid-cols-4 text-[10px] font-black text-slate-500 uppercase tracking-wider pb-2 border-b border-slate-800/60 mb-2 font-mono">
+                    <div className="grid grid-cols-4 text-[10px] font-black text-[#7c4d12] uppercase tracking-wider pb-2 border-b border-[#eec283] mb-2 font-mono">
                       <span>Patient / MRN</span>
                       <span>OPD Doctor / Dept</span>
                       <span>Scheduled Time</span>
@@ -1447,9 +1447,9 @@ export default function Dashboard() {
 
                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                       {displayAppointments.length === 0 ? (
-                        <div className="h-32 flex flex-col items-center justify-center text-slate-400 text-center">
-                          <Ticket className="w-8 h-8 opacity-20 mb-1" />
-                          <p className="text-xs italic text-slate-500">No walk-in bookings registered today.</p>
+                        <div className="h-32 flex flex-col items-center justify-center text-[#925e1a] text-center">
+                          <Ticket className="w-8 h-8 opacity-30 mb-1 text-[#7c4d12]" />
+                          <p className="text-xs italic text-[#7c4d12]">No walk-in bookings registered today.</p>
                         </div>
                       ) : (
                         displayAppointments.slice(0, 5).map((apt: any) => {
@@ -1458,30 +1458,30 @@ export default function Dashboard() {
                           const tokNum = apt.token || `TK-${apt.id?.slice(-3).toUpperCase() || '099'}`;
 
                           return (
-                            <div key={apt.id} className="grid grid-cols-4 items-center text-xs py-1.5 border-b border-slate-800/40 hover:bg-slate-800/20 rounded px-1 transition-colors text-left font-mono">
+                            <div key={apt.id} className="grid grid-cols-4 items-center text-xs py-1.5 border-b border-[#ebd0a3] hover:bg-[#fbd99d] rounded px-1 transition-colors text-left font-mono">
                               <div>
-                                <p className="font-bold text-slate-200 truncate">{patName}</p>
-                                <p className="text-[9px] text-slate-500">MRN: {patMRN}</p>
+                                <p className="font-bold text-[#2d1800] truncate">{patName}</p>
+                                <p className="text-[9px] text-[#7c4d12]">MRN: {patMRN}</p>
                               </div>
-                              <div className="text-slate-300">
-                                <p className="truncate font-black text-indigo-200">{apt.doctor || 'OPD Consultant'}</p>
-                                <p className="text-[9px] text-slate-500">General OPD</p>
+                              <div className="text-[#3a2002]">
+                                <p className="truncate font-black text-[#1e1000]">{apt.doctor || 'OPD Consultant'}</p>
+                                <p className="text-[9px] text-[#7c4d12]">General OPD</p>
                               </div>
-                              <div className="text-slate-300 text-left">
+                              <div className="text-[#3a2002] text-left">
                                 <p className="font-bold">{new Date(apt.appointment_date).toLocaleDateString()}</p>
-                                <p className="text-[10px] font-black tracking-tighter text-indigo-400">{apt.appointment_time}</p>
+                                <p className="text-[10px] font-black tracking-tighter text-[#1e3a8a]">{apt.appointment_time}</p>
                               </div>
                               <div className="text-right flex flex-col items-end gap-1">
                                 <span className={`text-[8px] font-black px-1.5 rounded uppercase ${
                                   apt.urgency === 'Emergency' 
-                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/20' 
+                                    ? 'bg-rose-200 text-rose-900 border border-rose-300' 
                                     : apt.urgency === 'Urgent' 
-                                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/20' 
-                                      : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/20'
+                                      ? 'bg-amber-200 text-amber-900 border border-amber-300' 
+                                      : 'bg-indigo-200 text-indigo-900 border border-indigo-300'
                                 }`}>
                                   {apt.urgency || 'Routine'}
                                 </span>
-                                <Badge className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 text-[9px] px-1 font-bold">
+                                <Badge className="bg-emerald-800 text-emerald-50 hover:bg-emerald-900 border border-emerald-900 text-[9px] px-1.5 py-0.5 font-bold">
                                   {tokNum}
                                 </Badge>
                               </div>
@@ -1492,9 +1492,9 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                  <div className="pt-2 border-t border-[#eec283] flex items-center justify-between text-[10px] text-[#7c4d12] font-semibold">
                     <span>Showing daily bookings logged on active receptionist counters.</span>
-                    <Link to="/opd" className="text-indigo-400 font-bold hover:underline flex items-center gap-1">
+                    <Link to="/opd" className="text-[#1e3a8a] font-extrabold hover:underline flex items-center gap-1">
                       Manage Full OPD Desk & Queue →
                     </Link>
                   </div>

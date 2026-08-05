@@ -66,21 +66,38 @@ import { User as UserType } from './types';
 import { supabaseService, syncOfflineDataWithSupabase } from '@/services/supabaseService';
 import { hasMenuAccess, normalizeRole } from '@/utils/rbac';
 
-const navItems = [
-  { name: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'RADIOLOGIST'] },
-  { name: 'OPD Management', icon: Stethoscope, path: '/opd', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'IPD Management', icon: Calendar, path: '/ipd', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'OT Management', icon: Scissors, path: '/ot', roles: ['SUPER_ADMIN', 'DOCTOR', 'SURGEON', 'NURSE'] },
-  { name: 'Lab & Radiology', icon: FlaskConical, path: '/lab', roles: ['SUPER_ADMIN', 'LAB_STAFF', 'ACCOUNTANT', 'ACCOUNTS', 'NURSE', 'RADIOLOGIST', 'PATHOLOGIST', 'DOCTOR'] },
-  { name: 'Patient 360', icon: User, path: '/patient-overview', roles: ['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'Maternity', icon: Baby, path: '/maternity', roles: ['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'] },
-  { name: 'Pharmacy Store', icon: Pill, path: '/pharmacy', roles: ['SUPER_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'Billing & Accounts', icon: CreditCard, path: '/billing', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'Expenses', icon: FileText, path: '/expenses', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'Admin Settings', icon: Settings, path: '/settings', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
-  { name: 'Staff Management', icon: Users, path: '/staff', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN'] },
-  { name: 'User Manual & Guide', icon: BookOpen, path: '/manual', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST'] },
+const navSections = [
+  {
+    category: 'Core & Clinical Desk',
+    items: [
+      { name: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'RADIOLOGIST'] },
+      { name: 'OPD Management', icon: Stethoscope, path: '/opd', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'IPD Management', icon: Calendar, path: '/ipd', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'OT Management', icon: Scissors, path: '/ot', roles: ['SUPER_ADMIN', 'DOCTOR', 'SURGEON', 'NURSE'] },
+      { name: 'Lab & Radiology', icon: FlaskConical, path: '/lab', roles: ['SUPER_ADMIN', 'LAB_STAFF', 'ACCOUNTANT', 'ACCOUNTS', 'NURSE', 'RADIOLOGIST', 'PATHOLOGIST', 'DOCTOR'] },
+      { name: 'Patient 360', icon: User, path: '/patient-overview', roles: ['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'Maternity', icon: Baby, path: '/maternity', roles: ['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK'] },
+    ]
+  },
+  {
+    category: 'Pharmacy & Billing',
+    items: [
+      { name: 'Pharmacy Store', icon: Pill, path: '/pharmacy', roles: ['SUPER_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'Billing & Accounts', icon: CreditCard, path: '/billing', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'Expenses', icon: FileText, path: '/expenses', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
+    ]
+  },
+  {
+    category: 'Administration',
+    items: [
+      { name: 'Admin Settings', icon: Settings, path: '/settings', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'Staff Management', icon: Users, path: '/staff', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN'] },
+      { name: 'User Manual & Guide', icon: BookOpen, path: '/manual', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST'] },
+    ]
+  }
 ];
+
+const navItems = navSections.flatMap(section => section.items);
 
 function ProtectedRoute({ children, allowedRoles, user }: { children: ReactNode, allowedRoles: string[], user: any }) {
   if (!user) return <>{children}</>;
@@ -102,73 +119,132 @@ function ProtectedRoute({ children, allowedRoles, user }: { children: ReactNode,
 
 function SidebarContent({ onLogout, user, hospitalInfo }: { onLogout: () => void, user: UserType | null, hospitalInfo: any }) {
   const location = useLocation();
-  
-  const filteredNavItems = navItems.filter(item => {
-    if (!user) return true;
-    return hasMenuAccess(item.path, user.role);
-  });
+  const [menuFilter, setMenuFilter] = useState('');
   
   return (
-    <div className="flex flex-col h-full bg-white border-r overflow-hidden">
-      <div className="p-6 flex items-center gap-3 flex-shrink-0">
-        <div className="w-10 h-10 bg-medical-blue rounded-lg flex items-center justify-center text-white font-bold text-xl overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50/70 border-r border-slate-200/80 overflow-hidden select-none">
+      {/* Brand Header */}
+      <div className="p-5 flex items-center gap-3.5 bg-white border-b border-slate-100 flex-shrink-0 shadow-xs">
+        <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-black text-xl overflow-hidden shadow-md shadow-blue-200 flex-shrink-0">
           {hospitalInfo.logo && hospitalInfo.logo !== 'null' && hospitalInfo.logo !== 'undefined' && hospitalInfo.logo.trim() !== '' ? (
             <img src={hospitalInfo.logo} alt="Logo" className="w-full h-full object-cover" />
           ) : (
             (hospitalInfo?.name || 'H').charAt(0)
           )}
         </div>
-        <div>
-          <h1 className="text-sm font-bold leading-none text-medical-blue uppercase">{hospitalInfo.name}</h1>
-          <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wider font-medium">Healthcare Center</p>
+        <div className="overflow-hidden">
+          <h1 className="text-sm font-extrabold leading-tight text-slate-900 truncate uppercase tracking-tight">{hospitalInfo.name}</h1>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Live Hospital System</p>
+          </div>
         </div>
       </div>
       
-      <Separator className="flex-shrink-0" />
-      
-      <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
-        <nav className="space-y-1">
-          {filteredNavItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive 
-                    ? 'bg-medical-blue text-white' 
-                    : 'text-secondary-text hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
+      {/* Quick Menu Search Filter */}
+      <div className="px-3.5 pt-3.5 pb-1 flex-shrink-0">
+        <div className="relative">
+          <Input
+            placeholder="Search menu items..."
+            value={menuFilter}
+            onChange={(e) => setMenuFilter(e.target.value)}
+            className="h-8 pl-8 pr-3 text-xs bg-white border-slate-200 rounded-lg shadow-2xs focus-visible:ring-1 focus-visible:ring-blue-500"
+          />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+          {menuFilter && (
+            <button 
+              onClick={() => setMenuFilter('')}
+              className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
       
-      <div className="p-4 mt-auto flex-shrink-0 border-t bg-white">
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-          <div className="flex items-center gap-3 mb-3">
-            <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
-              <AvatarImage src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Anjali"} />
-              <AvatarFallback>{user?.name.substring(0, 2).toUpperCase() || "AG"}</AvatarFallback>
-            </Avatar>
-            <div className="overflow-hidden">
-              <p className="text-sm font-semibold truncate">{user?.name || "Dr. Anjali Gupta"}</p>
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{user?.role.replace('_', ' ') || "Super Admin"}</p>
+      {/* Scrollable Navigation Groups */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4 custom-scrollbar">
+        {navSections.map((sec) => {
+          const visibleItems = sec.items.filter(item => {
+            const matchesRole = !user || hasMenuAccess(item.path, user.role);
+            const matchesQuery = !menuFilter || item.name.toLowerCase().includes(menuFilter.toLowerCase());
+            return matchesRole && matchesQuery;
+          });
+
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={sec.category} className="space-y-1">
+              <div className="px-2 py-1 flex items-center justify-between">
+                <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase font-mono">
+                  {sec.category}
+                </span>
+                <span className="text-[9px] text-slate-400 font-semibold bg-slate-200/60 px-1.5 py-0.5 rounded-full">
+                  {visibleItems.length}
+                </span>
+              </div>
+
+              <nav className="space-y-1">
+                {visibleItems.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      className={`group relative flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+                        isActive 
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-200/80' 
+                          : 'text-slate-600 hover:bg-blue-50/80 hover:text-blue-700'
+                      }`}
+                    >
+                      <div className={`p-1.5 rounded-lg transition-colors flex items-center justify-center ${
+                        isActive 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-slate-200/70 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600'
+                      }`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="truncate flex-1">{item.name}</span>
+                      {isActive && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-white shadow-xs"></span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Bottom User Card */}
+      <div className="p-3.5 mt-auto flex-shrink-0 border-t border-slate-200/80 bg-white shadow-xs">
+        <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl p-3 border border-slate-200/80 shadow-2xs space-y-2.5">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-shrink-0">
+              <Avatar className="w-10 h-10 border-2 border-white shadow-xs">
+                <AvatarImage src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Anjali"} />
+                <AvatarFallback className="bg-blue-600 text-white font-bold">{user?.name?.substring(0, 2).toUpperCase() || "AG"}</AvatarFallback>
+              </Avatar>
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+            </div>
+            <div className="overflow-hidden flex-1">
+              <p className="text-xs font-bold text-slate-900 truncate">{user?.name || "Dr. Anjali Gupta"}</p>
+              <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded-md bg-blue-100 text-blue-800 text-[9px] font-black uppercase tracking-tight">
+                {user?.role?.replace('_', ' ') || "Super Admin"}
+              </span>
             </div>
           </div>
+          
           <Button 
             variant="ghost" 
             size="sm" 
-            className="w-full justify-start gap-2 text-xs h-8 mt-1 text-soft-red hover:text-soft-red hover:bg-red-50"
+            className="w-full justify-center gap-1.5 text-xs h-8 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800 rounded-xl font-bold border border-rose-100/80 transition-colors"
             onClick={onLogout}
           >
-            <LogOut className="w-3 h-3" />
-            Logout
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
           </Button>
         </div>
       </div>
