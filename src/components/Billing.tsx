@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OPDCollectionTab } from './OPDCollectionTab';
 import OPD from './OPD';
@@ -107,125 +107,132 @@ export default function Billing() {
     logo: null as string | null
   }));
 
+  const isInitialLoad = useRef(true);
+
   const fetchData = async () => {
-    const isInitial = bills.length === 0;
-    if (isInitial) {
+    if (isInitialLoad.current) {
       setLoading(true);
     }
-    const [invoicesData, patientsData, staffData, expensesData, appointmentsData] = await Promise.all([
-      supabaseService.getInvoices(),
-      supabaseService.getPatients(),
-      supabaseService.getStaff(),
-      supabaseService.getExpenses(),
-      supabaseService.getAppointments ? supabaseService.getAppointments() : Promise.resolve([])
-    ]);
+    try {
+      const [invoicesData, patientsData, staffData, expensesData, appointmentsData] = await Promise.all([
+        supabaseService.getInvoices(),
+        supabaseService.getPatients(),
+        supabaseService.getStaff(),
+        supabaseService.getExpenses(),
+        supabaseService.getAppointments ? supabaseService.getAppointments() : Promise.resolve([])
+      ]);
 
-    if (invoicesData) {
-      const enrichedInvoices = invoicesData.map((inv: any) => {
-        const pId = inv.patient_id || inv.patientId;
-        const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
-        
-        let discountAmt = inv.discount_amount ?? inv.discountAmount ?? inv.discount ?? 0;
-        let payableAmt = inv.payable_amount ?? inv.payableAmount ?? inv.total_amount ?? inv.totalAmount ?? 0;
-        let paidAmt = inv.paid_amount ?? inv.paidAmount ?? 0;
-        let totalAmt = inv.total_amount ?? inv.totalAmount ?? 0;
-        let status = inv.status || inv.payment_status || 'Unpaid';
+      if (invoicesData) {
+        const enrichedInvoices = invoicesData.map((inv: any) => {
+          const pId = inv.patient_id || inv.patientId;
+          const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
+          
+          let discountAmt = inv.discount_amount ?? inv.discountAmount ?? inv.discount ?? 0;
+          let payableAmt = inv.payable_amount ?? inv.payableAmount ?? inv.total_amount ?? inv.totalAmount ?? 0;
+          let paidAmt = inv.paid_amount ?? inv.paidAmount ?? 0;
+          let totalAmt = inv.total_amount ?? inv.totalAmount ?? 0;
+          let status = inv.status || inv.payment_status || 'Unpaid';
 
-        return {
-          ...inv,
-          discount_amount: discountAmt,
-          payable_amount: payableAmt,
-          paid_amount: paidAmt,
-          total_amount: totalAmt,
-          status: status,
-          payment_status: status,
-          patients: inv.patients || (matchedPatient ? {
-            id: matchedPatient.id,
-            name: matchedPatient.name,
-            mrn: matchedPatient.mrn,
-            phone: matchedPatient.phone,
-            email: matchedPatient.email
-          } : null)
-        };
-      }).filter((inv: any) => {
-        const pId = inv.patient_id || inv.patientId;
-        const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
-        const patObj = inv.patients || matchedPatient || { id: pId };
-        return !isDummyPatient(patObj);
-      });
-
-      // Synthesize virtual invoices for any OPD appointments (including Paid, Unpaid, Pending) that do not have a corresponding invoice in the list
-      const missingAptInvoices: any[] = [];
-      if (appointmentsData) {
-        appointmentsData.forEach((apt: any) => {
-          const aptPaymentStatus = apt.payment_status || apt.paymentStatus || 'Pending';
-          if (aptPaymentStatus === 'Cancelled') return;
-
-          const pId = apt.patient_id || apt.patientId;
-          const aptDateStr = getLocalDateStr(apt.appointment_date || apt.created_at);
-
-          const hasInvoice = enrichedInvoices.some((inv: any) => {
-            const invPid = inv.patient_id || inv.patientId;
-            const cleanInvPid = toDeterministicUuid(invPid);
-            const cleanAptPid = toDeterministicUuid(pId);
-            const invDateStr = getLocalDateStr(inv.created_at || inv.date);
-            return cleanInvPid === cleanAptPid && (invDateStr === aptDateStr || inv.type === 'OPD');
-          });
-
-          if (!hasInvoice) {
-            const baseFee = Number(apt.fee || apt.appointmentFee || 500);
-            const discount = Number(apt.discount_amount || apt.discountAmount || 0);
-            const feeToCollect = Math.max(0, baseFee - discount);
-            const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
-            const isPaid = aptPaymentStatus === 'Paid' || aptPaymentStatus === 'Settled';
-
-            const virtualInv = {
-              id: `virtual-inv-opd-${apt.id}`,
-              patient_id: pId,
-              invoice_number: `INV-OPD-V-${apt.id}`,
-              status: isPaid ? 'Paid' : aptPaymentStatus === 'Refunded' ? 'Refunded' : 'Unpaid',
-              payment_status: isPaid ? 'Paid' : aptPaymentStatus === 'Refunded' ? 'Refunded' : 'Unpaid',
-              total_amount: baseFee,
-              discount_amount: discount,
-              payable_amount: feeToCollect,
-              paid_amount: isPaid ? feeToCollect : 0,
-              payment_method: apt.payment_method || apt.paymentMethod || 'Cash',
-              payment_remarks: apt.paymentRemarks || '',
-              type: 'OPD',
-              created_at: apt.created_at || new Date().toISOString(),
-              patients: matchedPatient ? {
-                id: matchedPatient.id,
-                name: matchedPatient.name,
-                mrn: matchedPatient.mrn,
-                phone: matchedPatient.phone,
-                email: matchedPatient.email
-              } : {
-                id: pId,
-                name: apt.patientName || 'Unknown',
-                phone: apt.patientPhone || 'N/A',
-                mrn: apt.patientMrn || 'N/A'
-              }
-            };
-            missingAptInvoices.push(virtualInv);
-          }
+          return {
+            ...inv,
+            discount_amount: discountAmt,
+            payable_amount: payableAmt,
+            paid_amount: paidAmt,
+            total_amount: totalAmt,
+            status: status,
+            payment_status: status,
+            patients: inv.patients || (matchedPatient ? {
+              id: matchedPatient.id,
+              name: matchedPatient.name,
+              mrn: matchedPatient.mrn,
+              phone: matchedPatient.phone,
+              email: matchedPatient.email
+            } : null)
+          };
+        }).filter((inv: any) => {
+          const pId = inv.patient_id || inv.patientId;
+          const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
+          const patObj = inv.patients || matchedPatient || { id: pId };
+          return !isDummyPatient(patObj);
         });
-      }
 
-      setBills([...enrichedInvoices, ...missingAptInvoices]);
+        // Synthesize virtual invoices for any OPD appointments (including Paid, Unpaid, Pending) that do not have a corresponding invoice in the list
+        const missingAptInvoices: any[] = [];
+        if (appointmentsData) {
+          appointmentsData.forEach((apt: any) => {
+            const aptPaymentStatus = apt.payment_status || apt.paymentStatus || 'Pending';
+            if (aptPaymentStatus === 'Cancelled') return;
+
+            const pId = apt.patient_id || apt.patientId;
+            const aptDateStr = getLocalDateStr(apt.appointment_date || apt.created_at);
+
+            const hasInvoice = enrichedInvoices.some((inv: any) => {
+              const invPid = inv.patient_id || inv.patientId;
+              const cleanInvPid = toDeterministicUuid(invPid);
+              const cleanAptPid = toDeterministicUuid(pId);
+              const invDateStr = getLocalDateStr(inv.created_at || inv.date);
+              return cleanInvPid === cleanAptPid && (invDateStr === aptDateStr || inv.type === 'OPD');
+            });
+
+            if (!hasInvoice) {
+              const baseFee = Number(apt.fee || apt.appointmentFee || 500);
+              const discount = Number(apt.discount_amount || apt.discountAmount || 0);
+              const feeToCollect = Math.max(0, baseFee - discount);
+              const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
+              const isPaid = aptPaymentStatus === 'Paid' || aptPaymentStatus === 'Settled';
+
+              const virtualInv = {
+                id: `virtual-inv-opd-${apt.id}`,
+                patient_id: pId,
+                invoice_number: `INV-OPD-V-${apt.id}`,
+                status: isPaid ? 'Paid' : aptPaymentStatus === 'Refunded' ? 'Refunded' : 'Unpaid',
+                payment_status: isPaid ? 'Paid' : aptPaymentStatus === 'Refunded' ? 'Refunded' : 'Unpaid',
+                total_amount: baseFee,
+                discount_amount: discount,
+                payable_amount: feeToCollect,
+                paid_amount: isPaid ? feeToCollect : 0,
+                payment_method: apt.payment_method || apt.paymentMethod || 'Cash',
+                payment_remarks: apt.paymentRemarks || '',
+                type: 'OPD',
+                created_at: apt.created_at || new Date().toISOString(),
+                patients: matchedPatient ? {
+                  id: matchedPatient.id,
+                  name: matchedPatient.name,
+                  mrn: matchedPatient.mrn,
+                  phone: matchedPatient.phone,
+                  email: matchedPatient.email
+                } : {
+                  id: pId,
+                  name: apt.patientName || 'Unknown',
+                  phone: apt.patientPhone || 'N/A',
+                  mrn: apt.patientMrn || 'N/A'
+                }
+              };
+              missingAptInvoices.push(virtualInv);
+            }
+          });
+        }
+
+        setBills([...enrichedInvoices, ...missingAptInvoices]);
+      }
+      if (patientsData) setPatients(patientsData);
+      if (staffData && staffData.length > 0) setUsers(staffData);
+      if (expensesData) setExpenses(expensesData);
+      if (appointmentsData) {
+        const filteredApts = appointmentsData.filter((apt: any) => {
+          const pId = apt.patient_id || apt.patientId;
+          const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
+          const patObj = matchedPatient || { id: pId, name: apt.patientName || apt.patient_name, phone: apt.patientPhone || apt.patient_phone };
+          return !isDummyPatient(patObj);
+        });
+        setAppointments(filteredApts);
+      }
+    } catch (err) {
+      console.error('Error fetching billing data:', err);
+    } finally {
+      isInitialLoad.current = false;
+      setLoading(false);
     }
-    if (patientsData) setPatients(patientsData);
-    if (staffData && staffData.length > 0) setUsers(staffData);
-    if (expensesData) setExpenses(expensesData);
-    if (appointmentsData) {
-      const filteredApts = appointmentsData.filter((apt: any) => {
-        const pId = apt.patient_id || apt.patientId;
-        const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
-        const patObj = matchedPatient || { id: pId, name: apt.patientName || apt.patient_name, phone: apt.patientPhone || apt.patient_phone };
-        return !isDummyPatient(patObj);
-      });
-      setAppointments(filteredApts);
-    }
-    setLoading(false);
   };
 
   useDataSync(fetchData);
