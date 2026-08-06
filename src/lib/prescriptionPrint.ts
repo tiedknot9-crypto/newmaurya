@@ -394,6 +394,8 @@ export function getPrescriptionPrintHtml(
             justify-content: space-between;
             background: #ffffff;
             page-break-inside: avoid;
+            width: 100%;
+            box-sizing: border-box;
           }
         </style>
       </head>
@@ -403,7 +405,7 @@ export function getPrescriptionPrintHtml(
           
           ${isValidHeaderImage ? `
             <div style="margin-bottom: 16px; width: 100%; text-align: center; page-break-inside: avoid;">
-              <img src="${actualHeaderImage}" style="width: 100%; max-height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;" />
+              <img src="${actualHeaderImage}" style="width: 100%; height: auto; max-height: 200px; object-fit: fill; display: block; border-radius: 6px;" />
             </div>
           ` : `
             <!-- STATIC HEADER (Matches Template Image Exactly) -->
@@ -645,7 +647,7 @@ export function getPrescriptionPrintHtml(
 
           ${isValidFooterImage ? `
             <div style="position: relative; margin-top: 16px; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
-              <img src="${actualFooterImage}" style="width: 100%; max-height: 140px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px;" />
+              <img src="${actualFooterImage}" style="width: 100%; height: auto; max-height: 160px; object-fit: fill; display: block; border-radius: 4px;" />
             </div>
           ` : `
             <!-- STATIC BOTTOM FOOTER BAR -->
