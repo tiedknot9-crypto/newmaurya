@@ -96,19 +96,19 @@ export function PrintPreviewModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-slate-900 border-slate-700 shadow-2xl">
+      <DialogContent className="max-w-5xl w-[95vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-slate-900 border-slate-700 shadow-2xl">
         {/* Modal Top Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700 text-white">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-800 border-b border-slate-700 text-white flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-9 h-9 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <DialogTitle className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 {data?.title || 'Document Print Preview'}
               </DialogTitle>
               <p className="text-xs text-slate-400 font-medium">
-                Review document layout before printing
+                Full prescription document view
               </p>
             </div>
           </div>
@@ -116,7 +116,7 @@ export function PrintPreviewModal() {
           <div className="flex items-center gap-2">
             <Button
               onClick={triggerPrint}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2 shadow-lg shadow-blue-600/20"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-2 shadow-lg shadow-blue-600/20 text-xs sm:text-sm"
             >
               <Printer className="w-4 h-4" />
               Print Document
@@ -124,7 +124,7 @@ export function PrintPreviewModal() {
             <Button
               variant="outline"
               onClick={openInNewTab}
-              className="bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-200 text-xs gap-1.5"
+              className="bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-200 text-xs gap-1.5 hidden sm:flex"
               title="Open in new window"
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -134,30 +134,30 @@ export function PrintPreviewModal() {
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(false)}
-              className="text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg ml-2"
+              className="text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg ml-1"
             >
               <X className="w-5 h-5" />
             </Button>
           </div>
         </div>
 
-        {/* Modal Body with Iframe Preview */}
-        <div className="flex-1 bg-slate-950 p-4 md:p-6 overflow-auto flex justify-center items-start">
-          <div className="w-full max-w-[210mm] min-h-[297mm] bg-white rounded-md shadow-2xl border border-slate-700 overflow-hidden relative">
+        {/* Modal Body with Full View Iframe Preview */}
+        <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-auto flex justify-center items-stretch">
+          <div className="w-full max-w-[880px] h-full bg-white rounded-md shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
             <iframe
               ref={iframeRef}
               srcDoc={data?.html || ''}
               title="Print Preview Frame"
-              className="w-full h-[78vh] border-0 block bg-white"
+              className="w-full flex-1 border-0 block bg-white min-h-[650px]"
             />
           </div>
         </div>
 
         {/* Modal Bottom Bar */}
-        <div className="px-6 py-3 bg-slate-800 border-t border-slate-700 flex items-center justify-between text-xs text-slate-400">
+        <div className="px-4 sm:px-6 py-3 bg-slate-800 border-t border-slate-700 flex items-center justify-between text-xs text-slate-400 flex-shrink-0">
           <span className="flex items-center gap-1.5 text-slate-300 font-medium">
             <FileText className="w-4 h-4 text-blue-400" />
-            Standard A4 Document Format
+            Standard A4 Auto-Fitting Format
           </span>
           <div className="flex items-center gap-3">
             <Button
