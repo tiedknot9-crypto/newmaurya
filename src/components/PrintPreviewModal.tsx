@@ -43,32 +43,21 @@ export function PrintPreviewModal() {
     };
   }, []);
 
-  const handleIframeLoad = () => {
-    if (iframeRef.current && data?.html) {
-      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(data.html);
-        doc.close();
-
-        if (data.autoPrint) {
-          // Trigger print inside iframe smoothly after render
-          setTimeout(() => {
-            try {
-              iframeRef.current?.contentWindow?.focus();
-              iframeRef.current?.contentWindow?.print();
-            } catch (err) {
-              console.error('Print error:', err);
-            }
-          }, 400);
-        }
-      }
-    }
-  };
-
   useEffect(() => {
     if (isOpen && data && iframeRef.current) {
-      handleIframeLoad();
+      const timer = setTimeout(() => {
+        try {
+          const doc = iframeRef.current?.contentDocument || iframeRef.current?.contentWindow?.document;
+          if (doc) {
+            doc.open();
+            doc.write(data.html);
+            doc.close();
+          }
+        } catch (e) {
+          console.error('Error writing iframe content:', e);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, data]);
 
@@ -78,21 +67,30 @@ export function PrintPreviewModal() {
         iframeRef.current.contentWindow.focus();
         iframeRef.current.contentWindow.print();
       } catch (e) {
-        toast.error('Unable to initiate print directly');
+        toast.error('Unable to initiate print directly. Trying print fallback...');
+        openInNewTab();
       }
     }
   };
 
   const openInNewTab = () => {
     if (!data?.html) return;
-    const newWin = window.open('', '_blank');
-    if (newWin) {
-      newWin.document.write(data.html);
-      newWin.document.close();
-      newWin.focus();
-      setTimeout(() => newWin.print(), 300);
-    } else {
-      toast.error('Popup blocked. Please use the Print button in the modal.');
+    try {
+      const blob = new Blob([data.html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const newWin = window.open(url, '_blank');
+      if (newWin) {
+        newWin.focus();
+      } else {
+        toast.error('Popup blocked by browser. Please use the Print Document button.');
+      }
+    } catch (err) {
+      const newWin = window.open('', '_blank');
+      if (newWin) {
+        newWin.document.write(data.html);
+        newWin.document.close();
+        newWin.focus();
+      }
     }
   };
 
@@ -148,6 +146,7 @@ export function PrintPreviewModal() {
           <div className="w-full max-w-[210mm] min-h-[297mm] bg-white rounded-md shadow-2xl border border-slate-700 overflow-hidden relative">
             <iframe
               ref={iframeRef}
+              srcDoc={data?.html || ''}
               title="Print Preview Frame"
               className="w-full h-[78vh] border-0 block bg-white"
             />
