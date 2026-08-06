@@ -245,18 +245,18 @@ export function getPrescriptionPrintHtml(
           @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
           
           @page {
-            size: A4;
-            margin: 8mm 10mm 8mm 10mm;
+            size: A4 portrait;
+            margin: 6mm 8mm 6mm 8mm;
           }
 
           * {
             box-sizing: border-box;
           }
 
-          body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+          html, body {
             margin: 0;
             padding: 0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             color: #0f172a;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
@@ -274,28 +274,38 @@ export function getPrescriptionPrintHtml(
               border-radius: 8px;
               max-width: 820px;
               margin: 0 auto;
-              padding: 20px;
+              padding: 18px;
+              min-height: auto;
             }
           }
 
           @media print {
-            body {
-              background-color: #ffffff;
-              padding: 0;
+            html, body {
+              height: auto !important;
+              min-height: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background-color: #ffffff !important;
+              overflow: visible !important;
             }
             .container {
-              box-shadow: none;
-              padding: 0;
-              width: 100%;
+              box-shadow: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              min-height: 0 !important;
+              page-break-inside: avoid !important;
             }
           }
 
           .container {
             width: 100%;
             position: relative;
-            padding-top: ${isValidTemplateImage ? '240px' : '0px'};
+            padding-top: ${isValidTemplateImage ? '220px' : '0px'};
             display: flex;
             flex-direction: column;
+            page-break-inside: avoid;
           }
           
           .header-wrapper {
