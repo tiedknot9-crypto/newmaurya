@@ -30,6 +30,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Toaster } from '@/components/ui/sonner';
+import { PrintPreviewModal } from '@/components/PrintPreviewModal';
+import { PrintPreviewModal } from '@/components/PrintPreviewModal';
 
 import { 
   Dialog, 
@@ -738,6 +740,8 @@ export default function App() {
 
   return (
     <Router>
+      <Toaster position="top-right" />
+      <PrintPreviewModal />
       <AppLayout 
         user={user}
         hospitalInfo={hospitalInfo}

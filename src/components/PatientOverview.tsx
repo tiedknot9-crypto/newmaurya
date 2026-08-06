@@ -41,6 +41,7 @@ import { toast } from 'sonner';
 import { supabaseService, toDeterministicUuid } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { getPrescriptionPrintHtml } from '@/lib/prescriptionPrint';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 
 const isPatientIdMatch = (id1: any, id2: any): boolean => {
   if (!id1 || !id2) return false;
@@ -386,12 +387,6 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
 
   const handlePrintPathologyReport = (order: any) => {
     if (!selectedPatient) return;
-    
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print report');
-      return;
-    }
 
     const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
       name: 'GLOBAL HOSPITAL',
@@ -412,18 +407,11 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Pathology Report - ${selectedPatient.name}`);
   };
 
   const handlePrintRadiologyReport = (record: any) => {
     if (!selectedPatient) return;
-
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print report');
-      return;
-    }
 
     const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
       name: 'GLOBAL HOSPITAL',
@@ -444,18 +432,11 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Radiology Report - ${selectedPatient.name}`);
   };
 
   const handlePrintMaternityReport = (delivery: any) => {
     if (!selectedPatient) return;
-
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print report');
-      return;
-    }
 
     const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
       name: 'GLOBAL HOSPITAL',
@@ -479,18 +460,11 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Maternity Report - ${selectedPatient.name}`);
   };
 
   const handlePrintPatient360Report = () => {
     if (!selectedPatient) return;
-
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print report');
-      return;
-    }
 
     const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
       name: 'GLOBAL HOSPITAL',
@@ -512,8 +486,7 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
       dues
     });
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Patient 360 Summary - ${selectedPatient.name}`);
   };
 
   const filteredPatients = useMemo(() => {
@@ -613,12 +586,6 @@ View full details at: ${shareUrl}
       phone: '+91 98765 43210'
     });
 
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print prescription');
-      return;
-    }
-
     const latestVitals = vitals && vitals.length > 0 ? vitals[0] : undefined;
 
     // Use vitals stored on the prescription first, otherwise fall back to latestVitals
@@ -652,8 +619,7 @@ View full details at: ${shareUrl}
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Prescription - ${selectedPatient.name}`);
   };
 
   const openPrescriptionModal = () => {

@@ -54,6 +54,7 @@ import { Separator } from '@/components/ui/separator';
 import { MOCK_BED_RATES, MOCK_USERS, MOCK_PATIENTS } from '@/mockData';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { 
   Dialog, 
   DialogContent, 
@@ -818,12 +819,6 @@ export default function IPD() {
   }, [beds, patients]);
 
   const handlePrintBedSummary = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Please allow popups to print the bed summary report.');
-      return;
-    }
-
     const rowsHtml = categoryBedSummary.map(cat => `
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; font-size: 13px;">${cat.category}</td>
@@ -841,7 +836,7 @@ export default function IPD() {
     const totalMaint = categoryBedSummary.reduce((acc, c) => acc + c.maintenanceBeds, 0);
     const overallRate = totalTotal > 0 ? Math.round((totalOccupied / totalTotal) * 100) : 0;
 
-    printWindow.document.write(`
+    const summaryHtml = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -894,13 +889,11 @@ export default function IPD() {
           <div style="margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8;">
             Report generated from IPD Bed Management System. Automatically updated on patient admission, transfer, and discharge.
           </div>
-          <script>
-            window.onload = function() { window.print(); };
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    printHtmlWithPreview(summaryHtml, 'IPD Bed Status Summary Report');
   };
 
   // Auto load/save lists on update

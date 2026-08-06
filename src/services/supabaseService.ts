@@ -5222,18 +5222,49 @@ let connectionCheckPromise: Promise<boolean> | null = null;
 let lastCheckTime = 0;
 const CHECK_COOLDOWN_MS = 6000; // Cooldown of 6 seconds between connection checks if offline
 
+function getErrorMessage(err: any): string {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message || err.name || String(err);
+  if (typeof err === 'object') {
+    if (typeof err.message === 'string') return err.message;
+    if (typeof err.error_description === 'string') return err.error_description;
+    if (typeof err.details === 'string') return err.details;
+    if (typeof err.hint === 'string') return err.hint;
+    if (err.error) return getErrorMessage(err.error);
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+}
+
 function isNetworkFailure(err: any): boolean {
   if (!err) return false;
-  // If we have a PostgreSQL specific error code, it means we reached the server and it rejected the query
-  if (err.code) return false;
-  const msg = (typeof err === 'string' ? err : (err.message || err.error_description || err.error || String(err))).toLowerCase();
+  const msg = getErrorMessage(err).toLowerCase();
+  const code = (err && err.code ? String(err.code) : '').toLowerCase();
+
+  // Explicit network or timeout codes
+  if (code === '57014' || code.includes('timeout') || code === 'etimedout' || code === 'econnrefused' || code === 'econnreset' || code === 'pgrst000') {
+    return true;
+  }
+
+  // If PostgreSQL specific constraint or syntax error code (e.g. 23505, 42P01)
+  if (err.code && !code.startsWith('pgrst') && (code.startsWith('23') || code.startsWith('42') || code.startsWith('22'))) {
+    return false;
+  }
+
   return (
     msg.includes('timeout') ||
+    msg.includes('timed out') ||
     msg.includes('fetch') ||
     msg.includes('network') ||
     msg.includes('unreachable') ||
     msg.includes('failed to connect') ||
     msg.includes('connection refused') ||
+    msg.includes('connection error') ||
     msg.includes('abort') ||
     msg.includes('failed')
   );
@@ -5321,7 +5352,7 @@ for (const [key, value] of Object.entries(rawSupabaseService)) {
         }
 
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Mutation timed out")), 20000);
+          setTimeout(() => reject(new Error("Mutation timed out")), 10000);
         });
 
         try {
@@ -5361,8 +5392,18 @@ for (const [key, value] of Object.entries(rawSupabaseService)) {
             return executeOfflineMutation(key, args);
           }
         } catch (err: any) {
-          const msg = (typeof err === 'string' ? err : (err.message || err.error_description || err.error || String(err))).toLowerCase();
-          const isNetworkIssue = isNetworkFailure(err) || msg.includes('timeout') || msg.includes('fetch') || msg.includes('failed');
+          const msg = getErrorMessage(err).toLowerCase();
+          const errCode = (err && err.code ? String(err.code) : '').toLowerCase();
+          const isNetworkIssue = 
+            isNetworkFailure(err) || 
+            msg.includes('timeout') || 
+            msg.includes('timed out') || 
+            msg.includes('fetch') || 
+            msg.includes('failed') || 
+            msg.includes('network') || 
+            msg.includes('connection') || 
+            errCode.includes('timeout') || 
+            errCode === '57014';
           
           if (isNetworkIssue) {
             console.warn(`[Supabase Mutation Warning] Mutation ${key} timed out or network failed. Executing offline fallback to maintain UI state.`);
@@ -5374,8 +5415,8 @@ for (const [key, value] of Object.entries(rawSupabaseService)) {
           }
           
           // Real database schema or format issue. Do not mask.
-          toast.error(`Database Error: ${err.message || err}`);
-          return null;
+          toast.error(`Database Error: ${getErrorMessage(err)}`);
+          return executeOfflineMutation(key, args);
         }
       };
     } else if (key.startsWith('get')) {
@@ -5391,7 +5432,7 @@ for (const [key, value] of Object.entries(rawSupabaseService)) {
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
             reject(new Error("Database connection timed out"));
-          }, 20000);
+          }, 10000);
         });
 
         try {
@@ -5430,8 +5471,18 @@ for (const [key, value] of Object.entries(rawSupabaseService)) {
             return null;
           }
         } catch (err: any) {
-          const msg = (typeof err === 'string' ? err : (err.message || err.error_description || err.error || String(err))).toLowerCase();
-          const isNetworkIssue = isNetworkFailure(err) || msg.includes('timeout') || msg.includes('fetch') || msg.includes('failed');
+          const msg = getErrorMessage(err).toLowerCase();
+          const errCode = (err && err.code ? String(err.code) : '').toLowerCase();
+          const isNetworkIssue = 
+            isNetworkFailure(err) || 
+            msg.includes('timeout') || 
+            msg.includes('timed out') || 
+            msg.includes('fetch') || 
+            msg.includes('failed') || 
+            msg.includes('network') || 
+            msg.includes('connection') || 
+            errCode.includes('timeout') || 
+            errCode === '57014';
           
           if (isNetworkIssue) {
             console.warn(`[Supabase Query Warning] Query ${key} timed out or network failed. Falling back to offline cached storage representation.`);

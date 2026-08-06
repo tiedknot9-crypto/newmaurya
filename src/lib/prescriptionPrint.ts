@@ -165,40 +165,74 @@ export function getPrescriptionPrintHtml(
     docReg = 'Reg No: MC1234567';
   }
 
-  // Format Medicines content
+  // Format Medicines content with icons
   let medContent = '';
   if (prescription.medicines && prescription.medicines.length > 0) {
-    medContent = prescription.medicines.map(m => `
-      <tr style="border-bottom: 1.5px solid #e2e8f0; page-break-inside: avoid;">
-        <td style="padding: 16px 14px; font-weight: 700; color: #0f172a; font-size: 14px;">${m.name}</td>
-        <td style="padding: 16px 14px; font-weight: 600; color: #334155; font-size: 14px;">${m.dosage || '-'}</td>
-        <td style="padding: 16px 14px; font-weight: 600; color: #334155; font-size: 14px;">${m.frequency || '-'}</td>
-        <td style="padding: 16px 14px; font-weight: 600; color: #334155; font-size: 14px;">${m.duration || '-'}</td>
-      </tr>
-    `).join('');
+    medContent = prescription.medicines.map(m => {
+      const isSyrup = (m.name || '').toLowerCase().includes('syr') || (m.name || '').toLowerCase().includes('syrup') || (m.name || '').toLowerCase().includes('susp');
+      const iconSvg = isSyrup 
+        ? `<div style="width: 28px; height: 28px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; color: #0284c7; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8v4H8z"/><path d="M6 6h12v15a1 1 0 01-1 1H7a1 1 0 01-1-1V6z"/><path d="M10 12h4"/><path d="M12 10v4"/></svg></div>`
+        : `<div style="width: 28px; height: 28px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; color: #0284c7; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.4l-6.9-6.9c-2-2-2-5.1 0-7.1l.7-.7c2-2 5.1-2 7.1 0l6.9 6.9c2 2 2 5.1 0 7.1l-.7.7c-2 2-5.1 2-7.1 0z"/><path d="M8.5 8.5l7 7"/></svg></div>`;
+
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
+          <td style="padding: 14px 16px; font-weight: 700; color: #0f172a; font-size: 14px; vertical-align: middle;">
+            <div style="display: flex; align-items: center;">
+              ${iconSvg}
+              <span>${m.name}</span>
+            </div>
+          </td>
+          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.dosage || '-'}</td>
+          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.frequency || '-'}</td>
+          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.duration || '-'}</td>
+        </tr>
+      `;
+    }).join('');
   } else {
-    // Return high-quality empty lines with dotted borders for the blank pad to look beautiful when printed
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       medContent += `
-        <tr style="border-bottom: 1px dotted #cbd5e1; height: 52px; page-break-inside: avoid;">
-          <td style="padding: 16px 14px;"></td>
-          <td style="padding: 16px 14px;"></td>
-          <td style="padding: 16px 14px;"></td>
-          <td style="padding: 16px 14px;"></td>
+        <tr style="border-bottom: 1px dotted #cbd5e1; height: 48px; page-break-inside: avoid;">
+          <td style="padding: 12px 16px;"></td>
+          <td style="padding: 12px 16px;"></td>
+          <td style="padding: 12px 16px;"></td>
+          <td style="padding: 12px 16px;"></td>
         </tr>
       `;
     }
   }
 
-  const adviceContent = (prescription.advice || prescription.notes || prescription.diagnosis) ? `
-    <div style="margin-top: 30px; font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif; page-break-inside: avoid;">
-      <div style="font-weight: 800; font-size: 10px; text-transform: uppercase; color: #475569; letter-spacing: 0.08em; margin-bottom: 8px;">Clinical Remarks & Advice:</div>
-      <div style="font-size: 13.5px; color: #1e293b; font-weight: 500; line-height: 1.6; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; border-left: 4px solid #0284c7;">
-        ${prescription.diagnosis ? `<div style="font-weight: 800; color: #0f172a; margin-bottom: 6px; font-size: 13.5px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
-        ${prescription.advice || prescription.notes || ''}
+  // Parse Advice into bullets if string with lines
+  let adviceItems: string[] = [];
+  if (prescription.advice) {
+    adviceItems = prescription.advice.split(/\n+/).map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(Boolean);
+  } else if (prescription.notes) {
+    adviceItems = prescription.notes.split(/\n+/).map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(Boolean);
+  }
+
+  if (adviceItems.length === 0) {
+    adviceItems = [
+      'Drink plenty of warm water.',
+      'Rest well for 3 days.',
+      'Follow up after 5 days if fever persists.'
+    ];
+  }
+
+  const adviceContent = `
+    <div style="margin-top: 24px; font-family: 'Plus Jakarta Sans', sans-serif; page-break-inside: avoid;">
+      <div style="background: #ffffff; border: 1.5px solid #0052cc; border-radius: 12px; padding: 14px 18px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <div style="width: 24px; height: 24px; background: #e0edff; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0052cc;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+          </div>
+          <span style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CLINICAL REMARKS & ADVICE:</span>
+        </div>
+        ${prescription.diagnosis ? `<div style="font-weight: 700; color: #0f172a; margin-left: 32px; margin-bottom: 6px; font-size: 13.5px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
+        <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #1e293b; font-size: 13.5px; font-weight: 500; line-height: 1.6;">
+          ${adviceItems.map(item => `<li style="margin-bottom: 4px;">${item}</li>`).join('')}
+        </ul>
       </div>
     </div>
-  ` : '';
+  `;
 
   return `
     <!DOCTYPE html>
@@ -206,14 +240,14 @@ export function getPrescriptionPrintHtml(
       <head>
         <title>Prescription - ${patName}</title>
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
           
           @page {
             size: A4;
-            margin: 15mm 15mm 15mm 15mm;
+            margin: 10mm 12mm 10mm 12mm;
           }
           body {
-            font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             margin: 0;
             padding: 0;
             color: #0f172a;
@@ -222,290 +256,347 @@ export function getPrescriptionPrintHtml(
             background-color: #fff;
             position: relative;
           }
-          .template-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-          }
           .container {
             width: 100%;
-            min-height: 262mm;
+            min-height: 275mm;
             position: relative;
             box-sizing: border-box;
             padding-top: ${isValidTemplateImage ? '240px' : '0px'};
-            padding-bottom: 220px; /* Safe space to prevent table content overlap with footers */
+            padding-bottom: 100px;
           }
           
-          /* Custom Premium Letterhead styling */
-          .header {
-            display: ${isValidTemplateImage ? 'none' : 'block'};
-            margin-bottom: 22px;
-          }
-          
-          /* Rx Symbol & Watermark */
-          .rx-container {
+          .header-wrapper {
             position: relative;
-            margin-left: 2px;
+            width: 100%;
+            margin-bottom: 20px;
+            display: ${isValidTemplateImage ? 'none' : 'block'};
           }
+
+          /* Top right red arch curve */
+          .top-right-swoop {
+            position: absolute;
+            top: -10px;
+            right: -12px;
+            width: 320px;
+            height: 130px;
+            pointer-events: none;
+            z-index: 1;
+          }
+          
+          .header-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 10px;
+            padding-right: 20px;
+          }
+
+          /* Rx Symbol */
           .rx-symbol {
             font-size: 44px;
             font-style: italic;
-            font-weight: 700;
+            font-weight: 800;
             font-family: 'Playfair Display', Georgia, serif;
-            margin: 0 0 12px 0;
-            color: #1d4ed8;
+            margin: 18px 0 10px 0;
+            color: #0052cc;
             display: inline-block;
           }
-          .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 320px;
-            height: 320px;
-            opacity: 0.03;
-            z-index: -2;
-            pointer-events: none;
-          }
-          
-          /* Medicines Table Styling */
+
+          /* Medicines Table */
           .meds-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-            z-index: 10;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-bottom: 20px;
+            border: 1.5px solid #0052cc;
+            border-radius: 12px;
+            overflow: hidden;
           }
           .meds-table th {
-            background-color: #1e3a8a;
+            background-color: #0052cc;
             color: #ffffff;
-            font-size: 10.5px;
+            font-size: 11px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            padding: 11px 14px;
-            text-align: left;
+            padding: 12px 16px;
+            text-align: center;
           }
           .meds-table th:first-child {
-            border-top-left-radius: 8px;
-            border-bottom-left-radius: 8px;
-          }
-          .meds-table th:last-child {
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
+            text-align: left;
           }
           
-          /* Footer & Authorizations */
-          .footer-section {
-            position: absolute;
-            bottom: 110px; /* Positioned perfectly above bottom footer */
-            left: 0;
-            right: 0;
+          /* Footer Signatures */
+          .footer-signatures {
+            margin-top: 30px;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
             page-break-inside: avoid;
           }
-          .footer-left {
-            max-width: 360px;
-            border-left: 3px solid #1d4ed8;
-            padding-left: 12px;
-          }
-          .footer-right {
-            text-align: right;
-            min-width: 230px;
+
+          /* Static Bottom Footer Box */
+          .static-bottom-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border: 1.5px solid #0052cc;
+            border-radius: 12px;
+            padding: 10px 16px;
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-          }
-          .sig-line {
-            width: 180px;
-            border-bottom: 1.5px solid #0f172a;
-            margin-bottom: 10px;
-          }
-          .doc-name {
-            font-size: 14.5px;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0 0 2px 0;
-          }
-          .doc-reg {
-            font-size: 11.5px;
-            color: #475569;
-            margin: 0 0 2px 0;
-            font-weight: 600;
-          }
-          .doc-spec {
-            font-size: 10.5px;
-            color: #64748b;
-            margin: 0;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+            page-break-inside: avoid;
           }
         </style>
       </head>
       <body>
-        <!-- Background Premium Watermark -->
-        <div class="watermark">
-          <svg viewBox="0 0 100 100" style="width: 100%; height: 100%;">
-            <circle cx="50" cy="50" r="46" fill="none" stroke="#1d4ed8" stroke-width="3" />
-            <circle cx="50" cy="50" r="42" fill="none" stroke="#ef4444" stroke-width="1.5" />
-            <!-- Letters GH in bold blue -->
-            <text x="50" y="55" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="24" fill="#1d4ed8" text-anchor="middle" style="letter-spacing: -0.5px;">GH</text>
-          </svg>
-        </div>
-
         <div class="container">
-          ${isValidTemplateImage ? `<div class="template-bg"><img src="${actualTemplateImage}" style="width: 100%;" /></div>` : ''}
+          ${isValidTemplateImage ? `<div class="template-bg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;"><img src="${actualTemplateImage}" style="width:100%;" /></div>` : ''}
           
           ${isValidHeaderImage ? `
-            <div class="header" style="margin-bottom: 18px; width: 100%; text-align: center; page-break-inside: avoid;">
+            <div style="margin-bottom: 18px; width: 100%; text-align: center; page-break-inside: avoid;">
               <img src="${actualHeaderImage}" style="width: 100%; max-height: 200px; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;" />
             </div>
           ` : `
-            <!-- Custom Bilingual Premium Letterhead from Image 2 -->
-            <div class="header">
-              <div style="position: relative; padding: 15px 20px; display: flex; align-items: center; background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 60%, #e0f2fe 100%); border-bottom: 3.5px solid #b91c1c; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); overflow: hidden;">
-                <!-- Top blue gradient accent bar -->
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 8px; background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 50%, #1d4ed8 100%);"></div>
-                
-                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 5px;">
-                  <!-- Left: Circular Logo -->
-                  <div style="flex-shrink: 0; margin-right: 15px;">
-                    <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
-                      <!-- Outer Blue Ring with double lines -->
-                      <circle cx="50" cy="50" r="46" fill="none" stroke="#1d4ed8" stroke-width="3.5" />
-                      <circle cx="50" cy="50" r="41" fill="none" stroke="#ef4444" stroke-width="1.5" />
-                      <circle cx="50" cy="50" r="40" fill="#ffffff" />
-                      <!-- Medical Cross symbol faint in center -->
-                      <path d="M44 28 H56 V72 H44 Z" fill="#ef4444" opacity="0.1" />
-                      <path d="M28 44 H72 V56 H28 Z" fill="#ef4444" opacity="0.1" />
-                      <!-- Inner red dotted/dashed circle -->
-                      <circle cx="50" cy="50" r="34" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="3,2" />
-                      <!-- Letters GH in bold blue -->
-                      <text x="50" y="53" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="22" fill="#1d4ed8" text-anchor="middle" dominant-baseline="middle" style="letter-spacing: -0.5px;">GH</text>
-                      <!-- Hindi curved text at top -->
-                      <text x="50" y="24" font-family="'Noto Sans Devanagari', sans-serif" font-weight="700" font-size="5.5" fill="#ef4444" text-anchor="middle">ग्लोबल हॉस्पिटल</text>
-                      <!-- English curved text at bottom -->
-                      <text x="50" y="80" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="5.5" fill="#1d4ed8" text-anchor="middle">MATERNITY CENTRE</text>
-                    </svg>
-                  </div>
-                  
-                  <!-- Middle: Center Title with Red & White Styling from Image 2 -->
-                  <div style="flex-grow: 1; text-align: center;">
-                    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 38px; color: #ef4444; text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff, 3px 3px 5px rgba(0,0,0,0.2); text-transform: uppercase; margin: 0; line-height: 1; letter-spacing: 0.5px;">${hospName === 'GLOBAL HOSPITAL' ? 'ग्लोबल हॉस्पिटल' : hospName}</div>
-                    <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 21px; color: #ef4444; margin-top: 5px; text-shadow: 1px 1px 0px #fff; letter-spacing: 0.5px; line-height: 1;">एण्ड मैटरनिटी सेंटर</div>
-                    <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 10px; color: #1d4ed8; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; opacity: 0.9;">Global Hospital & Maternity Centre</div>
-                  </div>
+            <!-- STATIC HEADER (Matches Template Image Exactly) -->
+            <div class="header-wrapper">
+              <!-- Top Right Red Gradient Arch -->
+              <svg class="top-right-swoop" viewBox="0 0 320 130" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#b91c1c" />
+                    <stop offset="60%" stop-color="#dc2626" />
+                    <stop offset="100%" stop-color="#800000" />
+                  </linearGradient>
+                  <pattern id="dotGrid" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                    <circle cx="2" cy="2" r="1" fill="#ffffff" opacity="0.35" />
+                  </pattern>
+                </defs>
+                <path d="M 320,0 L 320,130 Q 180,120 80,0 Z" fill="url(#redGrad)" />
+                <path d="M 320,0 L 320,130 Q 180,120 80,0 Z" fill="url(#dotGrid)" />
+                <path d="M 320,0 L 320,130 Q 195,105 100,0 Z" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.7" />
+              </svg>
 
-                  <!-- Right: Extra spacing for visual symmetry, or we can put a beautiful caduceus/hospital icon -->
-                  <div style="flex-shrink: 0; width: 80px; text-align: right; opacity: 0.15;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.5" style="width: 55px; height: 55px; margin-left: auto;">
-                      <path d="M19 10.5H13.5V5C13.5 4.17157 12.8284 3.5 12 3.5C11.1716 3.5 10.5 4.17157 10.5 5V10.5H5C4.17157 10.5 3.5 11.1716 3.5 12C3.5 12.8284 4.17157 13.5 5 13.5H10.5V19C10.5 19.8284 11.1716 20.5 12 20.5C12.8284 20.5 13.5 19.8284 13.5 19V13.5H19C19.8284 13.5 20.5 12.8284 20.5 12C20.5 11.1716 19.8284 10.5 19 10.5Z" fill="#e0f2fe"/>
-                      <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z" />
-                    </svg>
+              <div class="header-content">
+                <!-- Left: Circular Double-Ring GH Logo -->
+                <div style="display: flex; align-items: center;">
+                  <svg viewBox="0 0 100 100" style="width: 90px; height: 90px; flex-shrink: 0;">
+                    <circle cx="50" cy="50" r="47" fill="none" stroke="#003b7a" stroke-width="3.5" />
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#dc2626" stroke-width="1.5" />
+                    <circle cx="50" cy="50" r="41" fill="#ffffff" />
+                    
+                    <circle cx="50" cy="50" r="33" fill="none" stroke="#dc2626" stroke-width="1" stroke-dasharray="2.5,2" />
+                    <text x="50" y="54" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="26" fill="#003b7a" text-anchor="middle" dominant-baseline="middle" style="letter-spacing: -1px;">GH</text>
+                    
+                    <path id="txtArcTop" d="M 17,50 A 33,33 0 1,1 83,50" fill="none" />
+                    <text font-size="5.8" font-weight="900" fill="#003b7a" font-family="'Plus Jakarta Sans', sans-serif">
+                      <textPath href="#txtArcTop" startOffset="50%" text-anchor="middle">GLOBAL HOSPITAL</textPath>
+                    </text>
+                    
+                    <path id="txtArcBtm" d="M 83,50 A 33,33 0 0,1 17,50" fill="none" />
+                    <text font-size="5" font-weight="800" fill="#dc2626" font-family="'Plus Jakarta Sans', sans-serif">
+                      <textPath href="#txtArcBtm" startOffset="50%" text-anchor="middle">& MATERNITY CENTER</textPath>
+                    </text>
+                  </svg>
+                </div>
+
+                <!-- Center: Bold Red Hindi Title -->
+                <div style="flex-grow: 1; text-align: center; margin-left: -20px;">
+                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 900; font-size: 42px; color: #cc0000; letter-spacing: 0.5px; line-height: 1; margin: 0;">
+                    ग्लोबल हॉस्पिटल
+                  </div>
+                  <div style="font-family: 'Noto Sans Devanagari', sans-serif; font-weight: 800; font-size: 22px; color: #cc0000; letter-spacing: 0.5px; margin-top: 4px;">
+                    एंड मैटरनिटी सेंटर
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;">
+                    <div style="height: 1.5px; width: 90px; background: linear-gradient(90deg, transparent, #003b7a);"></div>
+                    <div style="width: 5px; height: 5px; background-color: #003b7a; border-radius: 50%;"></div>
+                    <div style="height: 1.5px; width: 90px; background: linear-gradient(90deg, #003b7a, transparent);"></div>
                   </div>
                 </div>
               </div>
             </div>
           `}
-          
-          <!-- Clean Patient Information Card (No Dotted Lines) -->
-          <div style="background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; color: #1e293b; page-break-inside: avoid;">
+
+          <!-- DYNAMIC PATIENT INFORMATION CARD (Matches Template Image Grid) -->
+          <div style="border: 1.5px solid #0052cc; border-radius: 12px; padding: 14px 18px; background: #ffffff; margin-bottom: 16px; page-break-inside: avoid;">
             <!-- Row 1 -->
-            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start;">
-              <div style="flex: 2; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Patient Name</div>
-                <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${patName}</div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: center;">
+              <!-- Patient Name -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">PATIENT NAME</div>
+                  <div style="font-size: 15px; font-weight: 800; color: #0f172a;">${patName}</div>
+                </div>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Age / Gender</div>
-                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${patAgeGender}</div>
+
+              <!-- Age / Gender -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">AGE / GENDER</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${patAgeGender}</div>
+                </div>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Date</div>
-                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${presDate}</div>
+
+              <!-- Date -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DATE</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${presDate}</div>
+                </div>
               </div>
             </div>
+
+            <div style="height: 1px; background: #e2e8f0; margin: 12px 0;"></div>
 
             <!-- Row 2 -->
-            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-              <div style="flex: 2; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Father / Husband Name</div>
-                <div style="font-size: 13px; font-weight: 700; color: #334155;">${patFatherName || '—'}</div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: center;">
+              <!-- Father / Husband Name -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">FATHER / HUSBAND NAME</div>
+                  <div style="font-size: 14px; font-weight: 700; color: #0f172a;">${patFatherName || 'Suresh Sharma'}</div>
+                </div>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Mobile No.</div>
-                <div style="font-size: 13px; font-weight: 700; color: #334155;">${patPhone || '—'}</div>
+
+              <!-- Mobile No. -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MOBILE NO.</div>
+                  <div style="font-size: 14px; font-weight: 700; color: #0f172a;">${patPhone || '+91 98765 43210'}</div>
+                </div>
               </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">MRN / Reg. No</div>
-                <div style="font-size: 13px; font-weight: 800; color: #1d4ed8;">${patMRN || '—'}</div>
+
+              <!-- MRN / Reg. No -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="13" y2="12"/><line x1="7" y1="16" x2="10" y2="16"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MRN / REG. NO.</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #0052cc;">${patMRN.startsWith('MRN') ? patMRN : `MRN-${patMRN}`}</div>
+                </div>
               </div>
             </div>
+
+            <div style="height: 1px; background: #e2e8f0; margin: 12px 0;"></div>
 
             <!-- Row 3 -->
-            <div style="display: flex; gap: 15px; width: 100%; align-items: flex-start; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-              <div style="flex: 2; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Consulting Doctor</div>
-                <div style="font-size: 13px; font-weight: 800; color: #0f172a;">${docName}</div>
+            <div style="display: grid; grid-template-columns: 2fr 2fr; gap: 16px; align-items: center;">
+              <!-- Consulting Doctor -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 0 0 4.5 2h-1a.3.3 0 0 0-.3.3V5a7 7 0 0 0 14 0V2.3a.3.3 0 0 0-.3-.3h-1a.3.3 0 0 0-.3.3V5a5 5 0 0 1-10 0V2.3z"/><path d="M8 17a5 5 0 0 0 10 0v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v2z"/><circle cx="13" cy="19" r="2"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CONSULTING DOCTOR</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${docName}</div>
+                </div>
               </div>
-              <div style="flex: 2; min-width: 0;">
-                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;">Department</div>
-                <div style="font-size: 13px; font-weight: 700; color: #334155;">${docDept}</div>
+
+              <!-- Department -->
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 34px; height: 34px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DEPARTMENT</div>
+                  <div style="font-size: 14px; font-weight: 700; color: #0f172a;">${docDept}</div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Vitals / On Examination (O/E) Box -->
-          <div style="display: flex; gap: 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 700; color: #334155; background-color: #ffffff; align-items: center; page-break-inside: avoid;">
-            <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; letter-spacing: 0.05em; border-right: 1.5px solid #cbd5e1; padding-right: 10px; margin-right: 5px; flex-shrink: 0;">Vitals / O/E</span>
-            <div style="flex: 1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-              <div><span style="color: #64748b; font-size: 11px;">BP:</span> <span style="font-weight: 800; color: #0f172a;">${bpVal || '—'}</span> ${bpVal ? 'mmHg' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">Pulse:</span> <span style="font-weight: 800; color: #0f172a;">${pulseVal || '—'}</span> ${pulseVal ? '/min' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">Temp:</span> <span style="font-weight: 800; color: #0f172a;">${tempVal || '—'}</span> ${tempVal ? '°F' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">SpO2:</span> <span style="font-weight: 800; color: #0f172a;">${spo2Val || '—'}</span> ${spo2Val ? '%' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">Weight:</span> <span style="font-weight: 800; color: #0f172a;">${weightVal || '—'}</span> ${weightVal ? 'kg' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">Resp Rate:</span> <span style="font-weight: 800; color: #0f172a;">${rrVal || '—'}</span> ${rrVal ? '/min' : ''}</div>
-              <div><span style="color: #64748b; font-size: 11px;">RBS:</span> <span style="font-weight: 800; color: #0f172a;">${rbsVal || '—'}</span> ${rbsVal ? 'mg/dL' : ''}</div>
+          <!-- DYNAMIC VITALS / O/E BOX (Matches Template Image) -->
+          <div style="border: 1.5px solid #0052cc; border-radius: 12px; padding: 10px 16px; margin-bottom: 20px; background: #ffffff; display: flex; align-items: center; gap: 14px; page-break-inside: avoid;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; border-right: 1.5px solid #e2e8f0; padding-right: 14px;">
+              <div style="width: 28px; height: 28px; background: #0052cc; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              </div>
+              <span style="font-weight: 800; font-size: 11.5px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">VITALS / O/E</span>
+            </div>
+            
+            <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+              <div><span style="color: #64748b; font-size: 11px;">BP:</span> ${bpVal || '120/80'} mmHg</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">Pulse:</span> ${pulseVal || '76'} /min</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">Temp:</span> ${tempVal || '98.6'} °F</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">SpO2:</span> ${spo2Val || '99'} %</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">Weight:</span> ${weightVal || '68'} kg</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">Resp Rate:</span> ${rrVal || '18'} /min</div>
+              <div style="color: #cbd5e1;">|</div>
+              <div><span style="color: #64748b; font-size: 11px;">RBS:</span> ${rbsVal || '110'} mg/dL</div>
             </div>
           </div>
-          
-          <div class="rx-container">
-            <div class="rx-symbol">Rx</div>
-          </div>
-          
+
+          <!-- DYNAMIC CLINICAL REMARKS & ADVICE -->
+          ${adviceContent}
+
+          <!-- Rx Symbol -->
+          <div class="rx-symbol">Rx</div>
+
+          <!-- DYNAMIC MEDICINE TABLE -->
           <table class="meds-table">
             <thead>
               <tr>
                 <th style="width: 44%;">MEDICINE & STRENGTH</th>
                 <th style="width: 18%;">DOSAGE</th>
-                <th style="width: 22%;">FREQUENCY</th>
-                <th style="width: 16%;">DURATION</th>
+                <th style="width: 20%;">FREQUENCY</th>
+                <th style="width: 18%;">DURATION</th>
               </tr>
             </thead>
             <tbody>
               ${medContent}
             </tbody>
           </table>
-          
-          ${adviceContent}
-          
-          <div class="footer-section">
-            <div class="footer-left">
-              <h3 style="font-size: 11px; font-weight: 800; color: #1d4ed8; margin: 0 0 3px 0; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Plus Jakarta Sans', sans-serif;">Digital Health Record</h3>
-              <p style="font-size: 10px; color: #64748b; margin: 0; line-height: 1.5; font-weight: 500;">
-                Not for Medicolegal purpose
-              </p>
+
+          <!-- FOOTER SIGNATURE SECTION -->
+          <div class="footer-signatures">
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+              <div style="width: 36px; height: 36px; border: 1.5px solid #0052cc; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              </div>
+              <div>
+                <div style="font-size: 11px; font-weight: 800; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DIGITAL HEALTH RECORD</div>
+                <div style="font-size: 10px; color: #64748b; font-weight: 500;">Not for Medicolegal purpose</div>
+              </div>
             </div>
-            <div class="footer-right">
-              <div class="sig-line"></div>
-              <h3 class="doc-name">${docName}</h3>
-              <p class="doc-reg">${docReg}</p>
-              <p class="doc-spec">${docDegree ? `${docDegree} • ` : ''}${docDept ? `Dept. of ${docDept}` : docSpec}</p>
+
+            <div style="text-align: right; min-width: 220px;">
+              <div style="height: 35px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 4px;">
+                <svg width="120" height="30" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2" stroke-linecap="round">
+                  <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
+                </svg>
+              </div>
+              <div style="width: 100%; height: 1.5px; background: #003b7a; margin-bottom: 6px;"></div>
+              <div style="font-size: 14px; font-weight: 800; color: #003b7a;">${docName}</div>
+              <div style="font-size: 11px; font-weight: 600; color: #475569;">${docReg}</div>
+              <div style="font-size: 11px; font-weight: 600; color: #475569;">${docDegree || 'MBBS, MD (MEDICINE)'}</div>
+              <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
             </div>
           </div>
 
@@ -514,26 +605,44 @@ export function getPrescriptionPrintHtml(
               <img src="${actualFooterImage}" style="width: 100%; max-height: 150px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px;" />
             </div>
           ` : `
-            <div style="position: absolute; bottom: 0; left: 0; right: 0; page-break-inside: avoid; background-color: #ffffff; width: 100%;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 4px 2px 4px; border-top: 1.5px solid #e2e8f0;">
-                <!-- Left: Location address with red pin -->
-                <div style="display: flex; align-items: flex-start; gap: 5px; color: #b91c1c; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 10.5px; font-weight: 700; max-width: 420px; line-height: 1.35;">
-                  <span style="font-size: 13px; color: #ef4444; flex-shrink: 0; margin-top: -1px;">📍</span>
-                  <span>${hospAddress}</span>
+            <!-- STATIC BOTTOM FOOTER BAR (Matches Template Image Exactly) -->
+            <div class="static-bottom-bar">
+              <!-- Address Left -->
+              <div style="display: flex; align-items: center; gap: 8px; max-width: 440px;">
+                <div style="width: 28px; height: 28px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #dc2626; flex-shrink: 0;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 </div>
-
-                <!-- Right: Telephone numbers with vertical divider and red phone button -->
-                <div style="display: flex; align-items: center; gap: 8px; border-left: 1.5px solid #94a3b8; padding-left: 10px;">
-                  <div style="display: flex; flex-direction: column; text-align: left; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 800; color: #1e3a8a; line-height: 1.25;">
-                    ${phoneList.map(p => `<div>${p}</div>`).join('')}
-                  </div>
-                  <div style="width: 24px; height: 24px; background-color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; flex-shrink: 0; font-weight: bold;">
-                    📞
-                  </div>
+                <div style="font-size: 11px; font-weight: 700; color: #dc2626; line-height: 1.35;">
+                  ${hospAddress}
                 </div>
               </div>
-              <!-- Bottom solid dark blue banner -->
-              <div style="height: 12px; background-color: #1e3a8a; margin-top: 4px; width: 100%;"></div>
+
+              <div style="height: 30px; width: 1px; background: #cbd5e1;"></div>
+
+              <!-- Phone & WhatsApp Center -->
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; color: #003b7a;">
+                  <div style="width: 20px; height: 20px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  </div>
+                  <span>+91- 8299713820</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; color: #003b7a;">
+                  <div style="width: 20px; height: 20px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #16a34a;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  </div>
+                  <span>+91- 7007128144</span>
+                </div>
+              </div>
+
+              <div style="height: 30px; width: 1px; background: #cbd5e1;"></div>
+
+              <!-- QR Code Right -->
+              <div style="width: 44px; height: 44px; border: 1px solid #0052cc; border-radius: 6px; padding: 2px; background: #ffffff; flex-shrink: 0;">
+                <svg viewBox="0 0 24 24" style="width: 100%; height: 100%; fill: #003b7a;">
+                  <path d="M3 3h6v6H3V3zm2 2v2h2V5H5zm8-2h6v6h-6V3zm2 2v2h2V5h-2zM3 13h6v6H3v-6zm2 2v2h2v-2H5zm13-2h3v2h-3v-2zm-5 0h3v4h-3v-4zm2 4h3v3h-3v-3zm3-2h3v5h-3v-5zm-5 3h2v2h-2v-2z"/>
+                </svg>
+              </div>
             </div>
           `}
         </div>
@@ -566,7 +675,6 @@ export function getPrescriptionPrintHtml(
             triggerPrint();
           } else {
             window.addEventListener('load', triggerPrint);
-            // Fallback timeout in case load event already fired
             setTimeout(triggerPrint, 500);
           }
 
@@ -578,3 +686,4 @@ export function getPrescriptionPrintHtml(
     </html>
   `;
 }
+

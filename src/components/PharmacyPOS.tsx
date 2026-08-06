@@ -32,6 +32,7 @@ import { useDataSync } from '@/hooks/useDataSync';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { generatePharmacyInvoiceHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { 
   Dialog, 
   DialogContent, 
@@ -709,12 +710,6 @@ export default function PharmacyPOS() {
       phone: '+91 6394517005'
     });
 
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
-    if (!printWindow) {
-      toast.error('Please allow popups to print receipt');
-      return;
-    }
-
     const receiptHtml = `
       <html>
         <head>
@@ -795,29 +790,15 @@ export default function PharmacyPOS() {
             <div style="margin-top: 5px;">Powered by Global Hospital HMS</div>
           </div>
           
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
         </body>
       </html>
     `;
 
-    printWindow.document.write(receiptHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(receiptHtml, `POS Receipt - ${lastOrder.invoiceId}`);
   };
 
   const printTaxInvoice = () => {
     if (!lastOrder) return;
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      toast.error('Please allow popups to print invoice');
-      return;
-    }
 
     const patientDetails = {
       name: lastOrder.patient || 'Walk-in Customer',
@@ -849,8 +830,7 @@ export default function PharmacyPOS() {
     };
 
     const invoiceHtml = generatePharmacyInvoiceHtml(billAdapter, inventory, patientDetails, pharmacySettings);
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(invoiceHtml, `POS Tax Invoice - ${lastOrder.invoiceId}`);
   };
 
   if (loading) {

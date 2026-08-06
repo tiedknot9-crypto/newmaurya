@@ -43,6 +43,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatCurrency } from '@/lib/utils';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { supabaseService } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
@@ -779,11 +780,6 @@ export default function Lab() {
       phone?: string;
       logo?: string | null;
     }>(STORAGE_KEYS.HOSPITAL_INFO, {});
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      toast.error('Please allow popups to print report');
-      return;
-    }
 
     const reportHtml = `
       <html>
@@ -933,19 +929,10 @@ export default function Lab() {
             </div>
           </div>
 
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
         </body>
       </html>
     `;
-    printWindow.document.write(reportHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(reportHtml, `Lab Report - ${test.id}`);
   };
 
   const printBill = (bill: any) => {
@@ -956,11 +943,6 @@ export default function Lab() {
       phone?: string;
       logo?: string | null;
     }>(STORAGE_KEYS.HOSPITAL_INFO, {});
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      toast.error('Please allow popups to print bill');
-      return;
-    }
 
     const billHtml = `
       <html>
@@ -1065,19 +1047,10 @@ export default function Lab() {
               Thank you for choosing Global Hospital Diagnostics. Get well soon!
             </div>
           </div>
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
         </body>
       </html>
     `;
-    printWindow.document.write(billHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(billHtml, `Lab Bill - ${bill.sequenceNumber || bill.id}`);
   };
 
   const handleExportLab = () => {

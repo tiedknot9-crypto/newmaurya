@@ -47,6 +47,7 @@ import { MOCK_USERS, MOCK_PATIENTS, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TEST
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getPrescriptionPrintHtml, parseStoredImage } from '@/lib/prescriptionPrint';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { syncOfflineDataWithSupabase, getSupabaseUnreachable, setSupabaseUnreachable, supabaseService } from '@/services/supabaseService';
 import { DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
 import { normalizeRole } from '@/utils/rbac';
@@ -1361,12 +1362,6 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
     const patient = MOCK_PATIENTS.find(p => p.id === pres.patientId);
     const doctor = users.find(u => u.id === pres.doctorId);
     
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print prescription');
-      return;
-    }
-
     const html = getPrescriptionPrintHtml(
       {
         name: patient?.name || 'N/A',
@@ -1385,181 +1380,7 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    return;
-
-    const prescriptionHtml = `
-      <html>
-        <head>
-          <title>Prescription - ${patient?.name}</title>
-          <style>
-            @page { margin: 10mm; size: A4; }
-            body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              margin: 0; 
-              padding: 0;
-              color: #1e293b;
-              line-height: 1.6;
-              -webkit-print-color-adjust: exact;
-            }
-            .template-bg {
-              position: fixed;
-              top: 0;
-              left: 0;
-              width: 100%;
-              height: 100%;
-              z-index: -1;
-            }
-            .content { 
-              position: relative;
-              padding-top: ${templateImage ? '260px' : '20px'}; 
-              padding-bottom: ${templateImage ? '100px' : '20px'};
-              margin: 0 30px;
-              z-index: 10;
-            }
-            .hospital-header {
-              text-align: center;
-              margin-bottom: 40px;
-              display: ${templateImage ? 'none' : 'block'};
-              border-bottom: 2px solid #2563eb;
-              padding-bottom: 20px;
-            }
-            .hospital-name { font-size: 32px; font-weight: 800; color: #2563eb; letter-spacing: -0.025em; margin-bottom: 5px; }
-            .hospital-info { font-size: 13px; color: #64748b; font-weight: 500; }
-            .rx-symbol { font-size: 60px; font-weight: 800; margin: 20px 0 10px 0; color: #2563eb; font-family: serif; }
-            
-            .patient-card { 
-              border: 1px solid #e2e8f0;
-              border-radius: 12px;
-              padding: 24px;
-              margin-bottom: 40px;
-              display: grid;
-              grid-template-columns: 1.5fr 1fr;
-              gap: 20px;
-              background-color: #f8fafc;
-            }
-            .info-item { font-size: 15px; }
-            .info-label { color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 10px; margin-right: 8px; letter-spacing: 0.05em; }
-            .info-value { font-weight: 800; color: #0f172a; }
-            
-            .medicine-table { width: 100%; border-collapse: collapse; margin-bottom: 50px; }
-            .medicine-table th { 
-              text-align: left; 
-              background-color: #f1f5f9;
-              padding: 15px; 
-              color: #475569; 
-              font-size: 11px; 
-              text-transform: uppercase; 
-              font-weight: 800;
-              border-bottom: 2px solid #cbd5e1;
-            }
-            .medicine-table td { padding: 18px 15px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-            .med-name { font-weight: 800; color: #1e293b; font-size: 16px; }
-            
-            .advice-section { 
-              margin-top: 40px;
-              padding: 25px;
-              border-left: 5px solid #2563eb;
-              background-color: #f0f7ff;
-              border-radius: 0 12px 12px 0;
-              page-break-inside: avoid;
-            }
-            .footer { 
-              margin-top: 100px; 
-              text-align: center;
-              padding-bottom: 100px;
-              page-break-inside: avoid;
-            }
-            .sig-section { display: flex; justify-content: space-between; margin-top: 80px; }
-            .sig-box { width: 220px; text-align: center; }
-            .sig-line { border-top: 2px solid #0f172a; margin-bottom: 10px; }
-            .sig-label { font-size: 13px; font-weight: 800; color: #475569; text-transform: uppercase; }
-          </style>
-        </head>
-        <body>
-          ${templateImage ? `<div class="template-bg"><img src="${templateImage}" style="width: 100%;" /></div>` : ''}
-          <div class="content">
-            <div class="hospital-header">
-              ${(hospitalInfo.logo && hospitalInfo.logo !== 'null' && hospitalInfo.logo !== 'undefined' && hospitalInfo.logo.trim() !== '') ? `<img src="${hospitalInfo.logo}" style="height: 60px; margin-bottom: 10px;" />` : ''}
-              <div class="hospital-name">${hospitalInfo.name}</div>
-              <div class="hospital-info">${hospitalInfo.address} | Tel: ${hospitalInfo.phone}</div>
-            </div>
-
-            <div class="patient-card">
-              <div style="display: flex; flex-direction: column; gap: 8px;">
-                <div class="info-item"><span class="info-label">Patient:</span> <span class="info-value" style="font-size: 20px;">${patient?.name}</span></div>
-                <div class="info-item"><span class="info-label">MRN / ID:</span> <span class="info-value">${patient?.mrn}</span></div>
-                <div class="info-item"><span class="info-label">Age/Gender:</span> <span class="info-value">${patient?.age} Y / ${patient?.gender}</span></div>
-              </div>
-              <div style="text-align: right; display: flex; flex-direction: column; gap: 8px;">
-                <div class="info-item"><span class="info-label">Prescription Date:</span> <span class="info-value">${pres.date || new Date().toLocaleDateString()}</span></div>
-                <div class="info-item"><span class="info-label">Doctor:</span> <span class="info-value">${doctor?.name}</span></div>
-                <div class="info-item"><span class="info-label">Pres ID:</span> <span class="info-value">#${pres.id.split('-').pop()?.toUpperCase()}</span></div>
-              </div>
-            </div>
-
-            <div class="rx-symbol">Rx</div>
-
-            <table class="medicine-table">
-              <thead>
-                <tr>
-                  <th style="width: 40%">Medicine & Dosage</th>
-                  <th>Frequency</th>
-                  <th>Duration</th>
-                  <th style="text-align: right">Quantity</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${pres.medicines.map((m: any) => `
-                  <tr>
-                    <td>
-                      <div class="med-name">${m.name}</div>
-                      <div style="font-size: 12px; color: #64748b; font-weight: 600;">${m.dosage}</div>
-                    </td>
-                    <td><span style="font-weight: 700; color: #2563eb;">${m.frequency}</span></td>
-                    <td><span style="font-weight: 600;">${m.duration}</span></td>
-                    <td style="text-align: right; font-weight: 800;"> - </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-
-            <div class="advice-section">
-              <p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 800; color: #2563eb; text-transform: uppercase; letter-spacing: 0.1em;">Diagnosis & Notes</p>
-              <div style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">${pres.diagnosis}</div>
-              <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;">${pres.notes}</p>
-            </div>
-
-            <div class="footer">
-              <div class="sig-section">
-                <div class="sig-box">
-                  <div class="sig-line"></div>
-                  <div class="sig-label">Patient Signature</div>
-                </div>
-                <div class="sig-box">
-                  <div class="sig-line"></div>
-                  <div class="sig-label">Physician Stamp & Signature</div>
-                  <div style="font-size: 11px; font-weight: 700; margin-top: 5px;">${doctor?.name}</div>
-                </div>
-              </div>
-              <div style="margin-top: 60px; color: #94a3b8; font-size: 11px;">This document is for medical use only. Keep safely.</div>
-            </div>
-          </div>
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(prescriptionHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Prescription - ${patient?.name || 'Patient'}`);
   };
 
   return (
@@ -2698,8 +2519,6 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                   size="sm" 
                   className="bg-white border-blue-200 text-blue-700 hover:bg-blue-50 gap-2 shadow-xs"
                   onClick={() => {
-                    const printWindow = window.open('', '_blank');
-                    if (!printWindow) return;
                     const samplePatient = {
                       name: 'Rahul Sharma',
                       age: 32,
@@ -2742,8 +2561,7 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                       prescriptionHeaderImage,
                       prescriptionFooterImage
                     );
-                    printWindow.document.write(html);
-                    printWindow.document.close();
+                    printHtmlWithPreview(html, 'Sample Prescription Print Preview');
                   }}
                 >
                   <Printer className="w-4 h-4 text-blue-600" />

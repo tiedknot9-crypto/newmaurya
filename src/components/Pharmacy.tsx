@@ -43,6 +43,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { supabaseService } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
@@ -302,12 +303,6 @@ export default function Pharmacy() {
   };
 
   const printPharmacyInvoice = (bill: any) => {
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      toast.error('Please allow popups to print invoice');
-      return;
-    }
-
     const patient = patients.find(p => p.id === bill.patient_id);
     const patientDetails = {
       name: bill.patientName || bill.patient_name || patient?.name || 'Walk-in Customer',
@@ -322,8 +317,7 @@ export default function Pharmacy() {
       patientDetails,
       pharmacySettings
     );
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(invoiceHtml, `Pharmacy Bill - ${bill.sequenceNumber || bill.id}`);
   };
 
   const handleExportInventory = () => {

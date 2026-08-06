@@ -63,6 +63,7 @@ import { supabaseService, toDeterministicUuid, isUuid } from '@/services/supabas
 import { useDataSync } from '@/hooks/useDataSync';
 import { canUserEditRecord, canUserEditClinicalData, canUserManageBilling, normalizeRole, canUserModifyRecord } from '@/utils/rbac';
 import { getPrescriptionPrintHtml } from '@/lib/prescriptionPrint';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { ConfirmDialog } from './ConfirmDialog';
 
 function parseTimeToMinutes(timeStr: string | null | undefined): number {
@@ -702,12 +703,6 @@ export default function OPD() {
   const printPrescription = () => {
     if (!selectedPatient) return;
 
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print prescription');
-      return;
-    }
-
     const doctor = users.find(u => u.name === prescription.doctor || u.id === prescription.doctor) || (prescription.doctor ? { name: prescription.doctor, department: 'General OPD' } : undefined);
     const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
 
@@ -757,8 +752,7 @@ export default function OPD() {
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Prescription - ${selectedPatient.name}`);
   };
 
   const loadPatientHistory = async (patientId: string) => {
@@ -1437,12 +1431,6 @@ export default function OPD() {
   const printToken = () => {
     if (!lastToken) return;
 
-    const printWindow = window.open('', '_blank', 'width=300,height=400');
-    if (!printWindow) {
-      toast.error('Please allow popups to print token');
-      return;
-    }
-
     const tokenHtml = `
       <html>
         <head>
@@ -1490,23 +1478,11 @@ export default function OPD() {
             Please wait for your turn.<br>
             Thank you for your patience.
           </div>
-          
-          <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-                window.onafterprint = () => {
-                  window.close();
-                };
-              }, 150);
-            };
-          </script>
         </body>
       </html>
     `;
 
-    printWindow.document.write(tokenHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(tokenHtml, `Token #${lastToken.tokenNumber} - ${lastToken.patientName}`);
   };
 
   const handleDeletePatient = (id: string) => {
@@ -1768,11 +1744,6 @@ export default function OPD() {
   };
 
   const printAppointmentToken = (apt: any) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=550');
-    if (!printWindow) {
-      toast.error('Please allow popups/tabs to print OPD tokens');
-      return;
-    }
     const patName = patients.find(p => isPatientIdMatch(p.id, apt.patientId) || isPatientIdMatch(p.id, apt.patient_id))?.name || apt.patientName || 'WALK-IN PATIENT';
     const patMRN = patients.find(p => isPatientIdMatch(p.id, apt.patientId) || isPatientIdMatch(p.id, apt.patient_id))?.mrn || apt.patientMrn || 'N/A';
     
@@ -1810,21 +1781,10 @@ export default function OPD() {
             <p>Please present this slip at OPD Consultation chamber outer disk. Wait for your turn token call.</p>
             <p style="font-weight: 900; color: #000; margin-top: 5px;">HAVE A HEALTHY DAY!</p>
           </div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-                window.onafterprint = function() {
-                  window.close();
-                };
-              }, 150);
-            };
-          </script>
         </body>
       </html>
     `;
-    printWindow.document.write(tokenHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(tokenHtml, `Token Slip - ${patName}`);
   };
 
   const printLatestPrescriptionForPatient = (patient: any, doctorNameFallback?: string) => {
@@ -1843,11 +1803,6 @@ export default function OPD() {
       advice: '',
       vitals: undefined
     };
-    const printWindow = window.open('', '_blank', 'width=800,height=1000');
-    if (!printWindow) {
-      toast.error('Please allow popups to print prescription');
-      return;
-    }
 
     const docObj = users.find(u => u.name === (latestRx.doctor || latestRx.doctor_name || doctorNameFallback));
     const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
@@ -1879,8 +1834,7 @@ export default function OPD() {
       hospitalInfo
     );
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printHtmlWithPreview(html, `Prescription - ${patient.name}`);
   };
 
   const handleExportData = () => {
@@ -3648,12 +3602,6 @@ export default function OPD() {
                 labRequests={selectedPatientLabs}
                 loading={loadingHistory}
                 onPrintPrescription={(rx) => {
-                  const printWindow = window.open('', '_blank', 'width=800,height=1000');
-                  if (!printWindow) {
-                    toast.error('Please allow popups to print prescription history');
-                    return;
-                  }
-                  
                   const docObj = users.find(u => u.name === (rx.doctor || rx.doctor_name));
                   const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
 
@@ -3684,8 +3632,7 @@ export default function OPD() {
                     hospitalInfo
                   );
                   
-                  printWindow.document.write(html);
-                  printWindow.document.close();
+                  printHtmlWithPreview(html, `Prescription - ${selectedPatient.name}`);
                 }}
               />
             </div>
@@ -3724,11 +3671,6 @@ export default function OPD() {
               labRequests={selectedPatientLabs}
               loading={loadingHistory}
               onPrintPrescription={(rx) => {
-                const printWindow = window.open('', '_blank', 'width=800,height=1000');
-                if (!printWindow) {
-                  toast.error('Please allow popups to print');
-                  return;
-                }
                 const docObj = users.find(u => u.name === (rx.doctor || rx.doctor_name));
                 const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
 
@@ -3758,8 +3700,7 @@ export default function OPD() {
                   docObj,
                   hospitalInfo
                 );
-                printWindow.document.write(html);
-                printWindow.document.close();
+                printHtmlWithPreview(html, `Prescription - ${selectedPatient.name}`);
               }}
             />
           </div>

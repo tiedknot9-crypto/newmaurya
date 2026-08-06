@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency, formatDate, getLocalDateStr } from '@/lib/utils';
+import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_USERS, MOCK_BILLING, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES } from '@/mockData';
 import { supabaseService, isDummyPatient, toDeterministicUuid } from '@/services/supabaseService';
@@ -1430,12 +1431,6 @@ export default function Billing() {
     };
 
     const patient = patientObj;
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      toast.error('Please allow popups to print invoice');
-      return;
-    }
-
     const invoiceHtml = `
       <html>
         <head>
@@ -1624,29 +1619,14 @@ export default function Billing() {
             </div>
           </div>
           
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
         </body>
       </html>
     `;
 
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(invoiceHtml, `Billing Invoice - ${bill.id}`);
   };
 
   const printConsolidatedStatement = (patient: any, conBills: any[]) => {
-    const printWindow = window.open('', '_blank', 'width=850,height=750');
-    if (!printWindow) {
-      toast.error('Please allow popups to print');
-      return;
-    }
-
     const itemsByDate: Record<string, any[]> = {};
     let grandTotal = 0;
     let grandDiscount = 0;
@@ -1855,20 +1835,11 @@ export default function Billing() {
             </div>
           </div>
           
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                window.close();
-              };
-            };
-          </script>
         </body>
       </html>
     `;
 
-    printWindow.document.write(consolidatedHtml);
-    printWindow.document.close();
+    printHtmlWithPreview(consolidatedHtml, `Consolidated Billing Statement - ${patient?.name || 'Patient'}`);
   };
 
   if (loading) {
