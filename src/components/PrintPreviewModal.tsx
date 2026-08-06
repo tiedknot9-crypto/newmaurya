@@ -96,7 +96,7 @@ export function PrintPreviewModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-slate-900 border-slate-700 shadow-2xl">
+      <DialogContent showCloseButton={false} className="w-[98vw] sm:max-w-[96vw] md:max-w-[1150px] h-[94vh] flex flex-col p-0 gap-0 overflow-hidden bg-slate-900 border-slate-700 shadow-2xl">
         {/* Modal Top Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-slate-800 border-b border-slate-700 text-white flex-shrink-0">
           <div className="flex items-center gap-3">

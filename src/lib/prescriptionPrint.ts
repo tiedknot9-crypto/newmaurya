@@ -175,16 +175,16 @@ export function getPrescriptionPrintHtml(
         : `<div style="width: 28px; height: 28px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; color: #0284c7; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.4l-6.9-6.9c-2-2-2-5.1 0-7.1l.7-.7c2-2 5.1-2 7.1 0l6.9 6.9c2 2 2 5.1 0 7.1l-.7.7c-2 2-5.1 2-7.1 0z"/><path d="M8.5 8.5l7 7"/></svg></div>`;
 
       return `
-        <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">
-          <td style="padding: 14px 16px; font-weight: 700; color: #0f172a; font-size: 14px; vertical-align: middle;">
+        <tr style="border-bottom: 1px solid #cbd5e1; page-break-inside: avoid;">
+          <td style="padding: 12px 14px; font-weight: 900; color: #000000; font-size: 14.5px; vertical-align: middle;">
             <div style="display: flex; align-items: center;">
               ${iconSvg}
               <span>${m.name}</span>
             </div>
           </td>
-          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.dosage || '-'}</td>
-          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.frequency || '-'}</td>
-          <td style="padding: 14px 16px; font-weight: 600; color: #334155; font-size: 14px; text-align: center; vertical-align: middle;">${m.duration || '-'}</td>
+          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.dosage || '-'}</td>
+          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.frequency || '-'}</td>
+          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.duration || '-'}</td>
         </tr>
       `;
     }).join('');
@@ -226,8 +226,8 @@ export function getPrescriptionPrintHtml(
           </div>
           <span style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CLINICAL REMARKS & ADVICE:</span>
         </div>
-        ${prescription.diagnosis ? `<div style="font-weight: 700; color: #0f172a; margin-left: 32px; margin-bottom: 6px; font-size: 13.5px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
-        <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #1e293b; font-size: 13.5px; font-weight: 500; line-height: 1.6;">
+        ${prescription.diagnosis ? `<div style="font-weight: 800; color: #000000; margin-left: 32px; margin-bottom: 6px; font-size: 14px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
+        <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #000000; font-size: 14px; font-weight: 700; line-height: 1.6;">
           ${adviceItems.map(item => `<li style="margin-bottom: 4px;">${item}</li>`).join('')}
         </ul>
       </div>
@@ -267,15 +267,19 @@ export function getPrescriptionPrintHtml(
             body {
               background-color: #f1f5f9;
               padding: 12px;
+              min-width: 720px;
+              box-sizing: border-box;
             }
             .container {
               background: #ffffff;
               box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
               border-radius: 8px;
+              width: 100%;
               max-width: 820px;
               margin: 0 auto;
               padding: 18px;
               min-height: auto;
+              box-sizing: border-box;
             }
           }
 
@@ -479,7 +483,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">PATIENT NAME</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${patName}</div>
+                  <div style="font-size: 14.5px; font-weight: 900; color: #000000;">${patName}</div>
                 </div>
               </div>
 
@@ -490,7 +494,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">AGE / GENDER</div>
-                  <div style="font-size: 13.5px; font-weight: 800; color: #0f172a;">${patAgeGender}</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${patAgeGender}</div>
                 </div>
               </div>
 
@@ -501,12 +505,12 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DATE</div>
-                  <div style="font-size: 13.5px; font-weight: 800; color: #0f172a;">${presDate}</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${presDate}</div>
                 </div>
               </div>
             </div>
 
-            <div style="height: 1px; background: #e2e8f0; margin: 10px 0;"></div>
+            <div style="height: 1px; background: #cbd5e1; margin: 10px 0;"></div>
 
             <!-- Row 2 -->
             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; align-items: center;">
@@ -517,7 +521,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">FATHER / HUSBAND NAME</div>
-                  <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${patFatherName || 'Suresh Sharma'}</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patFatherName || 'Suresh Sharma'}</div>
                 </div>
               </div>
 
@@ -528,7 +532,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MOBILE NO.</div>
-                  <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${patPhone || '+91 98765 43210'}</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patPhone || '+91 98765 43210'}</div>
                 </div>
               </div>
 
@@ -539,12 +543,12 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MRN / REG. NO.</div>
-                  <div style="font-size: 13.5px; font-weight: 800; color: #0052cc;">${patMRN.startsWith('MRN') ? patMRN : `MRN-${patMRN}`}</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #0040a8;">${patMRN.startsWith('MRN') ? patMRN : `MRN-${patMRN}`}</div>
                 </div>
               </div>
             </div>
 
-            <div style="height: 1px; background: #e2e8f0; margin: 10px 0;"></div>
+            <div style="height: 1px; background: #cbd5e1; margin: 10px 0;"></div>
 
             <!-- Row 3 -->
             <div style="display: grid; grid-template-columns: 2fr 2fr; gap: 12px; align-items: center;">
@@ -555,7 +559,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CONSULTING DOCTOR</div>
-                  <div style="font-size: 13.5px; font-weight: 800; color: #0f172a;">${docName}</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
                 </div>
               </div>
 
@@ -566,7 +570,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DEPARTMENT</div>
-                  <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">${docDept}</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${docDept}</div>
                 </div>
               </div>
             </div>
@@ -574,27 +578,27 @@ export function getPrescriptionPrintHtml(
 
           <!-- DYNAMIC VITALS / O/E BOX -->
           <div style="border: 1.5px solid #0052cc; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #ffffff; display: flex; align-items: center; gap: 12px; page-break-inside: avoid;">
-            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; border-right: 1.5px solid #e2e8f0; padding-right: 12px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; border-right: 1.5px solid #cbd5e1; padding-right: 12px;">
               <div style="width: 26px; height: 26px; background: #0052cc; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
               </div>
-              <span style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">VITALS / O/E</span>
+              <span style="font-weight: 900; font-size: 11px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">VITALS / O/E</span>
             </div>
             
-            <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; font-weight: 700; color: #0f172a;">
-              <div><span style="color: #64748b; font-size: 10.5px;">BP:</span> ${bpVal || '120/80'} mmHg</div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12.5px; font-weight: 800; color: #000000;">
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">BP:</span> <span style="font-weight: 900; color: #000000;">${bpVal || '120/80'} mmHg</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">Pulse:</span> ${pulseVal || '76'} /min</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Pulse:</span> <span style="font-weight: 900; color: #000000;">${pulseVal || '76'} /min</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">Temp:</span> ${tempVal || '98.6'} °F</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Temp:</span> <span style="font-weight: 900; color: #000000;">${tempVal || '98.6'} °F</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">SpO2:</span> ${spo2Val || '99'} %</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">SpO2:</span> <span style="font-weight: 900; color: #000000;">${spo2Val || '99'} %</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">Weight:</span> ${weightVal || '68'} kg</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Weight:</span> <span style="font-weight: 900; color: #000000;">${weightVal || '68'} kg</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">Resp Rate:</span> ${rrVal || '18'} /min</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Resp Rate:</span> <span style="font-weight: 900; color: #000000;">${rrVal || '18'} /min</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #64748b; font-size: 10.5px;">RBS:</span> ${rbsVal || '110'} mg/dL</div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">RBS:</span> <span style="font-weight: 900; color: #000000;">${rbsVal || '110'} mg/dL</span></div>
             </div>
           </div>
 
@@ -626,22 +630,22 @@ export function getPrescriptionPrintHtml(
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
               </div>
               <div>
-                <div style="font-size: 10.5px; font-weight: 800; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DIGITAL HEALTH RECORD</div>
-                <div style="font-size: 9.5px; color: #64748b; font-weight: 500;">Not for Medicolegal purpose</div>
+                <div style="font-size: 11px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DIGITAL HEALTH RECORD</div>
+                <div style="font-size: 11px; color: #000000; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">Not for Medicolegal purpose</div>
               </div>
             </div>
 
             <div style="text-align: right; min-width: 200px;">
               <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
-                <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2" stroke-linecap="round">
+                <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
                   <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
                 </svg>
               </div>
-              <div style="width: 100%; height: 1.5px; background: #003b7a; margin-bottom: 4px;"></div>
-              <div style="font-size: 13.5px; font-weight: 800; color: #003b7a;">${docName}</div>
-              <div style="font-size: 10.5px; font-weight: 600; color: #475569;">${docReg}</div>
-              <div style="font-size: 10.5px; font-weight: 600; color: #475569;">${docDegree || 'MBBS, MD (MEDICINE)'}</div>
-              <div style="font-size: 9.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
+              <div style="width: 100%; height: 2px; background: #003b7a; margin-bottom: 4px;"></div>
+              <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
+              <div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>
+              <div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree || 'MBBS, MD (MEDICINE)'}</div>
+              <div style="font-size: 10px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
             </div>
           </div>
 
