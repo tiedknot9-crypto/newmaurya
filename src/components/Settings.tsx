@@ -961,7 +961,16 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
   // User Management
   const [users, setUsers] = useState(() => storage.get(STORAGE_KEYS.USERS, MOCK_USERS));
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'DOCTOR', department: '', password: '' });
+  const [newUser, setNewUser] = useState({ 
+    name: '', 
+    email: '', 
+    role: 'DOCTOR', 
+    department: '', 
+    password: '',
+    regNo: '',
+    degree: '',
+    specialization: ''
+  });
 
   useEffect(() => {
     storage.set(STORAGE_KEYS.USERS, users);
@@ -1081,6 +1090,10 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
         role: newUser.role,
         department: newUser.department,
         designation: newUser.role,
+        regNo: newUser.regNo,
+        reg_no: newUser.regNo,
+        degree: newUser.degree,
+        specialization: newUser.specialization,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newUser.name}`
       };
       if (newUser.password) {
@@ -1119,6 +1132,10 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
         department: newUser.department,
         designation: newUser.role,
         password: newUser.password,
+        regNo: newUser.regNo,
+        reg_no: newUser.regNo,
+        degree: newUser.degree,
+        specialization: newUser.specialization,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newUser.name}`
       };
       
@@ -1131,7 +1148,7 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
       }
     }
     
-    setNewUser({ name: '', email: '', role: 'DOCTOR', department: '', password: '' });
+    setNewUser({ name: '', email: '', role: 'DOCTOR', department: '', password: '', regNo: '', degree: '', specialization: '' });
   };
 
   const handleAddMedicine = () => {
@@ -2413,7 +2430,19 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="space-y-2">
+                  <Label>Registration No. (MCI/State)</Label>
+                  <Input placeholder="e.g. MC-123456" value={newUser.regNo} onChange={(e) => setNewUser({...newUser, regNo: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Qualification / Degree</Label>
+                  <Input placeholder="e.g. MBBS, MD (Medicine)" value={newUser.degree} onChange={(e) => setNewUser({...newUser, degree: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Specialization</Label>
+                  <Input placeholder="e.g. General Medicine / Cardiology" value={newUser.specialization} onChange={(e) => setNewUser({...newUser, specialization: e.target.value})} />
+                </div>
+                <div className="flex items-end gap-2 md:col-span-3">
                   <Button className="bg-medical-blue flex-1 gap-2" onClick={handleAddUser}>
                     <ShieldCheck className="w-4 h-4" />
                     {editingUserId ? 'Update Account' : 'Create Account'}
@@ -2421,7 +2450,7 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                   {editingUserId && (
                     <Button variant="outline" onClick={() => {
                       setEditingUserId(null);
-                      setNewUser({ name: '', email: '', role: 'DOCTOR', department: '', password: '' });
+                      setNewUser({ name: '', email: '', role: 'DOCTOR', department: '', password: '', regNo: '', degree: '', specialization: '' });
                     }}>
                       Cancel
                     </Button>
@@ -2439,9 +2468,14 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <p className="text-sm font-bold truncate">{user.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
                           <Badge variant="outline" className="text-[9px] font-bold uppercase">{user.role}</Badge>
-                          <span className="text-[10px] text-slate-400 font-medium truncate">{user.department}</span>
+                          {user.department && <span className="text-[10px] text-slate-400 font-medium truncate">{user.department}</span>}
+                          {(user.regNo || user.reg_no) && (
+                            <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[9px] font-mono px-1">
+                              Reg: {user.regNo || user.reg_no}
+                            </Badge>
+                          )}
                         </div>
                         {isAdmin && (
                           <div className="mt-1.5 flex items-center gap-1.5 text-[10px]">
@@ -2456,11 +2490,14 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-medical-blue" onClick={() => {
                           setEditingUserId(user.id);
                           setNewUser({
-                            name: user.name,
-                            email: user.email,
-                            role: user.role,
+                            name: user.name || '',
+                            email: user.email || '',
+                            role: user.role || 'DOCTOR',
                             department: user.department || '',
-                            password: isAdmin ? (user.password || '') : '' // Only pre-fill password for admin
+                            password: isAdmin ? (user.password || '') : '',
+                            regNo: user.regNo || user.reg_no || user.registrationNo || '',
+                            degree: user.degree || '',
+                            specialization: user.specialization || ''
                           });
                           const element = document.getElementById('user-creation-form');
                           if (element) element.scrollIntoView({ behavior: 'smooth' });

@@ -18,6 +18,8 @@ export interface User {
   department?: string;
   specialization?: string;
   degree?: string;
+  regNo?: string;
+  reg_no?: string;
   avatar?: string;
 }
 

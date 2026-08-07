@@ -703,7 +703,13 @@ export default function OPD() {
   const printPrescription = () => {
     if (!selectedPatient) return;
 
-    const doctor = users.find(u => u.name === prescription.doctor || u.id === prescription.doctor) || (prescription.doctor ? { name: prescription.doctor, department: 'General OPD' } : undefined);
+    const doctor = users.find(u => 
+      u.name === prescription.doctor || 
+      u.id === prescription.doctor || 
+      u.name?.toLowerCase().trim() === prescription.doctor?.toLowerCase().trim() ||
+      u.name?.replace(/^dr\.?\s+/i, '').toLowerCase().trim() === prescription.doctor?.replace(/^dr\.?\s+/i, '').toLowerCase().trim()
+    ) || (prescription.doctor ? { name: prescription.doctor, department: 'General OPD' } : undefined);
+    
     const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
 
     // Use edited vitals if present, otherwise fall back to latestVitals from history
@@ -753,6 +759,68 @@ export default function OPD() {
     );
 
     printHtmlWithPreview(html, `Prescription - ${selectedPatient.name}`);
+  };
+
+  const printBlankPrescription = () => {
+    if (!selectedPatient) return;
+
+    const doctor = users.find(u => 
+      u.name === prescription.doctor || 
+      u.id === prescription.doctor || 
+      u.name?.toLowerCase().trim() === prescription.doctor?.toLowerCase().trim() ||
+      u.name?.replace(/^dr\.?\s+/i, '').toLowerCase().trim() === prescription.doctor?.replace(/^dr\.?\s+/i, '').toLowerCase().trim()
+    ) || (prescription.doctor ? { name: prescription.doctor, department: 'General OPD' } : undefined);
+
+    const latestVitals = selectedPatientVitals && selectedPatientVitals.length > 0 ? selectedPatientVitals[0] : undefined;
+
+    const activeVitals = (prescription.vitals && (
+      prescription.vitals.bp ||
+      prescription.vitals.pulse ||
+      prescription.vitals.temp ||
+      prescription.vitals.spo2 ||
+      prescription.vitals.weight ||
+      prescription.vitals.rr ||
+      prescription.vitals.rbs
+    )) ? {
+      bp: prescription.vitals.bp,
+      pulse: prescription.vitals.pulse,
+      temp: prescription.vitals.temp,
+      spo2: prescription.vitals.spo2,
+      weight: prescription.vitals.weight,
+      rr: prescription.vitals.rr,
+      rbs: prescription.vitals.rbs
+    } : (latestVitals ? {
+      bp: latestVitals.bp,
+      pulse: latestVitals.pulse,
+      temp: latestVitals.temp,
+      spo2: latestVitals.spo2,
+      weight: latestVitals.weight,
+      rr: latestVitals.rr || latestVitals.respiration,
+      rbs: latestVitals.rbs
+    } : undefined);
+
+    const html = getPrescriptionPrintHtml(
+      {
+        name: selectedPatient.name,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        mrn: selectedPatient.mrn,
+        phone: selectedPatient.phone || selectedPatient.mobile || '',
+        fatherName: selectedPatient.fatherName || selectedPatient.father_name || ''
+      },
+      {
+        date: prescription.date,
+        medicines: [],
+        advice: '',
+        vitals: activeVitals,
+        isBlank: true
+      },
+      doctor,
+      hospitalInfo,
+      { isBlank: true }
+    );
+
+    printHtmlWithPreview(html, `Blank Prescription - ${selectedPatient.name}`);
   };
 
   const loadPatientHistory = async (patientId: string) => {
@@ -3640,6 +3708,10 @@ export default function OPD() {
 
           <DialogFooter className="gap-2 mt-4 border-t pt-4">
             <Button variant="outline" onClick={() => setIsPrescriptionOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="gap-2 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium" onClick={printBlankPrescription}>
+              <FileText className="w-4 h-4 text-slate-500" />
+              Blank Prescription
+            </Button>
             <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50" onClick={printPrescription}>
               <Printer className="w-4 h-4" />
               Print

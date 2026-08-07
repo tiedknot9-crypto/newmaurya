@@ -33,6 +33,7 @@ export interface PrintPrescription {
   diagnosis?: string;
   notes?: string;
   vitals?: PrintVitals;
+  isBlank?: boolean;
 }
 
 export interface PrintDoctor {
@@ -63,13 +64,20 @@ export function parseStoredImage(val: string | null | undefined): string | null 
 export function getPrescriptionPrintHtml(
   patient: PrintPatient,
   prescription: PrintPrescription,
-  doctor?: PrintDoctor,
+  doctor?: PrintDoctor | string,
   hospitalInfo?: { name: string; address: string; phone: string },
-  templateImage?: string | null,
+  templateImage?: string | null | { isBlank?: boolean },
   headerImage?: string | null,
-  footerImage?: string | null
+  footerImage?: string | null,
+  options?: { isBlank?: boolean }
 ): string {
-  const rawTemplate = (templateImage !== undefined && templateImage !== null)
+  const isBlank = !!(
+    (options && options.isBlank) ||
+    (typeof templateImage === 'object' && templateImage !== null && (templateImage as any).isBlank) ||
+    (prescription as any)?.isBlank
+  );
+
+  const rawTemplate = (templateImage !== undefined && templateImage !== null && typeof templateImage === 'string')
     ? templateImage
     : ((hospitalInfo as any)?.template_image
       ? (hospitalInfo as any).template_image
@@ -172,13 +180,20 @@ export function getPrescriptionPrintHtml(
     if (rawUsers) storedUsers = JSON.parse(rawUsers);
   } catch {}
 
-  let matchedUser = storedUsers.find((u: any) => 
-    (rawDocName && (
-      String(u.name).trim().toLowerCase() === String(rawDocName).trim().toLowerCase() ||
-      String(u.id).trim().toLowerCase() === String(rawDocName).trim().toLowerCase()
-    )) ||
-    (doctor && typeof doctor === 'object' && doctor.id && String(u.id).trim().toLowerCase() === String(doctor.id).trim().toLowerCase())
-  );
+  const cleanDocStr = (s: any) => String(s || '').replace(/^dr\.?\s+/i, '').trim().toLowerCase();
+  const targetClean = cleanDocStr(rawDocName);
+  const targetId = String((doctor && typeof doctor === 'object' && doctor.id) || (prescription as any)?.doctorId || (prescription as any)?.doctor_id || '').trim().toLowerCase();
+
+  let matchedUser = storedUsers.find((u: any) => {
+    if (!u) return false;
+    const uNameClean = cleanDocStr(u.name);
+    const uId = String(u.id || '').trim().toLowerCase();
+
+    if (targetId && uId === targetId) return true;
+    if (targetClean && uNameClean === targetClean) return true;
+    if (targetClean && targetClean.length > 3 && (uNameClean.includes(targetClean) || targetClean.includes(uNameClean))) return true;
+    return false;
+  });
 
   // If no doctor name yet, try logged in user or first doctor from storage
   if (!matchedUser && !rawDocName) {
@@ -656,26 +671,38 @@ export function getPrescriptionPrintHtml(
             </div>
           </div>
 
-          <!-- Rx Symbol -->
-          <div class="rx-symbol">Rx</div>
+          ${isBlank ? `
+            <!-- Rx Symbol -->
+            <div class="rx-symbol" style="margin-top: 8px; margin-bottom: 8px;">Rx</div>
 
-          <!-- DYNAMIC MEDICINE TABLE -->
-          <table class="meds-table">
-            <thead>
-              <tr>
-                <th style="width: 44%;">MEDICINE & STRENGTH</th>
-                <th style="width: 18%;">DOSAGE</th>
-                <th style="width: 20%;">FREQUENCY</th>
-                <th style="width: 18%;">DURATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${medContent}
-            </tbody>
-          </table>
+            <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
+            <div style="min-height: 500px; width: 100%; border: 1.5px solid #0052cc; border-radius: 12px; background: #ffffff; margin-bottom: 20px; padding: 16px; box-sizing: border-box; position: relative;">
+              <div style="position: absolute; top: 12px; right: 16px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
+                Manual Prescription / Notes
+              </div>
+            </div>
+          ` : `
+            <!-- Rx Symbol -->
+            <div class="rx-symbol">Rx</div>
 
-          <!-- DYNAMIC CLINICAL REMARKS & ADVICE -->
-          ${adviceContent}
+            <!-- DYNAMIC MEDICINE TABLE -->
+            <table class="meds-table">
+              <thead>
+                <tr>
+                  <th style="width: 44%;">MEDICINE & STRENGTH</th>
+                  <th style="width: 18%;">DOSAGE</th>
+                  <th style="width: 20%;">FREQUENCY</th>
+                  <th style="width: 18%;">DURATION</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${medContent}
+              </tbody>
+            </table>
+
+            <!-- DYNAMIC CLINICAL REMARKS & ADVICE -->
+            ${adviceContent}
+          `}
 
           <!-- FOOTER SIGNATURE SECTION -->
           <div class="footer-signatures" style="margin-top: 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
