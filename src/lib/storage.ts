@@ -267,6 +267,7 @@ export const STORAGE_KEYS = {
   NURSING_TASKS: 'hms_nursing_tasks',
   BEDS: 'hms_beds',
   PHARMACY_BILLS: 'hms_pharmacy_billing',
+  PHARMACY_RETURNS: 'hms_pharmacy_returns',
   PRESCRIPTIONS: 'hms_prescriptions',
   TEMPLATE_IMAGE: 'hms_template_image',
   PRESCRIPTION_HEADER_IMAGE: 'hms_prescription_header_image',

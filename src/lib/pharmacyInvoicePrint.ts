@@ -865,3 +865,336 @@ export function generatePharmacyInvoiceHtml(
     </html>
   `;
 }
+
+export function generatePharmacyReturnReceiptHtml(
+  returnRecord: {
+    returnNo: string;
+    date: string;
+    patientName: string;
+    patientPhone?: string;
+    mrn?: string;
+    patientType?: string;
+    ipdNo?: string;
+    bedNo?: string;
+    originalBillNo?: string;
+    prescribingDoctor?: string;
+    items: Array<{
+      name: string;
+      quantity: number;
+      isLoose?: boolean;
+      unitType?: string;
+      price: number;
+      total: number;
+      reason?: string;
+    }>;
+    totalRefundAmount: number;
+    refundMode: string;
+    notes?: string;
+    performedBy?: string;
+  },
+  customSettings?: Partial<PharmacySettings>
+): string {
+  const settings = { ...DEFAULT_PHARMACY_SETTINGS, ...customSettings };
+  const refundInWords = numberToWords(returnRecord.totalRefundAmount || 0);
+
+  const formattedDate = returnRecord.date
+    ? new Date(returnRecord.date).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    : new Date().toLocaleString('en-IN');
+
+  const itemsRows = (returnRecord.items || []).map((item, idx) => `
+    <tr>
+      <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 11px;">${idx + 1}</td>
+      <td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 11px; font-weight: 600; color: #1e293b;">
+        ${item.name}
+        ${item.isLoose ? '<span style="font-size: 9px; color: #0284c7; margin-left: 4px;">(Loose)</span>' : ''}
+      </td>
+      <td style="text-align: center; border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 11px; font-weight: 700; color: #0f172a;">
+        ${item.quantity} ${item.unitType || (item.isLoose ? 'Tab(s)' : 'Strip/Unit')}
+      </td>
+      <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 11px;">
+        ₹${(item.price || 0).toFixed(2)}
+      </td>
+      <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 11px; font-weight: 700; color: #dc2626;">
+        ₹${(item.total || 0).toFixed(2)}
+      </td>
+      <td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 10px; color: #475569; font-style: italic;">
+        ${item.reason || returnRecord.notes || 'Medicine Return'}
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Pharmacy Medicine Return Voucher - ${returnRecord.returnNo}</title>
+        <meta charset="utf-8" />
+        <style>
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+          body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #1e293b;
+            background: #f8fafc;
+            margin: 0;
+            padding: 20px;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .voucher-card {
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+          }
+          .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #ef4444;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+          }
+          .pharmacy-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #991b1b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .pharmacy-sub {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+          }
+          .voucher-badge {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            color: #991b1b;
+            padding: 6px 12px;
+            border-radius: 8px;
+            text-align: right;
+          }
+          .voucher-type {
+            font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .voucher-no {
+            font-size: 12px;
+            font-weight: 700;
+            color: #dc2626;
+            margin-top: 2px;
+          }
+          .patient-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 12px;
+          }
+          .field-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #64748b;
+          }
+          .field-val {
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .patient-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+          .badge-opd { background: #e0f2fe; color: #0369a1; }
+          .badge-ipd { background: #fef3c7; color: #b45309; }
+          .table-container {
+            margin-bottom: 20px;
+          }
+          table.items-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          table.items-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            text-align: left;
+          }
+          .summary-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff5f5;
+            border: 1px dashed #fca5a5;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+          }
+          .total-amount-val {
+            font-size: 22px;
+            font-weight: 900;
+            color: #dc2626;
+          }
+          .words-val {
+            font-size: 11px;
+            font-weight: 700;
+            color: #7f1d1d;
+            margin-top: 2px;
+          }
+          .settlement-tag {
+            background: #ffffff;
+            border: 1px solid #f87171;
+            color: #b91c1c;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .footer-signs {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 36px;
+            padding-top: 12px;
+          }
+          .sign-col {
+            width: 220px;
+            text-align: center;
+            border-top: 1px solid #cbd5e1;
+            padding-top: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+          }
+          @media print {
+            body { padding: 0; background: #fff; }
+            .voucher-card { border: none; box-shadow: none; width: 100%; max-width: 100%; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="voucher-card">
+          <div class="header-bar">
+            <div>
+              <div class="pharmacy-title">${settings.pharmacyName}</div>
+              <div class="pharmacy-sub">${settings.address}</div>
+              <div class="pharmacy-sub">Phone: ${settings.phone} ${settings.gstin ? ' | GSTIN: ' + settings.gstin : ''}</div>
+            </div>
+            <div class="voucher-badge">
+              <div class="voucher-type">Medicine Return Voucher</div>
+              <div class="voucher-no">${returnRecord.returnNo}</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">${formattedDate}</div>
+            </div>
+          </div>
+
+          <div class="patient-grid">
+            <div>
+              <div class="field-label">Patient Name & MRN</div>
+              <div class="field-val">
+                ${returnRecord.patientName} 
+                <span class="patient-badge ${returnRecord.patientType === 'IPD' ? 'badge-ipd' : 'badge-opd'}">
+                  ${returnRecord.patientType || 'OPD'}
+                </span>
+              </div>
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                MRN: <strong>${returnRecord.mrn || 'N/A'}</strong> ${returnRecord.patientPhone ? ' | Ph: ' + returnRecord.patientPhone : ''}
+              </div>
+            </div>
+
+            <div>
+              <div class="field-label">Admission / Ref Invoice</div>
+              <div class="field-val">
+                ${returnRecord.patientType === 'IPD' && returnRecord.ipdNo ? 'IPD No: ' + returnRecord.ipdNo : ''}
+                ${returnRecord.patientType === 'IPD' && returnRecord.bedNo ? ' (Bed: ' + returnRecord.bedNo + ')' : ''}
+                ${returnRecord.originalBillNo ? 'Ref Bill: ' + returnRecord.originalBillNo : ''}
+                ${!returnRecord.ipdNo && !returnRecord.originalBillNo ? 'Direct Return' : ''}
+              </div>
+              ${returnRecord.prescribingDoctor ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Doctor: Dr. ${returnRecord.prescribingDoctor}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="width: 5%;">#</th>
+                  <th style="width: 35%;">Returned Medicine</th>
+                  <th style="width: 15%; text-align: center;">Qty Returned</th>
+                  <th style="width: 15%; text-align: right;">Unit Rate</th>
+                  <th style="width: 15%; text-align: right;">Refund Total</th>
+                  <th style="width: 15%;">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRows}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="summary-box">
+            <div>
+              <div class="field-label" style="color: #991b1b;">Total Refund Amount</div>
+              <div class="total-amount-val">₹${(returnRecord.totalRefundAmount || 0).toFixed(2)}</div>
+              <div class="words-val">${refundInWords}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="field-label" style="margin-bottom: 4px;">Refund Settlement Mode</div>
+              <div class="settlement-tag">${returnRecord.refundMode || 'Cash Refund'}</div>
+              ${returnRecord.performedBy ? `<div style="font-size: 10px; color: #64748b; margin-top: 6px;">Processed by: ${returnRecord.performedBy}</div>` : ''}
+            </div>
+          </div>
+
+          <div style="font-size: 10px; color: #64748b; line-height: 1.4; background: #f8fafc; padding: 8px 12px; border-radius: 6px;">
+            <strong>Note:</strong> Returned medicines are inspected and re-stocked into inventory. ${returnRecord.patientType === 'IPD' ? 'Refund credit has been applied to IPD patient account charges.' : 'Cash/digital refund handed over to patient/relative.'}
+          </div>
+
+          <div class="footer-signs">
+            <div class="sign-col">
+              Patient / Receiver Signature
+            </div>
+            <div class="sign-col">
+              Pharmacist / Authorised Signatory<br/>
+              <span style="font-size: 9px; color: #94a3b8; font-weight: 400;">For ${settings.pharmacyName}</span>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = () => {
+            window.print();
+            window.onafterprint = () => {
+              window.close();
+            };
+          }
+        </script>
+      </body>
+    </html>
+  `;
+}
+

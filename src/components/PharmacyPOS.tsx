@@ -15,7 +15,8 @@ import {
   Package,
   AlertCircle,
   ArrowRight,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -857,6 +858,16 @@ export default function PharmacyPOS() {
               <h1 className="text-xl font-bold">Pharmacy POS</h1>
             </div>
             <div className="flex gap-2">
+              <Link to="/pharmacy?tab=returns">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 text-rose-600 border-rose-200 bg-rose-50/50 hover:bg-rose-100/50 hover:text-rose-700 h-8 font-bold"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Return Medicine
+                </Button>
+              </Link>
               <Button 
                 variant="outline" 
                 size="sm" 

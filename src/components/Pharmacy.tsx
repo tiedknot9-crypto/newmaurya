@@ -15,7 +15,14 @@ import {
   Trash2,
   Edit,
   Loader2,
-  Settings
+  Settings,
+  RotateCcw,
+  Undo2,
+  User,
+  FileText,
+  CheckCircle2,
+  Receipt,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,17 +57,25 @@ import { useDataSync } from '@/hooks/useDataSync';
 import { canUserModifyRecord, normalizeRole } from '@/utils/rbac';
 import { toast } from 'sonner';
 import { ConfirmDialog } from './ConfirmDialog';
-import { Link } from 'react-router-dom';
-import { generatePharmacyInvoiceHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
+import { Link, useSearchParams } from 'react-router-dom';
+import { generatePharmacyInvoiceHtml, generatePharmacyReturnReceiptHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
 
 export default function Pharmacy() {
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   const isAccountant = normalizeRole(currentUser?.role) === 'ACCOUNTANT';
 
-  const [activeTab, setActiveTab] = useState(isAccountant ? 'billing' : 'inventory');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || (isAccountant ? 'billing' : 'inventory');
+  const [activeTab, setActiveTab] = useState(initialTab);
+
   const [inventory, setInventory] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
+  const [admissions, setAdmissions] = useState<any[]>([]);
+  const [returnRecords, setReturnRecords] = useState<any[]>(() => {
+    return storage.get(STORAGE_KEYS.PHARMACY_RETURNS, []);
+  });
+
   const [loading, setLoading] = useState(true);
   const templateImage = storage.get(STORAGE_KEYS.TEMPLATE_IMAGE, null);
 
@@ -81,6 +96,35 @@ export default function Pharmacy() {
     description: '',
     onConfirm: () => {},
   });
+
+  // --- Return Medicine States ---
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnPatientType, setReturnPatientType] = useState<'OPD' | 'IPD' | 'Walk-in'>('OPD');
+  const [returnPatientSearch, setReturnPatientSearch] = useState('');
+  const [selectedReturnPatient, setSelectedReturnPatient] = useState<any | null>(null);
+  const [selectedReturnBill, setSelectedReturnBill] = useState<any | null>(null);
+  const [returnCart, setReturnCart] = useState<Array<{
+    id: string;
+    itemId?: string;
+    name: string;
+    quantity: number;
+    maxQuantity?: number;
+    price: number;
+    isLoose?: boolean;
+    unitType?: string;
+    reason: string;
+  }>>([]);
+  const [restockInventory, setRestockInventory] = useState(true);
+  const [refundMode, setRefundMode] = useState('Cash Refund');
+  const [returnNotes, setReturnNotes] = useState('');
+  const [returnSearchQuery, setReturnSearchQuery] = useState('');
+
+  // Manual return medicine state
+  const [manualMedicineId, setManualMedicineId] = useState('');
+  const [manualReturnQty, setManualReturnQty] = useState(1);
+  const [manualReturnUnit, setManualReturnUnit] = useState<'strip' | 'loose'>('strip');
+  const [manualReturnPrice, setManualReturnPrice] = useState<number | ''>('');
+  const [manualReturnReason, setManualReturnReason] = useState('Discontinued by Doctor');
 
   const handleSaveEditBillInner = async () => {
     if (!editingBillInner) return;
@@ -131,16 +175,18 @@ export default function Pharmacy() {
     if (inventory.length === 0) {
       setLoading(true);
     }
-    const [invData, invoicesData, patientsData, dbSettings] = await Promise.all([
+    const [invData, invoicesData, patientsData, admissionsData, dbSettings] = await Promise.all([
       supabaseService.getPharmacyItems(),
       supabaseService.getInvoices(),
       supabaseService.getPatients(),
+      supabaseService.getAdmissions ? supabaseService.getAdmissions() : Promise.resolve([]),
       supabaseService.getPharmacySettings ? supabaseService.getPharmacySettings() : Promise.resolve(null)
     ]);
 
     if (invData) setInventory(invData);
     if (invoicesData) setBills(invoicesData.filter(inv => inv.type === 'Pharmacy' || inv.invoice_items?.some((item: any) => item.category === 'PHARMACY')));
     if (patientsData) setPatients(patientsData);
+    if (admissionsData) setAdmissions(admissionsData);
     if (dbSettings) {
       setPharmacySettings(dbSettings);
       const currentSettings = storage.get('hms_pharmacy_settings', null);
@@ -152,6 +198,273 @@ export default function Pharmacy() {
   };
 
   useDataSync(fetchData);
+
+  // --- Return Medicine Helpers ---
+  const filteredPatientsForReturn = useMemo(() => {
+    const query = returnPatientSearch.trim().toLowerCase();
+    
+    if (returnPatientType === 'IPD') {
+      return admissions
+        .filter(adm => {
+          if (!query) return true;
+          const nameMatch = (adm.patient_name || '').toLowerCase().includes(query);
+          const mrnMatch = (adm.mrn || '').toLowerCase().includes(query);
+          const ipdMatch = (adm.ipd_number || '').toLowerCase().includes(query);
+          const bedMatch = (adm.bed_number || '').toLowerCase().includes(query);
+          return nameMatch || mrnMatch || ipdMatch || bedMatch;
+        })
+        .map(adm => ({
+          id: adm.patient_id || adm.id,
+          name: adm.patient_name,
+          mrn: adm.mrn,
+          phone: adm.patient_phone || adm.phone || '',
+          patientType: 'IPD',
+          ipdNo: adm.ipd_number,
+          bedNo: adm.bed_number,
+          doctorName: adm.attending_doctor_name || adm.doctor_name
+        }));
+    } else if (returnPatientType === 'OPD') {
+      return patients
+        .filter(p => {
+          if (!query) return true;
+          const nameMatch = (p.name || '').toLowerCase().includes(query);
+          const mrnMatch = (p.mrn || '').toLowerCase().includes(query);
+          const phoneMatch = (p.phone || p.mobile || '').toLowerCase().includes(query);
+          return nameMatch || mrnMatch || phoneMatch;
+        })
+        .slice(0, 15)
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          mrn: p.mrn,
+          phone: p.phone || p.mobile || '',
+          patientType: 'OPD'
+        }));
+    }
+    return [];
+  }, [returnPatientType, returnPatientSearch, patients, admissions]);
+
+  const patientBillsForReturn = useMemo(() => {
+    if (!selectedReturnPatient) return [];
+    return sequencedBills.filter(bill => {
+      const matchId = bill.patient_id && bill.patient_id === selectedReturnPatient.id;
+      const matchName = bill.patient_name && bill.patient_name.toLowerCase() === selectedReturnPatient.name?.toLowerCase();
+      const matchMrn = bill.mrn && bill.mrn.toLowerCase() === selectedReturnPatient.mrn?.toLowerCase();
+      return matchId || matchName || matchMrn;
+    });
+  }, [selectedReturnPatient, sequencedBills]);
+
+  const totalReturnRefundAmount = useMemo(() => {
+    return returnCart.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  }, [returnCart]);
+
+  const handleSelectReturnPatient = (patient: any) => {
+    setSelectedReturnPatient(patient);
+    setSelectedReturnBill(null);
+    setReturnCart([]);
+    if (patient.patientType === 'IPD') {
+      setRefundMode('Adjusted in IPD Bill');
+    } else {
+      setRefundMode('Cash Refund');
+    }
+  };
+
+  const handleSelectReturnBill = (bill: any) => {
+    setSelectedReturnBill(bill);
+    const items = bill.invoice_items || bill.items || [];
+    if (items.length > 0) {
+      const initialCart = items.map((item: any, idx: number) => ({
+        id: `ret-${idx}-${Date.now()}`,
+        itemId: item.item_id || item.medicine_id || item.id,
+        name: item.item_name || item.name || 'Medicine Item',
+        quantity: item.quantity || 1,
+        maxQuantity: item.quantity || 1,
+        price: Number(item.unit_price || item.price || item.rate || 0),
+        isLoose: !!item.isLoose,
+        unitType: item.unitType || (item.isLoose ? 'Tablet(s)' : 'Strip/Unit'),
+        reason: 'Discontinued by Doctor'
+      }));
+      setReturnCart(initialCart);
+    }
+  };
+
+  const handleAddManualReturnItem = () => {
+    const invItem = inventory.find(i => i.id === manualMedicineId);
+    if (!invItem) {
+      toast.error('Please select a medicine from inventory');
+      return;
+    }
+    const isLoose = manualReturnUnit === 'loose';
+    const unitPrice = manualReturnPrice !== '' 
+      ? Number(manualReturnPrice) 
+      : (isLoose 
+          ? Math.round((invItem.mrp || invItem.price || 0) / (invItem.units_per_strip || 10)) 
+          : (invItem.mrp || invItem.price || 0));
+
+    setReturnCart(prev => [...prev, {
+      id: `ret-item-${Date.now()}-${Math.random()}`,
+      itemId: invItem.id,
+      name: invItem.name,
+      quantity: Number(manualReturnQty) || 1,
+      maxQuantity: 999,
+      price: unitPrice,
+      isLoose,
+      unitType: isLoose ? 'Tablet(s)' : (invItem.unit || 'Strip'),
+      reason: manualReturnReason || 'Excess / Unused Medicine'
+    }]);
+
+    setManualMedicineId('');
+    setManualReturnQty(1);
+    setManualReturnPrice('');
+    toast.success(`Added ${invItem.name} to return list`);
+  };
+
+  const handleProcessReturnSubmit = async () => {
+    if (returnCart.length === 0) {
+      toast.error('Please add at least one medicine item to return');
+      return;
+    }
+
+    const patientName = selectedReturnPatient?.name || (returnPatientType === 'Walk-in' ? 'Walk-in Customer' : 'Unknown Patient');
+    const mrn = selectedReturnPatient?.mrn || 'N/A';
+    const returnNo = `RET-${String(1001 + returnRecords.length).padStart(4, '0')}`;
+    const timestamp = new Date().toISOString();
+
+    const record = {
+      id: `ret-${Date.now()}`,
+      returnNo,
+      date: timestamp,
+      patientId: selectedReturnPatient?.id || null,
+      patientName,
+      patientPhone: selectedReturnPatient?.phone || '',
+      mrn,
+      patientType: returnPatientType,
+      ipdNo: selectedReturnPatient?.ipdNo || '',
+      bedNo: selectedReturnPatient?.bedNo || '',
+      originalBillNo: selectedReturnBill?.sequenceNumber || selectedReturnBill?.id || '',
+      prescribingDoctor: selectedReturnBill?.prescribing_doctor || selectedReturnPatient?.doctorName || '',
+      items: returnCart.map(c => ({
+        name: c.name,
+        quantity: c.quantity,
+        isLoose: c.isLoose,
+        unitType: c.unitType,
+        price: c.price,
+        total: c.quantity * c.price,
+        reason: c.reason
+      })),
+      totalRefundAmount: totalReturnRefundAmount,
+      refundMode,
+      notes: returnNotes,
+      restocked: restockInventory,
+      performedBy: currentUser?.name || 'Pharmacist'
+    };
+
+    // 1. Re-stock Inventory if enabled
+    if (restockInventory) {
+      for (const item of returnCart) {
+        const invItem = inventory.find(i => i.id === item.itemId || i.name.toLowerCase() === item.name.toLowerCase());
+        if (invItem) {
+          const unitsPerStrip = invItem.units_per_strip || 10;
+          let updatePayload: any = {};
+
+          if (item.isLoose) {
+            const currentTotalUnits = (invItem.stock * unitsPerStrip) + (invItem.loose_stock || 0);
+            const newTotalUnits = currentTotalUnits + item.quantity;
+            updatePayload = {
+              stock: Math.floor(newTotalUnits / unitsPerStrip),
+              loose_stock: newTotalUnits % unitsPerStrip,
+              updated_at: timestamp
+            };
+          } else {
+            updatePayload = {
+              stock: invItem.stock + item.quantity,
+              updated_at: timestamp
+            };
+          }
+
+          await supabaseService.updatePharmacyItem(invItem.id, updatePayload);
+
+          await supabaseService.logInventoryTransaction({
+            item_id: invItem.id,
+            transaction_type: 'RETURN',
+            quantity: item.quantity,
+            unit_price: item.price,
+            total_price: item.quantity * item.price,
+            reference_id: returnNo,
+            performed_by: currentUser?.id,
+            notes: `Returned by ${patientName} (${returnPatientType}) - ${item.reason}`
+          });
+        }
+      }
+    }
+
+    // 2. Post credit invoice entry if IPD Patient and Adjusted in IPD Bill
+    if (returnPatientType === 'IPD' && refundMode === 'Adjusted in IPD Bill' && selectedReturnPatient) {
+      try {
+        const creditInvoice = {
+          patient_id: selectedReturnPatient.id,
+          patient_name: patientName,
+          patient_phone: selectedReturnPatient.phone || '',
+          total_amount: -totalReturnRefundAmount,
+          paid_amount: 0,
+          discount_amount: 0,
+          payment_status: 'Credit Applied',
+          payment_method: 'IPD Bill Adjustment',
+          status: 'Settled',
+          type: 'Pharmacy Return',
+          invoice_type: 'IPD',
+          date: timestamp,
+          notes: `Medicine Return Voucher #${returnNo}`
+        };
+
+        await supabaseService.createInvoice(creditInvoice, returnCart.map(c => ({
+          item_name: `[RETURN CREDIT] ${c.name}`,
+          quantity: -c.quantity,
+          unit_price: c.price,
+          total_price: -(c.quantity * c.price),
+          category: 'PHARMACY_RETURN'
+        })));
+      } catch (err) {
+        console.error('Error posting IPD return credit invoice:', err);
+      }
+    }
+
+    // 3. Save to Storage
+    const updatedReturns = [record, ...returnRecords];
+    setReturnRecords(updatedReturns);
+    storage.set(STORAGE_KEYS.PHARMACY_RETURNS, updatedReturns);
+
+    toast.success(`Medicine Return ${returnNo} processed successfully!`);
+    setIsReturnModalOpen(false);
+
+    // Reset Form
+    setReturnCart([]);
+    setSelectedReturnPatient(null);
+    setSelectedReturnBill(null);
+    setReturnNotes('');
+
+    fetchData();
+
+    // Print Receipt
+    const voucherHtml = generatePharmacyReturnReceiptHtml(record, pharmacySettings);
+    printHtmlWithPreview(voucherHtml, `Medicine Return Voucher - ${returnNo}`);
+  };
+
+  const handlePrintReturnRecord = (record: any) => {
+    const voucherHtml = generatePharmacyReturnReceiptHtml(record, pharmacySettings);
+    printHtmlWithPreview(voucherHtml, `Medicine Return Voucher - ${record.returnNo}`);
+  };
+
+  const filteredReturnRecords = useMemo(() => {
+    if (!returnSearchQuery.trim()) return returnRecords;
+    const q = returnSearchQuery.toLowerCase();
+    return returnRecords.filter(r => 
+      (r.returnNo || '').toLowerCase().includes(q) ||
+      (r.patientName || '').toLowerCase().includes(q) ||
+      (r.mrn || '').toLowerCase().includes(q) ||
+      (r.ipdNo || '').toLowerCase().includes(q)
+    );
+  }, [returnRecords, returnSearchQuery]);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -390,6 +703,16 @@ export default function Pharmacy() {
                 POS Sell Terminal
               </Button>
             </Link>
+            <Button 
+              className="gap-2 bg-rose-600 text-white hover:bg-rose-700 rounded-xl font-bold h-10 shadow-md border border-rose-400/30"
+              onClick={() => {
+                setActiveTab('returns');
+                setIsReturnModalOpen(true);
+              }}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Return Medicine (OPD/IPD)
+            </Button>
             <Button variant="outline" className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white hover:text-orange-900 rounded-xl font-bold h-10" onClick={handleExportInventory}>
               <Download className="w-4 h-4" />
               Export Stock
@@ -779,10 +1102,14 @@ export default function Pharmacy() {
             </DialogContent>
           </Dialog>
 
-      <Tabs defaultValue={isAccountant ? "billing" : "inventory"} className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-100 p-1">
+      <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+        <TabsList className="bg-slate-100 p-1 flex flex-wrap gap-1">
           {!isAccountant && <TabsTrigger value="inventory">Inventory</TabsTrigger>}
           <TabsTrigger value="billing">Pharmacy Billing</TabsTrigger>
+          <TabsTrigger value="returns" className="flex gap-2 items-center text-rose-700 data-[state=active]:bg-rose-600 data-[state=active]:text-white font-bold">
+            <RotateCcw className="w-4 h-4" />
+            Return Medicine (OPD/IPD)
+          </TabsTrigger>
           {!isAccountant && (
             <TabsTrigger value="settings" className="flex gap-2 items-center">
               <Settings className="w-4 h-4" />
@@ -1215,6 +1542,196 @@ export default function Pharmacy() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="returns" className="space-y-6 mt-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-rose-50/50 p-4 rounded-2xl border border-rose-100">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-rose-600" />
+                Medicine Return Records (OPD & IPD)
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Process returned medicines for Outpatients and Admitted IPD Patients, re-stock inventory, and issue credit/refund vouchers.
+              </p>
+            </div>
+            <Button 
+              className="bg-rose-600 hover:bg-rose-700 text-white gap-2 font-bold shadow-md rounded-xl"
+              onClick={() => setIsReturnModalOpen(true)}
+            >
+              <RotateCcw className="w-4 h-4" />
+              New Medicine Return
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="border-none shadow-sm bg-gradient-to-br from-white to-rose-50/30">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Return Vouchers</p>
+                  <h3 className="text-2xl font-black text-slate-800 mt-1">{returnRecords.length}</h3>
+                </div>
+                <div className="p-3 rounded-xl bg-rose-100 text-rose-600">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm bg-gradient-to-br from-white to-amber-50/30">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Refund Amount</p>
+                  <h3 className="text-2xl font-black text-amber-700 mt-1">
+                    {formatCurrency(returnRecords.reduce((acc, r) => acc + (r.totalRefundAmount || 0), 0))}
+                  </h3>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-100 text-amber-600">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm bg-gradient-to-br from-white to-blue-50/30">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">OPD Patient Returns</p>
+                  <h3 className="text-2xl font-black text-blue-700 mt-1">
+                    {returnRecords.filter(r => r.patientType === 'OPD' || !r.patientType).length}
+                  </h3>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
+                  <User className="w-5 h-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm bg-gradient-to-br from-white to-purple-50/30">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">IPD Bed Returns</p>
+                  <h3 className="text-2xl font-black text-purple-700 mt-1">
+                    {returnRecords.filter(r => r.patientType === 'IPD').length}
+                  </h3>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-100 text-purple-600">
+                  <FileText className="w-5 h-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-none shadow-sm">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-lg font-bold">Return History Logs</CardTitle>
+                <CardDescription>Track all pharmacy returns, restocked items, and refund settlements.</CardDescription>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search Return No / Patient / MRN..." 
+                  className="pl-8 text-xs bg-slate-50"
+                  value={returnSearchQuery}
+                  onChange={(e) => setReturnSearchQuery(e.target.value)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredReturnRecords.length === 0 ? (
+                <div className="text-center py-12 border border-dashed rounded-xl my-2">
+                  <RotateCcw className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-40" />
+                  <p className="text-sm font-semibold text-slate-600">No Medicine Return Vouchers Found</p>
+                  <p className="text-xs text-muted-foreground mt-1">Click "New Medicine Return" to issue a return refund for OPD or IPD patients.</p>
+                  <Button 
+                    className="mt-4 bg-rose-600 text-white hover:bg-rose-700 gap-2 text-xs font-bold rounded-lg"
+                    onClick={() => setIsReturnModalOpen(true)}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> New Medicine Return
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow>
+                        <TableHead className="font-bold">Return Voucher</TableHead>
+                        <TableHead className="font-bold">Date & Time</TableHead>
+                        <TableHead className="font-bold">Patient Details</TableHead>
+                        <TableHead className="font-bold">Type</TableHead>
+                        <TableHead className="font-bold">Returned Items</TableHead>
+                        <TableHead className="font-bold text-right">Refund Amount</TableHead>
+                        <TableHead className="font-bold">Refund Method</TableHead>
+                        <TableHead className="font-bold text-center">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredReturnRecords.map((record) => (
+                        <TableRow key={record.id} className="hover:bg-slate-50/80 transition-colors">
+                          <TableCell className="font-mono text-xs font-bold text-rose-700">
+                            {record.returnNo}
+                            {record.originalBillNo && (
+                              <div className="text-[10px] text-muted-foreground font-normal">
+                                Bill: #{record.originalBillNo}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatDate(record.date)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="font-bold text-slate-800">{record.patientName}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {record.mrn !== 'N/A' && `MRN: ${record.mrn}`}
+                              {record.ipdNo && ` | IPD: ${record.ipdNo}`}
+                              {record.bedNo && ` | Bed: ${record.bedNo}`}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                record.patientType === 'IPD' 
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200 font-bold' 
+                                  : 'bg-blue-50 text-blue-700 border-blue-200 font-bold'
+                              }
+                            >
+                              {record.patientType || 'OPD'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[200px]">
+                            <div className="font-semibold text-slate-700 truncate">
+                              {record.items?.map((i: any) => `${i.name} (${i.quantity} ${i.unitType || ''})`).join(', ')}
+                            </div>
+                            <div className="text-[10px] text-emerald-600 font-medium">
+                              {record.restocked ? '✓ Inventory Re-stocked' : 'No Restock'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs font-bold text-rose-600 text-right">
+                            {formatCurrency(record.totalRefundAmount)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-700 font-medium">
+                              {record.refundMode || 'Cash'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 gap-1.5 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                              onClick={() => handlePrintReturnRecord(record)}
+                            >
+                              <Printer className="w-3.5 h-3.5" /> Print Voucher
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="settings" className="space-y-6 mt-6">
           <Card className="border-none shadow-sm">
             <CardHeader>
@@ -1508,6 +2025,392 @@ export default function Pharmacy() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Return Medicine Dialog Modal */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700 text-xl font-bold">
+              <RotateCcw className="w-5 h-5" /> Return Medicine (OPD / IPD Patient)
+            </DialogTitle>
+            <DialogDescription>
+              Select patient type, locate patient/bill, choose medicine items to return, and credit refund amount.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Step 1: Patient Type Selector */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Step 1: Patient Category</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  type="button"
+                  variant={returnPatientType === 'OPD' ? 'default' : 'outline'}
+                  className={returnPatientType === 'OPD' ? 'bg-blue-600 hover:bg-blue-700 text-white font-bold' : ''}
+                  onClick={() => {
+                    setReturnPatientType('OPD');
+                    setSelectedReturnPatient(null);
+                    setSelectedReturnBill(null);
+                    setReturnCart([]);
+                  }}
+                >
+                  <User className="w-4 h-4 mr-1.5" /> OPD Patient
+                </Button>
+                <Button
+                  type="button"
+                  variant={returnPatientType === 'IPD' ? 'default' : 'outline'}
+                  className={returnPatientType === 'IPD' ? 'bg-purple-600 hover:bg-purple-700 text-white font-bold' : ''}
+                  onClick={() => {
+                    setReturnPatientType('IPD');
+                    setSelectedReturnPatient(null);
+                    setSelectedReturnBill(null);
+                    setReturnCart([]);
+                  }}
+                >
+                  <FileText className="w-4 h-4 mr-1.5" /> IPD Admitted Patient
+                </Button>
+                <Button
+                  type="button"
+                  variant={returnPatientType === 'Walk-in' ? 'default' : 'outline'}
+                  className={returnPatientType === 'Walk-in' ? 'bg-slate-700 hover:bg-slate-800 text-white font-bold' : ''}
+                  onClick={() => {
+                    setReturnPatientType('Walk-in');
+                    setSelectedReturnPatient({ name: 'Walk-in Customer', mrn: 'N/A', patientType: 'Walk-in' });
+                    setSelectedReturnBill(null);
+                    setReturnCart([]);
+                  }}
+                >
+                  <ShoppingCart className="w-4 h-4 mr-1.5" /> Walk-in / Direct
+                </Button>
+              </div>
+            </div>
+
+            {/* Step 2: Patient Search & Selection */}
+            {returnPatientType !== 'Walk-in' && (
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  Step 2: Select {returnPatientType} Patient
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder={returnPatientType === 'IPD' ? "Search IPD Patient by Name, IPD No., Bed No..." : "Search OPD Patient by Name, Phone, MRN..."}
+                    className="pl-9 bg-slate-50 text-xs"
+                    value={returnPatientSearch}
+                    onChange={(e) => setReturnPatientSearch(e.target.value)}
+                  />
+                </div>
+
+                {/* Patient Search Results */}
+                {selectedReturnPatient ? (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800 text-sm">{selectedReturnPatient.name}</span>
+                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[10px]">
+                          Selected ({selectedReturnPatient.patientType})
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        MRN: {selectedReturnPatient.mrn || 'N/A'}
+                        {selectedReturnPatient.ipdNo && ` | IPD No: ${selectedReturnPatient.ipdNo}`}
+                        {selectedReturnPatient.bedNo && ` | Bed: ${selectedReturnPatient.bedNo}`}
+                        {selectedReturnPatient.doctorName && ` | Doctor: ${selectedReturnPatient.doctorName}`}
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs text-slate-500 hover:text-rose-600"
+                      onClick={() => {
+                        setSelectedReturnPatient(null);
+                        setSelectedReturnBill(null);
+                        setReturnCart([]);
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="max-h-36 overflow-y-auto border rounded-xl divide-y bg-white">
+                    {filteredPatientsForReturn.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground text-center">
+                        No {returnPatientType} patients found matching query.
+                      </div>
+                    ) : (
+                      filteredPatientsForReturn.map(pt => (
+                        <div 
+                          key={pt.id} 
+                          className="p-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center text-xs transition-colors"
+                          onClick={() => handleSelectReturnPatient(pt)}
+                        >
+                          <div>
+                            <span className="font-bold text-slate-800">{pt.name}</span>
+                            <span className="text-muted-foreground ml-2">MRN: {pt.mrn || 'N/A'}</span>
+                            {pt.ipdNo && <span className="text-purple-700 font-semibold ml-2">IPD: {pt.ipdNo} (Bed {pt.bedNo})</span>}
+                          </div>
+                          <Button size="sm" variant="outline" className="h-7 text-[11px] font-bold">Select</Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Select Pharmacy Bill or Manual Medicine Add */}
+            {selectedReturnPatient && (
+              <div className="space-y-3 pt-2 border-t border-dashed">
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    Step 3: Choose Medicines to Return
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">Select from previous bill or add manually</span>
+                </div>
+
+                {/* Patient Previous Bills Dropdown */}
+                {patientBillsForReturn.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-50 border space-y-2">
+                    <Label className="text-xs font-bold">Previous Pharmacy Bills for Patient:</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {patientBillsForReturn.map(bill => (
+                        <div 
+                          key={bill.id} 
+                          className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${selectedReturnBill?.id === bill.id ? 'bg-orange-50 border-orange-400 ring-2 ring-orange-400/20' : 'bg-white hover:border-slate-300'}`}
+                          onClick={() => handleSelectReturnBill(bill)}
+                        >
+                          <div className="flex justify-between font-bold text-slate-800">
+                            <span>Bill #{bill.sequenceNumber || bill.id.slice(0, 8)}</span>
+                            <span className="text-orange-700">{formatCurrency(bill.total_amount || bill.totalAmount || 0)}</span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground flex justify-between mt-1">
+                            <span>{formatDate(bill.created_at || bill.date)}</span>
+                            <span>{bill.invoice_items?.length || bill.items?.length || 0} items</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual Item Add Form */}
+                <div className="p-3 rounded-xl border bg-slate-50/70 space-y-3">
+                  <Label className="text-xs font-bold text-slate-700">Add Medicine Item to Return List Manually:</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                    <div className="sm:col-span-5 space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Select Medicine</Label>
+                      <Select value={manualMedicineId} onValueChange={setManualMedicineId}>
+                        <SelectTrigger className="h-9 text-xs bg-white">
+                          <SelectValue placeholder="Search inventory medicine..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {inventory.map(item => (
+                            <SelectItem key={item.id} value={item.id} className="text-xs">
+                              {item.name} (Stock: {item.stock} strips)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-2 space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Unit Type</Label>
+                      <Select value={manualReturnUnit} onValueChange={(v: 'strip' | 'loose') => setManualReturnUnit(v)}>
+                        <SelectTrigger className="h-9 text-xs bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="strip">Strip / Unit</SelectItem>
+                          <SelectItem value="loose">Loose Tablet</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-2 space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Qty</Label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={manualReturnQty}
+                        onChange={(e) => setManualReturnQty(Number(e.target.value))}
+                        className="h-9 text-xs bg-white"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 space-y-1">
+                      <Button 
+                        type="button" 
+                        className="w-full h-9 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1"
+                        onClick={handleAddManualReturnItem}
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Item
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Return Cart Table */}
+                {returnCart.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-800">Return Cart Items ({returnCart.length}):</Label>
+                    <div className="border rounded-xl overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-100">
+                          <TableRow>
+                            <TableHead className="text-xs font-bold">Medicine Name</TableHead>
+                            <TableHead className="text-xs font-bold w-24">Return Qty</TableHead>
+                            <TableHead className="text-xs font-bold w-24">Unit Price</TableHead>
+                            <TableHead className="text-xs font-bold w-28 text-right">Subtotal</TableHead>
+                            <TableHead className="text-xs font-bold w-36">Reason</TableHead>
+                            <TableHead className="w-10"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {returnCart.map((item, index) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="text-xs font-bold text-slate-800">
+                                {item.name}
+                                {item.isLoose && <Badge variant="outline" className="ml-2 text-[9px] bg-orange-50 text-orange-700">Loose</Badge>}
+                              </TableCell>
+                              <TableCell>
+                                <Input 
+                                  type="number" 
+                                  min="1" 
+                                  max={item.maxQuantity}
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, Number(e.target.value));
+                                    setReturnCart(prev => prev.map((c, i) => i === index ? { ...c, quantity: val } : c));
+                                  }}
+                                  className="h-8 text-xs w-20"
+                                />
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold">
+                                ₹{item.price.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-xs font-bold text-rose-700 text-right">
+                                {formatCurrency(item.quantity * item.price)}
+                              </TableCell>
+                              <TableCell>
+                                <Select 
+                                  value={item.reason} 
+                                  onValueChange={(val) => {
+                                    setReturnCart(prev => prev.map((c, i) => i === index ? { ...c, reason: val } : c));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-[11px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Discontinued by Doctor">Discontinued by Doctor</SelectItem>
+                                    <SelectItem value="Excess / Unused Medicine">Excess / Unused Medicine</SelectItem>
+                                    <SelectItem value="Wrong Medication Dispensed">Wrong Medication</SelectItem>
+                                    <SelectItem value="Patient Discharged / Expired">Patient Discharged</SelectItem>
+                                    <SelectItem value="Side Effect / Allergy">Side Effect / Allergy</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => setReturnCart(prev => prev.filter((_, i) => i !== index))}
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 4: Settlement & Restock Options */}
+            {returnCart.length > 0 && (
+              <div className="space-y-4 pt-3 border-t border-dashed">
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  Step 4: Refund Settlement & Inventory Policy
+                </Label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">Refund Payment Method</Label>
+                    <Select value={refundMode} onValueChange={setRefundMode}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {returnPatientType === 'IPD' && (
+                          <SelectItem value="Adjusted in IPD Bill">
+                            Adjusted in IPD Final Bill (Credit Note)
+                          </SelectItem>
+                        )}
+                        <SelectItem value="Cash Refund">Cash Refund</SelectItem>
+                        <SelectItem value="UPI / Online Transfer">UPI / Bank Refund</SelectItem>
+                        <SelectItem value="Store Credit Voucher">Store Credit Voucher</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50/60 border border-orange-100">
+                    <div className="space-y-0.5">
+                      <Label className="text-xs font-bold text-slate-800 cursor-pointer" htmlFor="restock-switch">
+                        Re-stock Inventory Stock
+                      </Label>
+                      <p className="text-[10px] text-muted-foreground">Automatically increases stock levels in inventory</p>
+                    </div>
+                    <input 
+                      id="restock-switch"
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                      checked={restockInventory}
+                      onChange={(e) => setRestockInventory(e.target.checked)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Return Notes / Reason Remarks</Label>
+                  <Input 
+                    placeholder="Enter additional remarks or doctor recommendation..."
+                    value={returnNotes}
+                    onChange={(e) => setReturnNotes(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-semibold text-rose-800 uppercase tracking-wider">Total Refund Payable</span>
+                    <p className="text-[10px] text-rose-600">Voucher will be generated & printed</p>
+                  </div>
+                  <span className="text-2xl font-black text-rose-700">
+                    {formatCurrency(totalReturnRefundAmount)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsReturnModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold gap-2"
+              disabled={returnCart.length === 0}
+              onClick={handleProcessReturnSubmit}
+            >
+              <CheckCircle2 className="w-4 h-4" /> Issue Return Voucher & Print
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm(prev => ({ ...prev, isOpen: false }))}
