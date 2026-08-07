@@ -113,21 +113,24 @@ export function getPrescriptionPrintHtml(
   const phoneList = hospPhone.split(/[,/\n]/).map(p => p.trim()).filter(Boolean);
   const hospEmail = `contact@${hospName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'globalhospital'}.com`;
   
-  const patName = patient?.name || 'N/A';
-  const patAgeGender = `${patient?.age || 'N/A'}Y / ${patient?.gender || 'N/A'}`;
+  const patName = patient?.name || '-';
+  const ageStr = patient?.age ? `${patient.age}Y` : '';
+  const genderStr = patient?.gender || '';
+  const patAgeGender = [ageStr, genderStr].filter(Boolean).join(' / ') || '-';
   const presDate = prescription?.date || new Date().toISOString().split('T')[0];
-  const patMRN = patient?.mrn || 'N/A';
-  const patPhone = patient?.phone || '';
-  const patFatherName = patient?.fatherName || (patient as any)?.father_name || '';
+  const rawMrn = patient?.mrn || (patient as any)?.id || '';
+  const patMRN = rawMrn ? (rawMrn.startsWith('MRN') ? rawMrn : `MRN-${rawMrn}`) : '-';
+  const patPhone = patient?.phone || (patient as any)?.mobile || '-';
+  const patFatherName = patient?.fatherName || (patient as any)?.father_name || '-';
 
   // Extract vitals
   const vts = prescription?.vitals;
   const bpVal = vts?.bp || '';
-  const pulseVal = vts?.pulse !== undefined && vts?.pulse !== 0 ? String(vts.pulse) : '';
-  const tempVal = vts?.temp !== undefined ? String(vts.temp) : '';
-  const spo2Val = vts?.spo2 !== undefined && vts?.spo2 !== 0 ? String(vts.spo2) : '';
-  const weightVal = vts?.weight !== undefined ? String(vts.weight) : '';
-  const rrVal = vts?.rr !== undefined && vts?.rr !== 0 ? String(vts.rr) : '';
+  const pulseVal = vts?.pulse !== undefined && vts?.pulse !== 0 && vts?.pulse !== '' ? String(vts.pulse) : '';
+  const tempVal = vts?.temp !== undefined && vts?.temp !== 0 && vts?.temp !== '' ? String(vts.temp) : '';
+  const spo2Val = vts?.spo2 !== undefined && vts?.spo2 !== 0 && vts?.spo2 !== '' ? String(vts.spo2) : '';
+  const weightVal = vts?.weight !== undefined && vts?.weight !== 0 && vts?.weight !== '' ? String(vts.weight) : '';
+  const rrVal = vts?.rr !== undefined && vts?.rr !== 0 && vts?.rr !== '' ? String(vts.rr) : '';
   const rbsVal = vts?.rbs !== undefined && vts?.rbs !== 0 && vts?.rbs !== '' ? String(vts.rbs) : '';
 
   let rawDocName = '';
@@ -143,10 +146,9 @@ export function getPrescriptionPrintHtml(
     docDept = doctor.department || '';
     docSpec = doctor.specialization || '';
     docDegree = doctor.degree || '';
-    if (doctor.id) {
+    docReg = (doctor as any).regNo || (doctor as any).reg_no || (doctor as any).registrationNo || '';
+    if (!docReg && doctor.id) {
       docReg = `Reg No: MC-${doctor.id.toString().toUpperCase()}`;
-    } else if (doctor.degree) {
-      docReg = `Reg No: MC-1234567`;
     }
   }
 
@@ -209,14 +211,6 @@ export function getPrescriptionPrintHtml(
     adviceItems = prescription.notes.split(/\n+/).map(s => s.trim().replace(/^[•\-\*]\s*/, '')).filter(Boolean);
   }
 
-  if (adviceItems.length === 0) {
-    adviceItems = [
-      'Drink plenty of warm water.',
-      'Rest well for 3 days.',
-      'Follow up after 5 days if fever persists.'
-    ];
-  }
-
   const adviceContent = `
     <div style="margin-top: 24px; font-family: 'Plus Jakarta Sans', sans-serif; page-break-inside: avoid;">
       <div style="background: #ffffff; border: 1.5px solid #0052cc; border-radius: 12px; padding: 14px 18px;">
@@ -227,9 +221,11 @@ export function getPrescriptionPrintHtml(
           <span style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CLINICAL REMARKS & ADVICE:</span>
         </div>
         ${prescription.diagnosis ? `<div style="font-weight: 800; color: #000000; margin-left: 32px; margin-bottom: 6px; font-size: 14px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
-        <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #000000; font-size: 14px; font-weight: 700; line-height: 1.6;">
-          ${adviceItems.map(item => `<li style="margin-bottom: 4px;">${item}</li>`).join('')}
-        </ul>
+        ${adviceItems.length > 0 ? `
+          <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #000000; font-size: 14px; font-weight: 700; line-height: 1.6;">
+            ${adviceItems.map(item => `<li style="margin-bottom: 4px;">${item}</li>`).join('')}
+          </ul>
+        ` : `<div style="margin-left: 32px; color: #000000; font-size: 14px; font-weight: 700;">-</div>`}
       </div>
     </div>
   `;
@@ -521,7 +517,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">FATHER / HUSBAND NAME</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patFatherName || 'Suresh Sharma'}</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patFatherName}</div>
                 </div>
               </div>
 
@@ -532,7 +528,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MOBILE NO.</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patPhone || '+91 98765 43210'}</div>
+                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patPhone}</div>
                 </div>
               </div>
 
@@ -543,7 +539,7 @@ export function getPrescriptionPrintHtml(
                 </div>
                 <div>
                   <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MRN / REG. NO.</div>
-                  <div style="font-size: 14px; font-weight: 900; color: #0040a8;">${patMRN.startsWith('MRN') ? patMRN : `MRN-${patMRN}`}</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #0040a8;">${patMRN}</div>
                 </div>
               </div>
             </div>
@@ -586,19 +582,19 @@ export function getPrescriptionPrintHtml(
             </div>
             
             <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12.5px; font-weight: 800; color: #000000;">
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">BP:</span> <span style="font-weight: 900; color: #000000;">${bpVal || '120/80'} mmHg</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">BP:</span> <span style="font-weight: 900; color: #000000;">${bpVal ? `${bpVal} mmHg` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Pulse:</span> <span style="font-weight: 900; color: #000000;">${pulseVal || '76'} /min</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Pulse:</span> <span style="font-weight: 900; color: #000000;">${pulseVal ? `${pulseVal} /min` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Temp:</span> <span style="font-weight: 900; color: #000000;">${tempVal || '98.6'} °F</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Temp:</span> <span style="font-weight: 900; color: #000000;">${tempVal ? `${tempVal} °F` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">SpO2:</span> <span style="font-weight: 900; color: #000000;">${spo2Val || '99'} %</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">SpO2:</span> <span style="font-weight: 900; color: #000000;">${spo2Val ? `${spo2Val} %` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Weight:</span> <span style="font-weight: 900; color: #000000;">${weightVal || '68'} kg</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Weight:</span> <span style="font-weight: 900; color: #000000;">${weightVal ? `${weightVal} kg` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Resp Rate:</span> <span style="font-weight: 900; color: #000000;">${rrVal || '18'} /min</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">Resp Rate:</span> <span style="font-weight: 900; color: #000000;">${rrVal ? `${rrVal} /min` : '-'}</span></div>
               <div style="color: #cbd5e1;">|</div>
-              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">RBS:</span> <span style="font-weight: 900; color: #000000;">${rbsVal || '110'} mg/dL</span></div>
+              <div><span style="color: #334155; font-size: 11px; font-weight: 800;">RBS:</span> <span style="font-weight: 900; color: #000000;">${rbsVal ? `${rbsVal} mg/dL` : '-'}</span></div>
             </div>
           </div>
 
@@ -624,17 +620,7 @@ export function getPrescriptionPrintHtml(
           ${adviceContent}
 
           <!-- FOOTER SIGNATURE SECTION -->
-          <div class="footer-signatures">
-            <div style="display: flex; align-items: flex-start; gap: 10px;">
-              <div style="width: 32px; height: 32px; border: 1.5px solid #0052cc; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-              </div>
-              <div>
-                <div style="font-size: 11px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DIGITAL HEALTH RECORD</div>
-                <div style="font-size: 11px; color: #000000; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">Not for Medicolegal purpose</div>
-              </div>
-            </div>
-
+          <div class="footer-signatures" style="margin-top: 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
             <div style="text-align: right; min-width: 200px;">
               <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
                 <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
@@ -643,8 +629,8 @@ export function getPrescriptionPrintHtml(
               </div>
               <div style="width: 100%; height: 2px; background: #003b7a; margin-bottom: 4px;"></div>
               <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
-              <div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>
-              <div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree || 'MBBS, MD (MEDICINE)'}</div>
+              ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
+              ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
               <div style="font-size: 10px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
             </div>
           </div>
