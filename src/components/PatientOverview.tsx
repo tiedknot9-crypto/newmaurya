@@ -563,16 +563,20 @@ View full details at: ${shareUrl}
   const handlePrintPrescription = (prescriptionData?: any) => {
     if (!selectedPatient) return;
 
-    let doctor = staff.find(u => u.id === (prescriptionData?.doctorId || prescriptionData?.doctor_id || selectedPatient.attending_doctor_id)) ||
-                 staff.find(u => u.name === (prescriptionData?.doctor || prescriptionData?.doctor_name));
+    const docSearch = prescriptionData?.doctor || prescriptionData?.doctor_name || selectedPatient.attending_doctor_name;
+    const docClean = docSearch ? docSearch.replace(/^dr\.?\s+/i, '').toLowerCase().trim() : '';
 
-    if (!doctor && (prescriptionData?.doctor || prescriptionData?.doctor_name)) {
+    let doctor = staff.find(u => u.id === (prescriptionData?.doctorId || prescriptionData?.doctor_id || selectedPatient.attending_doctor_id)) ||
+                 staff.find(u => u.name === (prescriptionData?.doctor || prescriptionData?.doctor_name)) ||
+                 staff.find(u => u.name && docClean && u.name.replace(/^dr\.?\s+/i, '').toLowerCase().trim() === docClean);
+
+    if (!doctor && docSearch) {
       doctor = {
-        name: prescriptionData.doctor || prescriptionData.doctor_name,
-        degree: prescriptionData.doctorDegree || prescriptionData.doctor_degree || '',
-        specialization: prescriptionData.doctorSpecialization || prescriptionData.doctor_specialization || prescriptionData.department || '',
-        department: prescriptionData.department || prescriptionData.doctorDepartment || prescriptionData.doctor_department || '',
-        id: prescriptionData.doctorId || prescriptionData.doctor_id || ''
+        name: docSearch,
+        degree: prescriptionData?.doctorDegree || prescriptionData?.doctor_degree || '',
+        specialization: prescriptionData?.doctorSpecialization || prescriptionData?.doctor_specialization || prescriptionData?.department || '',
+        department: prescriptionData?.department || prescriptionData?.doctorDepartment || prescriptionData?.doctor_department || '',
+        id: prescriptionData?.doctorId || prescriptionData?.doctor_id || ''
       };
     }
 
@@ -664,8 +668,86 @@ View full details at: ${shareUrl}
     setIsPrescriptionOpen(true);
   };
 
-  const handlePrintBlankPrescription = () => {
-    handlePrintPrescription();
+  const handlePrintBlankPrescription = (prescriptionData?: any) => {
+    if (!selectedPatient) return;
+
+    const docSearch = prescriptionData?.doctor || prescriptionData?.doctor_name || selectedPatient.attending_doctor_name;
+    const docClean = docSearch ? docSearch.replace(/^dr\.?\s+/i, '').toLowerCase().trim() : '';
+
+    let doctor = staff.find(u => u.id === (prescriptionData?.doctorId || prescriptionData?.doctor_id || selectedPatient.attending_doctor_id)) ||
+                 staff.find(u => u.name === (prescriptionData?.doctor || prescriptionData?.doctor_name)) ||
+                 staff.find(u => u.name && docClean && u.name.replace(/^dr\.?\s+/i, '').toLowerCase().trim() === docClean);
+
+    if (!doctor && docSearch) {
+      doctor = {
+        name: docSearch,
+        degree: prescriptionData?.doctorDegree || prescriptionData?.doctor_degree || '',
+        specialization: prescriptionData?.doctorSpecialization || prescriptionData?.doctor_specialization || prescriptionData?.department || '',
+        department: prescriptionData?.department || prescriptionData?.doctorDepartment || prescriptionData?.doctor_department || '',
+        id: prescriptionData?.doctorId || prescriptionData?.doctor_id || ''
+      };
+    }
+
+    if (!doctor && selectedPatient.attending_doctor_id) {
+      doctor = staff.find(u => u.id === selectedPatient.attending_doctor_id);
+    }
+
+    const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
+      name: 'GLOBAL HOSPITAL',
+      address: '123 Healthcare Way, Medical City',
+      phone: '+91 98765 43210'
+    });
+
+    const latestVitals = vitals && vitals.length > 0 ? vitals[0] : undefined;
+
+    const activeVitals = (prescriptionData?.vitals && (
+      prescriptionData.vitals.bp ||
+      prescriptionData.vitals.pulse ||
+      prescriptionData.vitals.temp ||
+      prescriptionData.vitals.spo2 ||
+      prescriptionData.vitals.weight ||
+      prescriptionData.vitals.rr ||
+      prescriptionData.vitals.rbs
+    )) ? {
+      bp: prescriptionData.vitals.bp,
+      pulse: prescriptionData.vitals.pulse,
+      temp: prescriptionData.vitals.temp,
+      spo2: prescriptionData.vitals.spo2,
+      weight: prescriptionData.vitals.weight,
+      rr: prescriptionData.vitals.rr,
+      rbs: prescriptionData.vitals.rbs
+    } : (latestVitals ? {
+      bp: latestVitals.bp,
+      pulse: latestVitals.pulse,
+      temp: latestVitals.temp,
+      spo2: latestVitals.spo2,
+      weight: latestVitals.weight,
+      rr: latestVitals.rr || latestVitals.respiration,
+      rbs: latestVitals.rbs
+    } : undefined);
+
+    const html = getPrescriptionPrintHtml(
+      {
+        name: selectedPatient.name,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        mrn: selectedPatient.mrn,
+        phone: selectedPatient.phone || selectedPatient.mobile || '',
+        fatherName: selectedPatient.fatherName || selectedPatient.father_name || ''
+      },
+      {
+        date: new Date().toISOString().split('T')[0],
+        medicines: [],
+        advice: '',
+        vitals: activeVitals,
+        isBlank: true
+      },
+      doctor,
+      hospitalInfo,
+      { isBlank: true }
+    );
+
+    printHtmlWithPreview(html, `Blank Prescription - ${selectedPatient.name}`);
   };
 
   const handleSavePrescription = async () => {
@@ -2145,6 +2227,15 @@ View full details at: ${shareUrl}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsPrescriptionOpen(false)}>Cancel</Button>
+            <Button 
+              type="button"
+              variant="outline" 
+              className="gap-2 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium" 
+              onClick={() => handlePrintBlankPrescription(newPrescription)}
+            >
+              <FileText className="w-4 h-4 text-slate-500" />
+              Blank Prescription
+            </Button>
             <Button 
               type="button"
               variant="outline" 
