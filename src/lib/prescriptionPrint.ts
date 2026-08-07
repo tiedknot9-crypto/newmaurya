@@ -142,7 +142,7 @@ export function getPrescriptionPrintHtml(
   if (typeof doctor === 'string') {
     rawDocName = doctor;
   } else if (doctor && typeof doctor === 'object') {
-    rawDocName = doctor.name || '';
+    rawDocName = doctor.name || (doctor as any).doctor_name || (doctor as any).doctorName || '';
     docDept = doctor.department || '';
     docSpec = doctor.specialization || '';
     docDegree = doctor.degree || '';
@@ -152,19 +152,77 @@ export function getPrescriptionPrintHtml(
     }
   }
 
-  const docName = rawDocName ? (rawDocName.trim().startsWith('Dr.') ? rawDocName.trim() : `Dr. ${rawDocName.trim()}`) : 'Dr. Attending Doctor';
+  // Fall back to prescription doctor fields
+  if (!rawDocName && prescription) {
+    rawDocName = (prescription as any).doctor || (prescription as any).doctor_name || (prescription as any).doctorName || (prescription as any).consultingDoctor || '';
+    if (!docDept) docDept = (prescription as any).department || (prescription as any).doctorDepartment || '';
+    if (!docDegree) docDegree = (prescription as any).doctorDegree || (prescription as any).degree || '';
+    if (!docReg) docReg = (prescription as any).doctorRegNo || (prescription as any).regNo || '';
+  }
 
-  if (!docDept && docSpec) {
-    docDept = docSpec;
+  // Fall back to patient attending doctor fields
+  if (!rawDocName && patient) {
+    rawDocName = (patient as any).attending_doctor_name || (patient as any).doctor || (patient as any).doctor_name || '';
   }
-  if (!docDept) {
-    docDept = 'General OPD / Clinical Services';
+
+  // Try matching against stored staff/users in localStorage
+  let storedUsers: any[] = [];
+  try {
+    const rawUsers = typeof window !== 'undefined' ? localStorage.getItem('hms_users') : null;
+    if (rawUsers) storedUsers = JSON.parse(rawUsers);
+  } catch {}
+
+  let matchedUser = storedUsers.find((u: any) => 
+    (rawDocName && (
+      String(u.name).trim().toLowerCase() === String(rawDocName).trim().toLowerCase() ||
+      String(u.id).trim().toLowerCase() === String(rawDocName).trim().toLowerCase()
+    )) ||
+    (doctor && typeof doctor === 'object' && doctor.id && String(u.id).trim().toLowerCase() === String(doctor.id).trim().toLowerCase())
+  );
+
+  // If no doctor name yet, try logged in user or first doctor from storage
+  if (!matchedUser && !rawDocName) {
+    try {
+      const curRaw = typeof window !== 'undefined' ? (localStorage.getItem('hms_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('user')) : null;
+      if (curRaw) {
+        const cur = JSON.parse(curRaw);
+        if (cur && cur.name) {
+          matchedUser = cur;
+        }
+      }
+    } catch {}
+
+    if (!matchedUser && storedUsers.length > 0) {
+      matchedUser = storedUsers.find((u: any) => 
+        u.role?.toUpperCase() === 'DOCTOR' || 
+        u.role?.toUpperCase() === 'SUPER_ADMIN' || 
+        u.role?.toUpperCase() === 'SURGEON'
+      ) || storedUsers[0];
+    }
   }
-  if (!docSpec) {
-    docSpec = docDept;
+
+  if (matchedUser) {
+    if (!rawDocName) rawDocName = matchedUser.name || '';
+    if (!docDept) docDept = matchedUser.department || matchedUser.specialization || '';
+    if (!docSpec) docSpec = matchedUser.specialization || matchedUser.department || '';
+    if (!docDegree) docDegree = matchedUser.degree || '';
+    if (!docReg) {
+      docReg = matchedUser.regNo || matchedUser.reg_no || matchedUser.registrationNo || (matchedUser.id ? `MC-${matchedUser.id.toString().toUpperCase()}` : '');
+    }
   }
-  if (!docReg) {
-    docReg = 'Reg No: MC1234567';
+
+  const docName = rawDocName 
+    ? (rawDocName.trim().startsWith('Dr.') ? rawDocName.trim() : `Dr. ${rawDocName.trim()}`) 
+    : 'Dr. Attending Doctor';
+
+  if (!docDept && docSpec) docDept = docSpec;
+  if (!docDept) docDept = 'General Medicine';
+  if (!docSpec) docSpec = docDept;
+
+  if (docReg && !docReg.toLowerCase().startsWith('reg') && !docReg.toLowerCase().startsWith('mc')) {
+    docReg = `Reg No: ${docReg}`;
+  } else if (docReg && !docReg.toLowerCase().startsWith('reg')) {
+    docReg = `Reg No: ${docReg}`;
   }
 
   // Format Medicines content with icons
