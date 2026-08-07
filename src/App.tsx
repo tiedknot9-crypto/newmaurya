@@ -83,7 +83,7 @@ const navSections = [
   {
     category: 'Pharmacy & Billing',
     items: [
-      { name: 'Pharmacy Store', icon: Pill, path: '/pharmacy', roles: ['SUPER_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS'] },
+      { name: 'Pharmacy Store', icon: Pill, path: '/pharmacy', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE'] },
       { name: 'Billing & Accounts', icon: CreditCard, path: '/billing', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
       { name: 'Expenses', icon: FileText, path: '/expenses', roles: ['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
     ]
@@ -831,8 +831,8 @@ function AppLayout({ user, hospitalInfo, handleLogout, isMobileMenuOpen, setIsMo
             <Route path="/ot" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'SURGEON', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><OTManagement /></ProtectedRoute>} />
             <Route path="/lab" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'LAB_STAFF', 'ACCOUNTANT', 'ACCOUNTS', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'RADIOLOGIST', 'PATHOLOGIST', 'DOCTOR']}><Lab /></ProtectedRoute>} />
             <Route path="/patient-overview" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'ACCOUNTANT', 'ACCOUNTS']}><PatientOverview userRole={user?.role} /></ProtectedRoute>} />
-            <Route path="/pharmacy" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS']}><Pharmacy /></ProtectedRoute>} />
-            <Route path="/pharmacy/pos" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS']}><PharmacyPOS /></ProtectedRoute>} />
+            <Route path="/pharmacy" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><Pharmacy /></ProtectedRoute>} />
+            <Route path="/pharmacy/pos" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><PharmacyPOS /></ProtectedRoute>} />
             <Route path="/expenses" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><Expenses /></ProtectedRoute>} />
             <Route path="/billing" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Billing /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><AdminSettings currentUser={user} onUserUpdate={(updatedUser) => setUser(updatedUser)} onHospitalUpdate={(info) => setHospitalInfo(info)} /></ProtectedRoute>} />

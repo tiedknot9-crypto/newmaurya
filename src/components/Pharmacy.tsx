@@ -244,6 +244,28 @@ export default function Pharmacy() {
     return [];
   }, [returnPatientType, returnPatientSearch, patients, admissions]);
 
+  const sequencedBills = useMemo(() => {
+    // Sort all bills by date ascending to assign stable chronological sequence numbers
+    const chronologicalBills = [...bills].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      return dateA - dateB;
+    });
+
+    // Create a map from bill.id to sequence number
+    const sequenceMap = new Map<string, string>();
+    chronologicalBills.forEach((bill, index) => {
+      const seqNum = `PHA-${String(1001 + index).padStart(4, '0')}`;
+      sequenceMap.set(bill.id, seqNum);
+    });
+
+    // Return bills mapped with sequenceNumber
+    return bills.map(bill => ({
+      ...bill,
+      sequenceNumber: sequenceMap.get(bill.id) || `PHA-${bill.id.slice(0, 8).toUpperCase()}`
+    }));
+  }, [bills]);
+
   const patientBillsForReturn = useMemo(() => {
     if (!selectedReturnPatient) return [];
     return sequencedBills.filter(bill => {
@@ -474,28 +496,6 @@ export default function Pharmacy() {
       (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   }, [inventory, searchQuery]);
-
-  const sequencedBills = useMemo(() => {
-    // Sort all bills by date ascending to assign stable chronological sequence numbers
-    const chronologicalBills = [...bills].sort((a, b) => {
-      const dateA = new Date(a.created_at || a.date || 0).getTime();
-      const dateB = new Date(b.created_at || b.date || 0).getTime();
-      return dateA - dateB;
-    });
-
-    // Create a map from bill.id to sequence number
-    const sequenceMap = new Map<string, string>();
-    chronologicalBills.forEach((bill, index) => {
-      const seqNum = `PHA-${String(1001 + index).padStart(4, '0')}`;
-      sequenceMap.set(bill.id, seqNum);
-    });
-
-    // Return bills mapped with sequenceNumber
-    return bills.map(bill => ({
-      ...bill,
-      sequenceNumber: sequenceMap.get(bill.id) || `PHA-${bill.id.slice(0, 8).toUpperCase()}`
-    }));
-  }, [bills]);
 
   const [billingSearchQuery, setBillingSearchQuery] = useState('');
 
