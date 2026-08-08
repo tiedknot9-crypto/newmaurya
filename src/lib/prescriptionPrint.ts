@@ -709,14 +709,13 @@ export function getPrescriptionPrintHtml(
 
           ${!isBlank ? `
             <!-- FOOTER SIGNATURE SECTION -->
-            <div class="footer-signatures" style="margin-top: 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
+            <div class="footer-signatures" style="margin-top: auto; margin-bottom: 6px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
               <div style="text-align: right; min-width: 200px;">
                 <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
                   <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
                     <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
                   </svg>
                 </div>
-                <div style="width: 100%; height: 2px; background: #003b7a; margin-bottom: 4px;"></div>
                 <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
                 ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
                 ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
@@ -726,12 +725,12 @@ export function getPrescriptionPrintHtml(
           ` : ''}
 
           ${isValidFooterImage ? `
-            <div style="position: relative; margin-top: auto; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
+            <div style="position: relative; margin-top: 4px; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
               <img src="${actualFooterImage}" style="width: 100%; height: auto; max-height: 160px; object-fit: fill; display: block; border-radius: 4px;" />
             </div>
           ` : `
             <!-- STATIC BOTTOM FOOTER BAR -->
-            <div class="static-bottom-bar" style="margin-top: auto;">
+            <div class="static-bottom-bar" style="margin-top: 4px;">
               <!-- Address Left -->
               <div style="display: flex; align-items: center; gap: 8px; max-width: 440px;">
                 <div style="width: 26px; height: 26px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #dc2626; flex-shrink: 0;">
