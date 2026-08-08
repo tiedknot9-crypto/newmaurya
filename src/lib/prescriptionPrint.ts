@@ -676,11 +676,7 @@ export function getPrescriptionPrintHtml(
             <div class="rx-symbol" style="margin-top: 8px; margin-bottom: 8px;">Rx</div>
 
             <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
-            <div style="min-height: 500px; width: 100%; border: 1.5px solid #0052cc; border-radius: 12px; background: #ffffff; margin-bottom: 20px; padding: 16px; box-sizing: border-box; position: relative;">
-              <div style="position: absolute; top: 12px; right: 16px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
-                Manual Prescription / Notes
-              </div>
-            </div>
+            <div style="min-height: 520px; width: 100%; margin-bottom: 16px; box-sizing: border-box;"></div>
           ` : `
             <!-- Rx Symbol -->
             <div class="rx-symbol">Rx</div>
@@ -704,21 +700,23 @@ export function getPrescriptionPrintHtml(
             ${adviceContent}
           `}
 
-          <!-- FOOTER SIGNATURE SECTION -->
-          <div class="footer-signatures" style="margin-top: 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
-            <div style="text-align: right; min-width: 200px;">
-              <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
-                <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
-                  <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
-                </svg>
+          ${!isBlank ? `
+            <!-- FOOTER SIGNATURE SECTION -->
+            <div class="footer-signatures" style="margin-top: 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
+              <div style="text-align: right; min-width: 200px;">
+                <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
+                  <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
+                    <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
+                  </svg>
+                </div>
+                <div style="width: 100%; height: 2px; background: #003b7a; margin-bottom: 4px;"></div>
+                <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
+                ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
+                ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
+                <div style="font-size: 10px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
               </div>
-              <div style="width: 100%; height: 2px; background: #003b7a; margin-bottom: 4px;"></div>
-              <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
-              ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
-              ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
-              <div style="font-size: 10px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
             </div>
-          </div>
+          ` : ''}
 
           ${isValidFooterImage ? `
             <div style="position: relative; margin-top: 16px; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
