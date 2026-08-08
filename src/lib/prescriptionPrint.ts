@@ -488,8 +488,8 @@ export function getPrescriptionPrintHtml(
           ${isValidTemplateImage ? `<div class="template-bg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;"><img src="${actualTemplateImage}" style="width:100%;" /></div>` : ''}
           
           ${isValidHeaderImage ? `
-            <div style="margin-bottom: 16px; width: 100%; text-align: center; page-break-inside: avoid;">
-              <img src="${actualHeaderImage}" style="width: 100%; height: auto; max-height: 200px; object-fit: fill; display: block; border-radius: 6px;" />
+            <div style="margin-bottom: 8px; width: 100%; text-align: center; page-break-inside: avoid; flex-shrink: 0;">
+              <img src="${actualHeaderImage}" style="width: 100%; height: auto; max-height: 160px; object-fit: contain; display: block; border-radius: 4px;" />
             </div>
           ` : `
             <!-- STATIC HEADER (Matches Template Image Exactly) -->
@@ -684,10 +684,10 @@ export function getPrescriptionPrintHtml(
 
           ${isBlank ? `
             <!-- Rx Symbol -->
-            <div class="rx-symbol" style="margin-top: 6px; margin-bottom: 4px;">Rx</div>
+            <div class="rx-symbol" style="margin-top: 4px; margin-bottom: 4px;">Rx</div>
 
             <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
-            <div style="flex: 1; flex-grow: 1; flex-shrink: 0; min-height: 165mm; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
+            <div style="flex: 1; flex-grow: 1; flex-shrink: 1; min-height: 0; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
           ` : `
             <!-- Rx Symbol -->
             <div class="rx-symbol">Rx</div>
@@ -711,25 +711,23 @@ export function getPrescriptionPrintHtml(
             ${adviceContent}
           `}
 
-          ${!isBlank ? `
-            <!-- FOOTER SIGNATURE SECTION -->
-            <div class="footer-signatures" style="margin-top: auto; margin-bottom: 6px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
-              <div style="text-align: right; min-width: 200px;">
-                <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
-                ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
-                ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
-                <div style="font-size: 10px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
-              </div>
+          <!-- FOOTER SIGNATURE SECTION -->
+          <div class="footer-signatures" style="margin-top: auto; margin-bottom: 4px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid; flex-shrink: 0;">
+            <div style="text-align: right; min-width: 180px;">
+              <div style="font-size: 13.5px; font-weight: 900; color: #000000;">${docName}</div>
+              ${docReg ? `<div style="font-size: 10.5px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
+              ${docDegree ? `<div style="font-size: 10.5px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
+              <div style="font-size: 9.5px; font-weight: 900; color: #0052cc; text-transform: uppercase; letter-spacing: 0.05em;">DEPT. OF ${docDept.toUpperCase()}</div>
             </div>
-          ` : ''}
+          </div>
 
           ${isValidFooterImage ? `
-            <div style="position: relative; margin-top: 4px; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
-              <img src="${actualFooterImage}" style="width: 100%; height: auto; max-height: 160px; object-fit: fill; display: block; border-radius: 4px;" />
+            <div style="position: relative; margin-top: 4px; flex-shrink: 0; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
+              <img src="${actualFooterImage}" style="width: 100%; height: auto; max-height: 150px; object-fit: contain; display: block; border-radius: 4px;" />
             </div>
           ` : `
             <!-- STATIC BOTTOM FOOTER BAR -->
-            <div class="static-bottom-bar" style="margin-top: 4px;">
+            <div class="static-bottom-bar" style="margin-top: 4px; flex-shrink: 0;">
               <!-- Address Left -->
               <div style="display: flex; align-items: center; gap: 8px; max-width: 440px;">
                 <div style="width: 26px; height: 26px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #dc2626; flex-shrink: 0;">
