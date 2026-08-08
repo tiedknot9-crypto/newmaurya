@@ -711,11 +711,6 @@ export function getPrescriptionPrintHtml(
             <!-- FOOTER SIGNATURE SECTION -->
             <div class="footer-signatures" style="margin-top: auto; margin-bottom: 6px; display: flex; justify-content: flex-end; align-items: flex-end; page-break-inside: avoid;">
               <div style="text-align: right; min-width: 200px;">
-                <div style="height: 30px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
-                  <svg width="110" height="26" viewBox="0 0 120 30" fill="none" stroke="#003b7a" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M10 25 C 20 5, 30 5, 40 20 C 45 10, 50 10, 60 25 M 55 18 L 90 8" />
-                  </svg>
-                </div>
                 <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
                 ${docReg ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docReg}</div>` : ''}
                 ${docDegree ? `<div style="font-size: 11px; font-weight: 800; color: #1e293b;">${docDegree}</div>` : ''}
