@@ -246,31 +246,31 @@ export function getPrescriptionPrintHtml(
     medContent = prescription.medicines.map(m => {
       const isSyrup = (m.name || '').toLowerCase().includes('syr') || (m.name || '').toLowerCase().includes('syrup') || (m.name || '').toLowerCase().includes('susp');
       const iconSvg = isSyrup 
-        ? `<div style="width: 28px; height: 28px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; color: #0284c7; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8v4H8z"/><path d="M6 6h12v15a1 1 0 01-1 1H7a1 1 0 01-1-1V6z"/><path d="M10 12h4"/><path d="M12 10v4"/></svg></div>`
-        : `<div style="width: 28px; height: 28px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; color: #0284c7; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.4l-6.9-6.9c-2-2-2-5.1 0-7.1l.7-.7c2-2 5.1-2 7.1 0l6.9 6.9c2 2 2 5.1 0 7.1l-.7.7c-2 2-5.1 2-7.1 0z"/><path d="M8.5 8.5l7 7"/></svg></div>`;
+        ? `<div style="width: 24px; height: 24px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; color: #0284c7; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8v4H8z"/><path d="M6 6h12v15a1 1 0 01-1 1H7a1 1 0 01-1-1V6z"/><path d="M10 12h4"/><path d="M12 10v4"/></svg></div>`
+        : `<div style="width: 24px; height: 24px; background: #eff6ff; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; color: #0284c7; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20.4l-6.9-6.9c-2-2-2-5.1 0-7.1l.7-.7c2-2 5.1-2 7.1 0l6.9 6.9c2 2 2 5.1 0 7.1l-.7.7c-2 2-5.1 2-7.1 0z"/><path d="M8.5 8.5l7 7"/></svg></div>`;
 
       return `
         <tr style="border-bottom: 1px solid #cbd5e1; page-break-inside: avoid;">
-          <td style="padding: 12px 14px; font-weight: 900; color: #000000; font-size: 14.5px; vertical-align: middle;">
+          <td style="padding: 8px 12px; font-weight: 900; color: #000000; font-size: 13.5px; vertical-align: middle;">
             <div style="display: flex; align-items: center;">
               ${iconSvg}
               <span>${m.name}</span>
             </div>
           </td>
-          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.dosage || '-'}</td>
-          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.frequency || '-'}</td>
-          <td style="padding: 12px 14px; font-weight: 800; color: #000000; font-size: 14px; text-align: center; vertical-align: middle;">${m.duration || '-'}</td>
+          <td style="padding: 8px 12px; font-weight: 800; color: #000000; font-size: 13px; text-align: center; vertical-align: middle;">${m.dosage || '-'}</td>
+          <td style="padding: 8px 12px; font-weight: 800; color: #000000; font-size: 13px; text-align: center; vertical-align: middle;">${m.frequency || '-'}</td>
+          <td style="padding: 8px 12px; font-weight: 800; color: #000000; font-size: 13px; text-align: center; vertical-align: middle;">${m.duration || '-'}</td>
         </tr>
       `;
     }).join('');
   } else {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       medContent += `
-        <tr style="border-bottom: 1px dotted #cbd5e1; height: 48px; page-break-inside: avoid;">
-          <td style="padding: 12px 16px;"></td>
-          <td style="padding: 12px 16px;"></td>
-          <td style="padding: 12px 16px;"></td>
-          <td style="padding: 12px 16px;"></td>
+        <tr style="border-bottom: 1px dotted #cbd5e1; height: 38px; page-break-inside: avoid;">
+          <td style="padding: 8px 12px;"></td>
+          <td style="padding: 8px 12px;"></td>
+          <td style="padding: 8px 12px;"></td>
+          <td style="padding: 8px 12px;"></td>
         </tr>
       `;
     }
@@ -285,20 +285,20 @@ export function getPrescriptionPrintHtml(
   }
 
   const adviceContent = `
-    <div style="margin-top: 24px; font-family: 'Plus Jakarta Sans', sans-serif; page-break-inside: avoid;">
-      <div style="background: #ffffff; border: 1.5px solid #0052cc; border-radius: 12px; padding: 14px 18px;">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-          <div style="width: 24px; height: 24px; background: #e0edff; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0052cc;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+    <div style="margin-top: 10px; font-family: 'Plus Jakarta Sans', sans-serif; page-break-inside: avoid;">
+      <div style="background: #ffffff; border: 1.5px solid #0052cc; border-radius: 12px; padding: 10px 14px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <div style="width: 22px; height: 22px; background: #e0edff; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0052cc;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
           </div>
-          <span style="font-weight: 800; font-size: 12px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CLINICAL REMARKS & ADVICE:</span>
+          <span style="font-weight: 800; font-size: 11px; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CLINICAL REMARKS & ADVICE:</span>
         </div>
-        ${prescription.diagnosis ? `<div style="font-weight: 800; color: #000000; margin-left: 32px; margin-bottom: 6px; font-size: 14px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
+        ${prescription.diagnosis ? `<div style="font-weight: 800; color: #000000; margin-left: 30px; margin-bottom: 4px; font-size: 13px;">Diagnosis: ${prescription.diagnosis}</div>` : ''}
         ${adviceItems.length > 0 ? `
-          <ul style="margin: 0 0 0 32px; padding: 0; list-style-type: disc; color: #000000; font-size: 14px; font-weight: 700; line-height: 1.6;">
-            ${adviceItems.map(item => `<li style="margin-bottom: 4px;">${item}</li>`).join('')}
+          <ul style="margin: 0 0 0 30px; padding: 0; list-style-type: disc; color: #000000; font-size: 13px; font-weight: 700; line-height: 1.5;">
+            ${adviceItems.map(item => `<li style="margin-bottom: 2px;">${item}</li>`).join('')}
           </ul>
-        ` : `<div style="margin-left: 32px; color: #000000; font-size: 14px; font-weight: 700;">-</div>`}
+        ` : `<div style="margin-left: 30px; color: #000000; font-size: 13px; font-weight: 700;">-</div>`}
       </div>
     </div>
   `;
@@ -315,7 +315,7 @@ export function getPrescriptionPrintHtml(
           
           @page {
             size: A4 portrait;
-            margin: 4mm 6mm 4mm 6mm;
+            margin: 4mm 5mm 4mm 5mm;
           }
 
           * {
@@ -366,8 +366,8 @@ export function getPrescriptionPrintHtml(
               padding: 0 !important;
               margin: 0 !important;
               width: 100% !important;
-              height: ${isBlank ? '272mm' : 'auto'} !important;
-              max-height: ${isBlank ? '272mm' : 'none'} !important;
+              height: 275mm !important;
+              max-height: 275mm !important;
               min-height: 0 !important;
               display: flex !important;
               flex-direction: column !important;
@@ -391,7 +391,7 @@ export function getPrescriptionPrintHtml(
           .header-wrapper {
             position: relative;
             width: 100%;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             display: ${isValidTemplateImage ? 'none' : 'block'};
           }
 
@@ -412,17 +412,17 @@ export function getPrescriptionPrintHtml(
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding-top: 6px;
+            padding-top: 4px;
             padding-right: 16px;
           }
 
           /* Rx Symbol */
           .rx-symbol {
-            font-size: 38px;
+            font-size: 28px;
             font-style: italic;
             font-weight: 800;
             font-family: 'Playfair Display', Georgia, serif;
-            margin: 12px 0 8px 0;
+            margin: 4px 0 4px 0;
             color: #0052cc;
             display: inline-block;
           }
@@ -432,7 +432,7 @@ export function getPrescriptionPrintHtml(
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
             border: 1.5px solid #0052cc;
             border-radius: 12px;
             overflow: hidden;
@@ -441,11 +441,11 @@ export function getPrescriptionPrintHtml(
           .meds-table th {
             background-color: #0052cc;
             color: #ffffff;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            padding: 10px 14px;
+            padding: 6px 10px;
             text-align: center;
           }
           .meds-table th:first-child {
@@ -454,8 +454,8 @@ export function getPrescriptionPrintHtml(
           
           /* Footer Signatures */
           .footer-signatures {
-            margin-top: 20px;
-            margin-bottom: 16px;
+            margin-top: 8px;
+            margin-bottom: 4px;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
@@ -465,10 +465,10 @@ export function getPrescriptionPrintHtml(
           /* Bottom Footer Box */
           .static-bottom-bar {
             position: relative;
-            margin-top: 16px;
+            margin-top: auto;
             border: 1.5px solid #0052cc;
             border-radius: 12px;
-            padding: 10px 16px;
+            padding: 6px 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -549,111 +549,111 @@ export function getPrescriptionPrintHtml(
           `}
 
           <!-- DYNAMIC PATIENT INFORMATION CARD -->
-          <div style="border: 1.5px solid #0052cc; border-radius: 12px; padding: 12px 16px; background: #ffffff; margin-bottom: 14px; page-break-inside: avoid;">
+          <div style="border: 1.5px solid #0052cc; border-radius: 10px; padding: 8px 12px; background: #ffffff; margin-bottom: 8px; page-break-inside: avoid;">
             <!-- Row 1 -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; align-items: center;">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; align-items: center;">
               <!-- Patient Name -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">PATIENT NAME</div>
-                  <div style="font-size: 14.5px; font-weight: 900; color: #000000;">${patName}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">PATIENT NAME</div>
+                  <div style="font-size: 13.5px; font-weight: 900; color: #000000;">${patName}</div>
                 </div>
               </div>
 
               <!-- Age / Gender -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">AGE / GENDER</div>
-                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${patAgeGender}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">AGE / GENDER</div>
+                  <div style="font-size: 13px; font-weight: 900; color: #000000;">${patAgeGender}</div>
                 </div>
               </div>
 
               <!-- Date -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DATE</div>
-                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${presDate}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DATE</div>
+                  <div style="font-size: 13px; font-weight: 900; color: #000000;">${presDate}</div>
                 </div>
               </div>
             </div>
 
-            <div style="height: 1px; background: #cbd5e1; margin: 10px 0;"></div>
+            <div style="height: 1px; background: #cbd5e1; margin: 6px 0;"></div>
 
             <!-- Row 2 -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; align-items: center;">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; align-items: center;">
               <!-- Father / Husband Name -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">FATHER / HUSBAND NAME</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patFatherName}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">FATHER / HUSBAND NAME</div>
+                  <div style="font-size: 13px; font-weight: 800; color: #000000;">${patFatherName}</div>
                 </div>
               </div>
 
               <!-- Mobile No. -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MOBILE NO.</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${patPhone}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MOBILE NO.</div>
+                  <div style="font-size: 13px; font-weight: 800; color: #000000;">${patPhone}</div>
                 </div>
               </div>
 
               <!-- MRN / Reg. No -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="13" y2="12"/><line x1="7" y1="16" x2="10" y2="16"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="13" y2="12"/><line x1="7" y1="16" x2="10" y2="16"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MRN / REG. NO.</div>
-                  <div style="font-size: 14px; font-weight: 900; color: #0040a8;">${patMRN}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">MRN / REG. NO.</div>
+                  <div style="font-size: 13px; font-weight: 900; color: #0040a8;">${patMRN}</div>
                 </div>
               </div>
             </div>
 
-            <div style="height: 1px; background: #cbd5e1; margin: 10px 0;"></div>
+            <div style="height: 1px; background: #cbd5e1; margin: 6px 0;"></div>
 
             <!-- Row 3 -->
-            <div style="display: grid; grid-template-columns: 2fr 2fr; gap: 12px; align-items: center;">
+            <div style="display: grid; grid-template-columns: 2fr 2fr; gap: 8px; align-items: center;">
               <!-- Consulting Doctor -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 0 0 4.5 2h-1a.3.3 0 0 0-.3.3V5a7 7 0 0 0 14 0V2.3a.3.3 0 0 0-.3-.3h-1a.3.3 0 0 0-.3.3V5a5 5 0 0 1-10 0V2.3z"/><path d="M8 17a5 5 0 0 0 10 0v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v2z"/><circle cx="13" cy="19" r="2"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 0 0 4.5 2h-1a.3.3 0 0 0-.3.3V5a7 7 0 0 0 14 0V2.3a.3.3 0 0 0-.3-.3h-1a.3.3 0 0 0-.3.3V5a5 5 0 0 1-10 0V2.3z"/><path d="M8 17a5 5 0 0 0 10 0v-2a1 1 0 0 0-1-1h-8a1 1 0 0 0-1 1v2z"/><circle cx="13" cy="19" r="2"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CONSULTING DOCTOR</div>
-                  <div style="font-size: 14px; font-weight: 900; color: #000000;">${docName}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">CONSULTING DOCTOR</div>
+                  <div style="font-size: 13px; font-weight: 900; color: #000000;">${docName}</div>
                 </div>
               </div>
 
               <!-- Department -->
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 32px; height: 32px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 28px; height: 28px; background: #e0edff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0052cc; flex-shrink: 0;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 </div>
                 <div>
-                  <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DEPARTMENT</div>
-                  <div style="font-size: 14px; font-weight: 800; color: #000000;">${docDept}</div>
+                  <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; color: #0052cc; letter-spacing: 0.05em;">DEPARTMENT</div>
+                  <div style="font-size: 13px; font-weight: 800; color: #000000;">${docDept}</div>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- DYNAMIC VITALS / O/E BOX -->
-          <div style="border: 1.5px solid #0052cc; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; background: #ffffff; display: flex; align-items: center; gap: 12px; page-break-inside: avoid;">
+          <div style="border: 1.5px solid #0052cc; border-radius: 10px; padding: 6px 12px; margin-bottom: 8px; background: #ffffff; display: flex; align-items: center; gap: 10px; page-break-inside: avoid;">
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; border-right: 1.5px solid #cbd5e1; padding-right: 12px;">
               <div style="width: 26px; height: 26px; background: #0052cc; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
