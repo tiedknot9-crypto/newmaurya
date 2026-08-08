@@ -347,27 +347,30 @@ export function getPrescriptionPrintHtml(
               max-width: 820px;
               margin: 0 auto;
               padding: 18px;
-              min-height: auto;
+              min-height: 278mm;
               box-sizing: border-box;
             }
           }
 
           @media print {
             html, body {
-              height: auto !important;
-              min-height: 0 !important;
+              height: 100% !important;
+              min-height: 100% !important;
               margin: 0 !important;
               padding: 0 !important;
               background-color: #ffffff !important;
-              overflow: visible !important;
+              overflow: hidden !important;
             }
             .container {
               box-shadow: none !important;
               padding: 0 !important;
               margin: 0 !important;
               width: 100% !important;
-              height: auto !important;
-              min-height: 0 !important;
+              height: 278mm !important;
+              min-height: 278mm !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
               page-break-inside: avoid !important;
             }
           }
@@ -673,10 +676,10 @@ export function getPrescriptionPrintHtml(
 
           ${isBlank ? `
             <!-- Rx Symbol -->
-            <div class="rx-symbol" style="margin-top: 8px; margin-bottom: 8px;">Rx</div>
+            <div class="rx-symbol" style="margin-top: 6px; margin-bottom: 4px;">Rx</div>
 
             <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
-            <div style="min-height: 520px; width: 100%; margin-bottom: 16px; box-sizing: border-box;"></div>
+            <div style="flex: 1; min-height: 520px; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
           ` : `
             <!-- Rx Symbol -->
             <div class="rx-symbol">Rx</div>
@@ -719,12 +722,12 @@ export function getPrescriptionPrintHtml(
           ` : ''}
 
           ${isValidFooterImage ? `
-            <div style="position: relative; margin-top: 16px; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
+            <div style="position: relative; margin-top: auto; page-break-inside: avoid; text-align: center; background-color: #ffffff; width: 100%;">
               <img src="${actualFooterImage}" style="width: 100%; height: auto; max-height: 160px; object-fit: fill; display: block; border-radius: 4px;" />
             </div>
           ` : `
             <!-- STATIC BOTTOM FOOTER BAR -->
-            <div class="static-bottom-bar">
+            <div class="static-bottom-bar" style="margin-top: auto;">
               <!-- Address Left -->
               <div style="display: flex; align-items: center; gap: 8px; max-width: 440px;">
                 <div style="width: 26px; height: 26px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #dc2626; flex-shrink: 0;">
