@@ -315,7 +315,7 @@ export function getPrescriptionPrintHtml(
           
           @page {
             size: A4 portrait;
-            margin: 6mm 8mm 6mm 8mm;
+            margin: 4mm 6mm 4mm 6mm;
           }
 
           * {
@@ -347,7 +347,7 @@ export function getPrescriptionPrintHtml(
               max-width: 820px;
               margin: 0 auto;
               padding: 18px;
-              min-height: 278mm;
+              min-height: 275mm;
               box-sizing: border-box;
             }
           }
@@ -355,7 +355,7 @@ export function getPrescriptionPrintHtml(
           @media print {
             html, body {
               height: 100% !important;
-              min-height: 100% !important;
+              max-height: 100% !important;
               margin: 0 !important;
               padding: 0 !important;
               background-color: #ffffff !important;
@@ -366,12 +366,16 @@ export function getPrescriptionPrintHtml(
               padding: 0 !important;
               margin: 0 !important;
               width: 100% !important;
-              height: 278mm !important;
-              min-height: 278mm !important;
+              height: ${isBlank ? '272mm' : 'auto'} !important;
+              max-height: ${isBlank ? '272mm' : 'none'} !important;
+              min-height: 0 !important;
               display: flex !important;
               flex-direction: column !important;
               justify-content: space-between !important;
               page-break-inside: avoid !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              overflow: hidden !important;
             }
           }
 
@@ -387,7 +391,7 @@ export function getPrescriptionPrintHtml(
           .header-wrapper {
             position: relative;
             width: 100%;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             display: ${isValidTemplateImage ? 'none' : 'block'};
           }
 
@@ -679,7 +683,7 @@ export function getPrescriptionPrintHtml(
             <div class="rx-symbol" style="margin-top: 6px; margin-bottom: 4px;">Rx</div>
 
             <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
-            <div style="flex: 1; min-height: 520px; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
+            <div style="flex: 1; min-height: 0; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
           ` : `
             <!-- Rx Symbol -->
             <div class="rx-symbol">Rx</div>
