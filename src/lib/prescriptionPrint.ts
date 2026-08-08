@@ -315,7 +315,7 @@ export function getPrescriptionPrintHtml(
           
           @page {
             size: A4 portrait;
-            margin: 4mm 5mm 4mm 5mm;
+            margin: 0;
           }
 
           * {
@@ -329,14 +329,15 @@ export function getPrescriptionPrintHtml(
             color: #0f172a;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
-            background-color: #fff;
+            background-color: #ffffff;
+            width: 100%;
           }
 
           @media screen {
             body {
               background-color: #f1f5f9;
               padding: 12px;
-              min-width: 720px;
+              margin: 0;
               box-sizing: border-box;
             }
             .container {
@@ -347,15 +348,15 @@ export function getPrescriptionPrintHtml(
               max-width: 820px;
               margin: 0 auto;
               padding: 18px;
-              min-height: 275mm;
+              min-height: 280mm;
               box-sizing: border-box;
             }
           }
 
           @media print {
             html, body {
-              height: 100% !important;
-              max-height: 100% !important;
+              width: 210mm !important;
+              height: 297mm !important;
               margin: 0 !important;
               padding: 0 !important;
               background-color: #ffffff !important;
@@ -363,15 +364,18 @@ export function getPrescriptionPrintHtml(
             }
             .container {
               box-shadow: none !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              width: 100% !important;
-              height: 275mm !important;
-              max-height: 275mm !important;
-              min-height: 0 !important;
+              border: none !important;
+              border-radius: 0 !important;
+              padding: 4mm 6mm !important;
+              margin: 0 auto !important;
+              width: 210mm !important;
+              max-width: 210mm !important;
+              height: 287mm !important;
+              max-height: 287mm !important;
               display: flex !important;
               flex-direction: column !important;
               justify-content: space-between !important;
+              box-sizing: border-box !important;
               page-break-inside: avoid !important;
               page-break-after: avoid !important;
               page-break-before: avoid !important;
@@ -683,7 +687,7 @@ export function getPrescriptionPrintHtml(
             <div class="rx-symbol" style="margin-top: 6px; margin-bottom: 4px;">Rx</div>
 
             <!-- BLANK PRESCRIPTION CONTENT AREA FOR MANUAL HANDWRITING -->
-            <div style="flex: 1; min-height: 0; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
+            <div style="flex: 1; flex-grow: 1; flex-shrink: 0; min-height: 165mm; width: 100%; margin-bottom: 8px; box-sizing: border-box;"></div>
           ` : `
             <!-- Rx Symbol -->
             <div class="rx-symbol">Rx</div>
