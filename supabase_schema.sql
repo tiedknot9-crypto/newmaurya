@@ -25,6 +25,11 @@
 -- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 -- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 -- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_name TEXT;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_date DATE;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_bill_no TEXT;
+-- CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), return_no TEXT UNIQUE NOT NULL, return_number TEXT, date TIMESTAMPTZ DEFAULT NOW(), vendor_name TEXT NOT NULL, vendor_phone TEXT, purchase_bill_no TEXT, item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL, item_name TEXT NOT NULL, batch_number TEXT, quantity INTEGER NOT NULL DEFAULT 1, unit_type TEXT DEFAULT 'unit', purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00, total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, reason TEXT NOT NULL DEFAULT 'Near Expiry', debit_note_no TEXT, performed_by TEXT, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 -- ===============================================
 
 -- 1. Profiles / Users (Optional reference to auth.users handled manually without FK block constraint)
@@ -507,6 +512,10 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_items (
   rack_number TEXT,
   manufacturer TEXT,
   composition TEXT, -- e.g., 'Amoxicillin + Clavulanic Acid'
+  vendor_name TEXT,
+  vendor_phone TEXT,
+  purchase_date DATE,
+  purchase_bill_no TEXT,
   is_loose_sale_enabled BOOLEAN DEFAULT FALSE,
   units_per_strip INTEGER DEFAULT 10,
   loose_selling_price DECIMAL(10, 2) DEFAULT 0.00,
@@ -526,6 +535,30 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_purchases (
   invoice_number TEXT,
   recorded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10.2 Pharmacy Purchase Returns (Tracking Vendor Returns & Debit Notes)
+CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  return_number TEXT,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  vendor_name TEXT NOT NULL,
+  vendor_phone TEXT,
+  purchase_bill_no TEXT,
+  item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  batch_number TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_type TEXT DEFAULT 'unit',
+  purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  reason TEXT NOT NULL DEFAULT 'Near Expiry',
+  debit_note_no TEXT,
+  performed_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.inventory_transactions (
@@ -833,6 +866,7 @@ ALTER TABLE public.lab_test_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_package_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pharmacy_purchases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_purchase_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.birth_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.external_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.radiology_records ENABLE ROW LEVEL SECURITY;
@@ -1367,6 +1401,34 @@ ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS is_loose_sale_enabled
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS units_per_strip INTEGER DEFAULT 10;
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS loose_selling_price DECIMAL(10, 2) DEFAULT 0.00;
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS loose_stock INTEGER DEFAULT 0;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_name TEXT;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_date DATE;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_bill_no TEXT;
+
+-- 2. Update pharmacy_purchase_returns table
+CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  return_number TEXT,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  vendor_name TEXT NOT NULL,
+  vendor_phone TEXT,
+  purchase_bill_no TEXT,
+  item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  batch_number TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_type TEXT DEFAULT 'unit',
+  purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  reason TEXT NOT NULL DEFAULT 'Near Expiry',
+  debit_note_no TEXT,
+  performed_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- 2. Update invoice_items table to track tax per item
 ALTER TABLE public.invoice_items ADD COLUMN IF NOT EXISTS tax_percentage DECIMAL(5, 2) DEFAULT 0.00;

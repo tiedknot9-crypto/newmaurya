@@ -4294,6 +4294,78 @@ const rawSupabaseService = {
     }
   },
 
+  getPharmacyPurchaseReturns: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pharmacy_purchase_returns')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((ret: any) => ({
+        id: ret.id,
+        returnNo: ret.return_no || ret.return_number || ret.id,
+        date: ret.date || ret.created_at,
+        vendorName: ret.vendor_name,
+        vendorPhone: ret.vendor_phone,
+        purchaseBillNo: ret.purchase_bill_no,
+        itemId: ret.item_id,
+        itemName: ret.item_name,
+        batchNo: ret.batch_number,
+        quantity: ret.quantity,
+        unitType: ret.unit_type,
+        purchasePrice: Number(ret.purchase_price || 0),
+        totalAmount: Number(ret.total_amount || 0),
+        reason: ret.reason,
+        debitNoteNo: ret.debit_note_no,
+        performedBy: ret.performed_by,
+        notes: ret.notes
+      }));
+    } catch (error: any) {
+      console.warn('Error fetching pharmacy purchase returns:', error.message);
+      return storage.get(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, []);
+    }
+  },
+
+  createPharmacyPurchaseReturn: async (record: any) => {
+    try {
+      const dbRecord = {
+        return_no: record.returnNo || record.return_no || `PRET-${Date.now()}`,
+        return_number: record.returnNo || record.return_no || `PRET-${Date.now()}`,
+        date: record.date || new Date().toISOString(),
+        vendor_name: record.vendorName || record.vendor_name || 'Vendor',
+        vendor_phone: record.vendorPhone || record.vendor_phone,
+        purchase_bill_no: record.purchaseBillNo || record.purchase_bill_no || 'N/A',
+        item_id: cleanUuidFields({ id: record.itemId || record.item_id })?.id,
+        item_name: record.itemName || record.item_name || 'Medicine',
+        batch_number: record.batchNo || record.batchNumber || record.batch_number || 'N/A',
+        quantity: Number(record.quantity || 1),
+        unit_type: record.unitType || record.unit_type || 'unit',
+        purchase_price: Number(record.purchasePrice || record.purchase_price || 0),
+        total_amount: Number(record.totalAmount || record.total_amount || 0),
+        reason: record.reason || 'Near Expiry',
+        debit_note_no: record.debitNoteNo || record.debit_note_no,
+        performed_by: record.performedBy || record.performed_by || 'Pharmacist',
+        notes: record.notes
+      };
+
+      const data = await selfHealingQuery('insert', 'pharmacy_purchase_returns', dbRecord);
+      const inserted = data && data[0] ? data[0] : record;
+      
+      // Update local storage cache
+      const current = storage.get(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, []);
+      const updated = [record, ...current.filter((c: any) => c.id !== record.id)];
+      storage.set(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, updated);
+
+      return inserted;
+    } catch (error: any) {
+      console.error('Error creating pharmacy purchase return:', error.message);
+      const current = storage.get(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, []);
+      const updated = [record, ...current.filter((c: any) => c.id !== record.id)];
+      storage.set(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, updated);
+      return record;
+    }
+  },
+
   // Dashboard Stats
   getDashboardStats: async () => {
     try {

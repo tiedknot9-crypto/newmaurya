@@ -184,18 +184,20 @@ export default function Pharmacy() {
     if (inventory.length === 0) {
       setLoading(true);
     }
-    const [invData, invoicesData, patientsData, admissionsData, dbSettings] = await Promise.all([
+    const [invData, invoicesData, patientsData, admissionsData, dbSettings, purchaseReturnsData] = await Promise.all([
       supabaseService.getPharmacyItems(),
       supabaseService.getInvoices(),
       supabaseService.getPatients(),
       supabaseService.getAdmissions ? supabaseService.getAdmissions() : Promise.resolve([]),
-      supabaseService.getPharmacySettings ? supabaseService.getPharmacySettings() : Promise.resolve(null)
+      supabaseService.getPharmacySettings ? supabaseService.getPharmacySettings() : Promise.resolve(null),
+      supabaseService.getPharmacyPurchaseReturns ? supabaseService.getPharmacyPurchaseReturns() : Promise.resolve([])
     ]);
 
     if (invData) setInventory(invData);
     if (invoicesData) setBills(invoicesData.filter(inv => inv.type === 'Pharmacy' || inv.invoice_items?.some((item: any) => item.category === 'PHARMACY')));
     if (patientsData) setPatients(patientsData);
     if (admissionsData) setAdmissions(admissionsData);
+    if (purchaseReturnsData && purchaseReturnsData.length > 0) setPurchaseReturns(purchaseReturnsData);
     if (dbSettings) {
       setPharmacySettings(dbSettings);
       const currentSettings = storage.get('hms_pharmacy_settings', null);
@@ -702,10 +704,10 @@ export default function Pharmacy() {
       updated_at: timestamp
     });
 
-    // Save purchase return record
+    // Save purchase return record to Supabase and storage
+    await supabaseService.createPharmacyPurchaseReturn(record);
     const updated = [record, ...purchaseReturns];
     setPurchaseReturns(updated);
-    storage.set(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, updated);
 
     toast.success(`Purchase Return ${returnNo} processed & ${purchaseReturnQty} units deducted from stock!`);
     setIsPurchaseReturnModalOpen(false);
