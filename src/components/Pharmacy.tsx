@@ -542,7 +542,7 @@ export default function Pharmacy() {
   }, [sequencedBills, billingSearchQuery, billingStartDate, billingEndDate, billingPaymentFilter, patients]);
 
   const filteredBillsTotalAmount = useMemo(() => {
-    return filteredBills.reduce((sum, b) => sum + (Number(b.total_amount) || Number(b.totalAmount) || 0), 0);
+    return filteredBills.reduce((sum, b) => sum + (Number(b.payable_amount ?? b.payableAmount ?? b.total_amount ?? b.totalAmount) || 0), 0);
   }, [filteredBills]);
 
   // Purchase Return States
@@ -1740,8 +1740,8 @@ export default function Pharmacy() {
                               {!bill.patient_phone && patient?.mrn && <p className="text-xs text-muted-foreground">{patient.mrn}</p>}
                             </div>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(bill.date)}</TableCell>
-                          <TableCell className="font-bold whitespace-nowrap">{formatCurrency(bill.totalAmount)}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(bill.date || bill.created_at || bill.issued_at)}</TableCell>
+                          <TableCell className="font-bold whitespace-nowrap">{formatCurrency(bill.payable_amount ?? bill.payableAmount ?? bill.total_amount ?? bill.totalAmount ?? 0)}</TableCell>
                           <TableCell className="whitespace-nowrap">
                             <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-none">
                               Paid

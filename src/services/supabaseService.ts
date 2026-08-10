@@ -644,10 +644,7 @@ function cleanInvoiceForPostgres(inv: any) {
   
   // calculate payable_amount if missing
   if (!('payable_amount' in cleaned)) {
-    const total = Number(cleaned.total_amount) || 0;
-    const discount = Number(cleaned.discount_amount) || 0;
-    const tax = Number(cleaned.tax_amount) || 0;
-    cleaned.payable_amount = (total - discount) + tax;
+    cleaned.payable_amount = Number(cleaned.total_amount) || 0;
   }
   
   // list of actual columns in supabase_schema.sql

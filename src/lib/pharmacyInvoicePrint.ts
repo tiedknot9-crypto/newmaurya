@@ -184,20 +184,33 @@ export function generatePharmacyInvoiceHtml(
   // Pre-process items
   const preItems = rawItems.map((item: any, idx: number) => {
     const itemName = item.name || item.item_name || item.description || 'Unknown Medicine';
-    const invItem = inventory.find(i => 
-      i.name?.toLowerCase().trim() === itemName.toLowerCase().trim() || 
-      i.id === item.id
-    );
+    const cleanName = itemName.replace(/\s*\((Loose|Strip|Tablet\(s\)|Capsule|Unit|Tablets?|Pills?)\)/gi, '').trim().toLowerCase();
+
+    const invItem = inventory.find(i => {
+      if (item.item_id && i.id === item.item_id) return true;
+      if (item.id && i.id === item.id) return true;
+      const invName = (i.name || '').toLowerCase().trim();
+      return invName === cleanName || cleanName.includes(invName) || invName.includes(cleanName);
+    });
 
     const price = Number(item.price || item.unit_price || 0);
     const quantity = Number(item.quantity || 1);
     const taxPercentage = Number(item.taxPercentage ?? item.tax_percentage ?? invItem?.tax_percentage ?? invItem?.taxPercentage ?? 0);
-    const batchNo = item.batchNumber || item.batch_number || invItem?.batch_number || invItem?.batchNumber || 'A1';
+    const batchNo = item.batchNumber || item.batch_number || item.batchNo || invItem?.batch_number || invItem?.batchNumber || 'A1';
 
     // 1. Manufacturing Date
-    let mfgRaw = item.mfgDate || item.mfg_date || invItem?.mfg_date || invItem?.mfgDate;
+    let mfgRaw = item.mfgDate || item.mfg_date || item.mfg || invItem?.mfg_date || invItem?.mfgDate;
     // 2. Expiry Date
-    let expiryRaw = item.expiryDate || item.expiry_date || invItem?.expiry_date || invItem?.expiryDate;
+    let expiryRaw = item.expiryDate || item.expiry_date || item.expiry || invItem?.expiry_date || invItem?.expiryDate;
+
+    // Fallback if loose tablet or missing date
+    if (!expiryRaw && cleanName) {
+      const fallbackInv = inventory.find(i => (i.name || '').toLowerCase().includes(cleanName) || cleanName.includes((i.name || '').toLowerCase()));
+      if (fallbackInv) {
+        expiryRaw = fallbackInv.expiry_date || fallbackInv.expiryDate;
+        if (!mfgRaw) mfgRaw = fallbackInv.mfg_date || fallbackInv.mfgDate;
+      }
+    }
 
     let mfgDateStr = 'N/A';
     let expiryDateStr = 'N/A';
@@ -363,14 +376,12 @@ export function generatePharmacyInvoiceHtml(
       <head>
         <title>Pharmacy Invoice - ${invoiceNo}</title>
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-          
           @page {
             size: A4;
             margin: 10mm;
           }
           body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             margin: 0;
             padding: 0;
             background-color: #fff;

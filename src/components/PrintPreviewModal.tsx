@@ -45,19 +45,16 @@ export function PrintPreviewModal() {
 
   useEffect(() => {
     if (isOpen && data && iframeRef.current) {
-      const timer = setTimeout(() => {
-        try {
-          const doc = iframeRef.current?.contentDocument || iframeRef.current?.contentWindow?.document;
-          if (doc) {
-            doc.open();
-            doc.write(data.html);
-            doc.close();
-          }
-        } catch (e) {
-          console.error('Error writing iframe content:', e);
+      try {
+        const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+        if (doc) {
+          doc.open();
+          doc.write(data.html);
+          doc.close();
         }
-      }, 100);
-      return () => clearTimeout(timer);
+      } catch (e) {
+        console.error('Error writing iframe content:', e);
+      }
     }
   }, [isOpen, data]);
 

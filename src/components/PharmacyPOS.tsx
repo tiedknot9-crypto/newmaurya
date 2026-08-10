@@ -687,21 +687,33 @@ export default function PharmacyPOS() {
 
     const invoice = {
       patient_id: selectedPatientId,
+      patient_name: patientName,
+      patient_phone: patientPhone,
+      prescribing_doctor: doctorName,
       total_amount: total,
+      payable_amount: total,
       paid_amount: total,
       discount_amount: computedDiscountAmount,
+      tax_amount: tax,
       payment_status: 'Paid',
       payment_method: formattedPaymentMethod,
       status: 'Settled',
-      type: 'Pharmacy'
+      type: 'Pharmacy',
+      date: new Date().toISOString()
     };
 
     const invoiceItems = cart.map(item => ({
+      item_id: item.id,
       item_name: item.name,
       quantity: item.quantity,
       unit_price: item.price,
       total_price: item.price * item.quantity,
-      category: 'PHARMACY'
+      category: 'PHARMACY',
+      batch_number: item.batchNumber || item.batch_number || '',
+      expiry_date: item.expiryDate || item.expiry_date || '',
+      hsn_code: item.hsnCode || item.hsn_code || '',
+      tax_percentage: item.taxPercentage || item.tax_percentage || 0,
+      is_loose: !!item.isLoose
     }));
 
     const result = await supabaseService.createInvoice(invoice, invoiceItems);
