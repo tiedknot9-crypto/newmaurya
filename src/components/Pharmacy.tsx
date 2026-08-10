@@ -498,6 +498,9 @@ export default function Pharmacy() {
   }, [inventory, searchQuery]);
 
   const [billingSearchQuery, setBillingSearchQuery] = useState('');
+  const [billingStartDate, setBillingStartDate] = useState('');
+  const [billingEndDate, setBillingEndDate] = useState('');
+  const [billingPaymentFilter, setBillingPaymentFilter] = useState('ALL');
 
   const filteredBills = useMemo(() => {
     let result = sequencedBills;
@@ -511,8 +514,47 @@ export default function Pharmacy() {
         return name.includes(q) || mrn.includes(q) || seqNum.includes(q) || bill.id.toLowerCase().includes(q);
       });
     }
+
+    if (billingStartDate) {
+      const start = new Date(billingStartDate + 'T00:00:00').getTime();
+      result = result.filter(bill => {
+        const bTime = new Date(bill.created_at || bill.date || 0).getTime();
+        return bTime >= start;
+      });
+    }
+
+    if (billingEndDate) {
+      const end = new Date(billingEndDate + 'T23:59:59').getTime();
+      result = result.filter(bill => {
+        const bTime = new Date(bill.created_at || bill.date || 0).getTime();
+        return bTime <= end;
+      });
+    }
+
+    if (billingPaymentFilter && billingPaymentFilter !== 'ALL') {
+      result = result.filter(bill => {
+        const pm = (bill.payment_method || bill.paymentMethod || '').toLowerCase();
+        return pm.includes(billingPaymentFilter.toLowerCase());
+      });
+    }
+
     return result;
-  }, [sequencedBills, billingSearchQuery, patients]);
+  }, [sequencedBills, billingSearchQuery, billingStartDate, billingEndDate, billingPaymentFilter, patients]);
+
+  const filteredBillsTotalAmount = useMemo(() => {
+    return filteredBills.reduce((sum, b) => sum + (Number(b.total_amount) || Number(b.totalAmount) || 0), 0);
+  }, [filteredBills]);
+
+  // Purchase Return States
+  const [purchaseReturns, setPurchaseReturns] = useState<any[]>(() => {
+    return storage.get(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, []);
+  });
+  const [isPurchaseReturnModalOpen, setIsPurchaseReturnModalOpen] = useState(false);
+  const [purchaseReturnVendor, setPurchaseReturnVendor] = useState('');
+  const [purchaseReturnMedicineId, setPurchaseReturnMedicineId] = useState('');
+  const [purchaseReturnQty, setPurchaseReturnQty] = useState(1);
+  const [purchaseReturnReason, setPurchaseReturnReason] = useState('Near Expiry');
+  const [purchaseReturnRefNo, setPurchaseReturnRefNo] = useState('');
 
   const [newItem, setNewItem] = useState({ 
     name: '', 
@@ -528,6 +570,11 @@ export default function Pharmacy() {
     rack_number: '',
     batch_number: '',
     expiry_date: '',
+    mfg_date: '',
+    vendor_name: '',
+    vendor_phone: '',
+    purchase_date: '',
+    purchase_bill_no: '',
     composition: '',
     is_loose_sale_enabled: false,
     units_per_strip: 10,
@@ -551,6 +598,11 @@ export default function Pharmacy() {
       rack_number: newItem.rack_number,
       batch_number: newItem.batch_number,
       expiry_date: newItem.expiry_date || null,
+      mfg_date: newItem.mfg_date || null,
+      vendor_name: newItem.vendor_name || '',
+      vendor_phone: newItem.vendor_phone || '',
+      purchase_date: newItem.purchase_date || null,
+      purchase_bill_no: newItem.purchase_bill_no || '',
       stock: Number(newItem.stock),
       mrp: Number(newItem.mrp),
       selling_price: Number(newItem.selling_price),
@@ -582,6 +634,11 @@ export default function Pharmacy() {
         rack_number: '',
         batch_number: '',
         expiry_date: '',
+        mfg_date: '',
+        vendor_name: '',
+        vendor_phone: '',
+        purchase_date: '',
+        purchase_bill_no: '',
         composition: '',
         is_loose_sale_enabled: false,
         units_per_strip: 10,
@@ -591,6 +648,63 @@ export default function Pharmacy() {
     } else {
       toast.error('Failed to add item');
     }
+  };
+
+  const handleProcessPurchaseReturn = async () => {
+    const invItem = inventory.find(i => i.id === purchaseReturnMedicineId);
+    if (!invItem) {
+      toast.error('Please select a medicine item to return');
+      return;
+    }
+    if (!purchaseReturnVendor.trim()) {
+      toast.error('Please enter vendor name');
+      return;
+    }
+    if (purchaseReturnQty <= 0) {
+      toast.error('Please enter a valid return quantity');
+      return;
+    }
+
+    const returnNo = `PRET-${String(1001 + purchaseReturns.length).padStart(4, '0')}`;
+    const timestamp = new Date().toISOString();
+    const purchasePrice = invItem.purchase_price || (invItem.selling_price ? invItem.selling_price * 0.8 : 0);
+    const totalAmount = purchaseReturnQty * purchasePrice;
+
+    const record = {
+      id: `pret-${Date.now()}`,
+      returnNo,
+      date: timestamp,
+      vendorName: purchaseReturnVendor.trim(),
+      purchaseBillNo: purchaseReturnRefNo.trim() || 'N/A',
+      itemId: invItem.id,
+      itemName: invItem.name,
+      batchNo: invItem.batch_number || 'N/A',
+      quantity: purchaseReturnQty,
+      purchasePrice,
+      totalAmount,
+      reason: purchaseReturnReason,
+      performedBy: currentUser?.name || 'Pharmacist'
+    };
+
+    // Deduct stock from inventory
+    const newStock = Math.max(0, invItem.stock - purchaseReturnQty);
+    await supabaseService.updatePharmacyItem(invItem.id, {
+      stock: newStock,
+      updated_at: timestamp
+    });
+
+    // Save purchase return record
+    const updated = [record, ...purchaseReturns];
+    setPurchaseReturns(updated);
+    storage.set(STORAGE_KEYS.PHARMACY_PURCHASE_RETURNS, updated);
+
+    toast.success(`Purchase Return ${returnNo} processed & ${purchaseReturnQty} units deducted from stock!`);
+    setIsPurchaseReturnModalOpen(false);
+    setPurchaseReturnVendor('');
+    setPurchaseReturnMedicineId('');
+    setPurchaseReturnQty(1);
+    setPurchaseReturnRefNo('');
+    fetchData();
   };
 
   const handleDeleteItem = (id: string) => {
@@ -1024,13 +1138,63 @@ export default function Pharmacy() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Expiry Date</Label>
-                  <Input 
-                    type="date" 
-                    value={newItem.expiry_date}
-                    onChange={(e) => setNewItem({...newItem, expiry_date: e.target.value})}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Mfg Date</Label>
+                    <Input 
+                      type="date" 
+                      value={newItem.mfg_date}
+                      onChange={(e) => setNewItem({...newItem, mfg_date: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expiry Date</Label>
+                    <Input 
+                      type="date" 
+                      value={newItem.expiry_date}
+                      onChange={(e) => setNewItem({...newItem, expiry_date: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2 border-t border-dashed">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Vendor & Purchase Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Vendor / Supplier Name</Label>
+                      <Input 
+                        placeholder="e.g. Global Medical Agencies" 
+                        value={newItem.vendor_name}
+                        onChange={(e) => setNewItem({...newItem, vendor_name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Vendor Contact</Label>
+                      <Input 
+                        placeholder="e.g. +91 9876543210" 
+                        value={newItem.vendor_phone}
+                        onChange={(e) => setNewItem({...newItem, vendor_phone: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Purchase Date</Label>
+                      <Input 
+                        type="date" 
+                        value={newItem.purchase_date}
+                        onChange={(e) => setNewItem({...newItem, purchase_date: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Purchase Invoice / Bill No.</Label>
+                      <Input 
+                        placeholder="e.g. INV-8890" 
+                        value={newItem.purchase_bill_no}
+                        onChange={(e) => setNewItem({...newItem, purchase_bill_no: e.target.value})}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4 pt-2 border-t border-dashed col-span-2">
@@ -1111,6 +1275,12 @@ export default function Pharmacy() {
             Return Medicine (OPD/IPD)
           </TabsTrigger>
           {!isAccountant && (
+            <TabsTrigger value="purchase_returns" className="flex gap-2 items-center text-amber-800 data-[state=active]:bg-amber-600 data-[state=active]:text-white font-bold">
+              <Undo2 className="w-4 h-4" />
+              Purchase Return (Vendor)
+            </TabsTrigger>
+          )}
+          {!isAccountant && (
             <TabsTrigger value="settings" className="flex gap-2 items-center">
               <Settings className="w-4 h-4" />
               Pharmacy Settings
@@ -1187,6 +1357,7 @@ export default function Pharmacy() {
                       <TableHead className="whitespace-nowrap">Category</TableHead>
                       <TableHead className="whitespace-nowrap">MRP / Selling</TableHead>
                       <TableHead className="whitespace-nowrap">Stock</TableHead>
+                      <TableHead className="whitespace-nowrap">Vendor & Purchase Info</TableHead>
                       <TableHead className="whitespace-nowrap">Expiry Date</TableHead>
                       <TableHead className="whitespace-nowrap">Status</TableHead>
                       <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
@@ -1220,6 +1391,13 @@ export default function Pharmacy() {
                               </span>
                             )}
                             <span className="text-[10px] text-muted-foreground">Min Level: {item.min_stock_level || 0}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          <div>
+                            <p className="font-semibold text-slate-700">{item.vendor_name || 'N/A'}</p>
+                            {item.purchase_date && <p className="text-[10px] text-teal-700 font-medium">Purchased: {formatDate(item.purchase_date)}</p>}
+                            {item.purchase_bill_no && <p className="text-[9px] text-slate-400">Bill: {item.purchase_bill_no}</p>}
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -1440,22 +1618,87 @@ export default function Pharmacy() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="billing" className="mt-6">
+        <TabsContent value="billing" className="mt-6 space-y-4">
           <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <div>
-                <CardTitle className="text-lg">Pharmacy Billing History</CardTitle>
-                <CardDescription>View and manage pharmacy-specific invoices.</CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-black text-slate-800">Pharmacy Billing History</CardTitle>
+                  <CardDescription className="text-xs">View and manage pharmacy sales, filter by date range and payment mode.</CardDescription>
+                </div>
+
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-2xl">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider block">Total Billed Amount</span>
+                    <span className="text-xl font-black text-emerald-700 leading-none">{formatCurrency(filteredBillsTotalAmount)}</span>
+                  </div>
+                  <Badge variant="outline" className="bg-white text-emerald-800 border-emerald-300 font-bold ml-2 text-xs">
+                    {filteredBills.length} Bills
+                  </Badge>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-slate-100 mt-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
-                    placeholder="Search invoice or MRN..." 
-                    className="pl-10 bg-slate-50 border-none h-9" 
+                    placeholder="Search invoice or patient..." 
+                    className="pl-9 bg-slate-50 border-slate-200 h-10 text-xs font-semibold rounded-xl" 
                     value={billingSearchQuery}
                     onChange={(e) => setBillingSearchQuery(e.target.value)}
                   />
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 h-10">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">From:</span>
+                  <input 
+                    type="date"
+                    className="bg-transparent text-xs font-bold text-slate-700 w-full focus:outline-none"
+                    value={billingStartDate}
+                    onChange={(e) => setBillingStartDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 h-10">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">To:</span>
+                  <input 
+                    type="date"
+                    className="bg-transparent text-xs font-bold text-slate-700 w-full focus:outline-none"
+                    value={billingEndDate}
+                    onChange={(e) => setBillingEndDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Select value={billingPaymentFilter} onValueChange={setBillingPaymentFilter}>
+                    <SelectTrigger className="h-10 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl">
+                      <SelectValue placeholder="Payment Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Payment Modes</SelectItem>
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="UPI">UPI / QR</SelectItem>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="Credit">Credit</SelectItem>
+                      <SelectItem value="Multi">Multi-mode Split</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {(billingStartDate || billingEndDate || billingSearchQuery || billingPaymentFilter !== 'ALL') && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-10 px-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-xs shrink-0"
+                      onClick={() => {
+                        setBillingSearchQuery('');
+                        setBillingStartDate('');
+                        setBillingEndDate('');
+                        setBillingPaymentFilter('ALL');
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1955,7 +2198,199 @@ export default function Pharmacy() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Purchase Return (Vendor) Tab */}
+        <TabsContent value="purchase_returns" className="mt-6 space-y-4">
+          <Card className="border-none shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <div>
+                <CardTitle className="text-lg font-black text-slate-800">Vendor Purchase Returns (Debit Notes)</CardTitle>
+                <CardDescription className="text-xs">Record items returned to pharmaceutical vendors/suppliers and automatically deduct stock.</CardDescription>
+              </div>
+              <Button 
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-2 rounded-xl"
+                onClick={() => setIsPurchaseReturnModalOpen(true)}
+              >
+                <Undo2 className="w-4 h-4" />
+                Process New Purchase Return
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {purchaseReturns.length === 0 ? (
+                <div className="py-12 text-center space-y-3">
+                  <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                    <Undo2 className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-700">No Purchase Returns Recorded</h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">When near-expiry or damaged items are sent back to vendors, create a purchase return entry here to adjust inventory levels.</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow>
+                        <TableHead className="font-bold text-xs">Return No / Date</TableHead>
+                        <TableHead className="font-bold text-xs">Vendor Name</TableHead>
+                        <TableHead className="font-bold text-xs">Invoice Ref No.</TableHead>
+                        <TableHead className="font-bold text-xs">Returned Item</TableHead>
+                        <TableHead className="font-bold text-xs">Batch</TableHead>
+                        <TableHead className="font-bold text-xs">Qty</TableHead>
+                        <TableHead className="font-bold text-xs">Debit Amount</TableHead>
+                        <TableHead className="font-bold text-xs">Reason</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {purchaseReturns.map((ret: any) => (
+                        <TableRow key={ret.id} className="hover:bg-slate-50/50">
+                          <TableCell className="font-bold text-xs">
+                            <span className="text-amber-700 font-mono font-black">{ret.returnNo}</span>
+                            <span className="text-[10px] text-slate-400 block">{formatDate(ret.date)}</span>
+                          </TableCell>
+                          <TableCell className="font-bold text-xs text-slate-800">{ret.vendorName}</TableCell>
+                          <TableCell className="text-xs text-slate-500 font-mono">{ret.purchaseBillNo || 'N/A'}</TableCell>
+                          <TableCell className="font-bold text-xs text-slate-700">{ret.itemName}</TableCell>
+                          <TableCell className="text-xs font-mono text-slate-500">{ret.batchNo}</TableCell>
+                          <TableCell className="font-black text-xs text-rose-600">-{ret.quantity} units</TableCell>
+                          <TableCell className="font-black text-xs text-slate-800">{formatCurrency(ret.totalAmount)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[10px] font-bold">
+                              {ret.reason}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Process Purchase Return Modal */}
+      <Dialog open={isPurchaseReturnModalOpen} onOpenChange={setIsPurchaseReturnModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-800">Process Purchase Return to Vendor</DialogTitle>
+            <DialogDescription className="text-xs">
+              This will deduct stock from the pharmacy inventory and create a vendor debit note record.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Vendor / Supplier Name *</Label>
+                <Input 
+                  placeholder="e.g. Global Medical Agencies"
+                  className="h-9 text-xs"
+                  value={purchaseReturnVendor}
+                  onChange={(e) => setPurchaseReturnVendor(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Purchase Bill / Invoice No.</Label>
+                <Input 
+                  placeholder="e.g. INV-8890"
+                  className="h-9 text-xs"
+                  value={purchaseReturnRefNo}
+                  onChange={(e) => setPurchaseReturnRefNo(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Select Medicine Item *</Label>
+              <Select 
+                value={purchaseReturnMedicineId} 
+                onValueChange={(val) => {
+                  setPurchaseReturnMedicineId(val);
+                  const item = inventory.find(i => i.id === val);
+                  if (item && item.vendor_name && !purchaseReturnVendor) {
+                    setPurchaseReturnVendor(item.vendor_name);
+                  }
+                  if (item && item.purchase_bill_no && !purchaseReturnRefNo) {
+                    setPurchaseReturnRefNo(item.purchase_bill_no);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Search inventory medicine..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {inventory.map(item => (
+                    <SelectItem key={item.id} value={item.id} className="text-xs">
+                      {item.name} (Batch: {item.batch_number || 'N/A'}, In Stock: {item.stock})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Return Quantity *</Label>
+                <Input 
+                  type="number" 
+                  min="1"
+                  max={inventory.find(i => i.id === purchaseReturnMedicineId)?.stock || 9999}
+                  className="h-9 text-xs font-bold"
+                  value={purchaseReturnQty}
+                  onChange={(e) => setPurchaseReturnQty(Math.max(1, Number(e.target.value)))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Reason for Return</Label>
+                <Select value={purchaseReturnReason} onValueChange={setPurchaseReturnReason}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Near Expiry">Near Expiry / Expired</SelectItem>
+                    <SelectItem value="Damaged Batch">Damaged Batch / Packaging</SelectItem>
+                    <SelectItem value="Quality Defect">Quality / Recall Defect</SelectItem>
+                    <SelectItem value="Overstock Return">Overstock / Excess Supply</SelectItem>
+                    <SelectItem value="Wrong Item Received">Wrong Item Supplied</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {purchaseReturnMedicineId && (
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-amber-900">Current Stock in Inventory:</span>
+                  <span className="font-black text-amber-800">
+                    {inventory.find(i => i.id === purchaseReturnMedicineId)?.stock || 0} units
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-amber-900">Estimated Total Refund Amount:</span>
+                  <span className="font-black text-amber-800">
+                    {formatCurrency(
+                      purchaseReturnQty * (
+                        inventory.find(i => i.id === purchaseReturnMedicineId)?.purchase_price || 
+                        ((inventory.find(i => i.id === purchaseReturnMedicineId)?.selling_price || 0) * 0.8)
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setIsPurchaseReturnModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl" onClick={handleProcessPurchaseReturn}>
+              Confirm Return & Adjust Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Pharmacy Bill Dialog */}
       <Dialog open={isEditBillOpen} onOpenChange={setIsEditBillOpen}>

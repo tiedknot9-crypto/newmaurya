@@ -9,6 +9,7 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle,
+  ShieldAlert,
   Printer,
   Share2,
   Image as ImageIcon,
@@ -74,7 +75,8 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
     name: '',
     phone: '',
     age: '',
-    gender: 'male'
+    gender: 'male',
+    patientCategory: 'OPD' as 'OPD' | 'IPD'
   });
   const [loading, setLoading] = useState(false);
   const [mergePatientData, setMergePatientData] = useState<{ existing: any, newDetails: any } | null>(null);
@@ -89,7 +91,8 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
         name: existing.name,
         phone: existing.phone,
         age: Number(newDetails.age) || existing.age,
-        gender: newDetails.gender || existing.gender
+        gender: newDetails.gender || existing.gender,
+        registration_type: newDetails.patientCategory || existing.registration_type || 'OPD'
       };
 
       const result = await supabaseService.updatePatient(existing.id, mergedData);
@@ -106,7 +109,7 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
         });
 
         toast.success(`Patient record found and merged successfully! MRN: ${existing.mrn}`);
-        setFormData({ name: '', phone: '', age: '', gender: 'male' });
+        setFormData({ name: '', phone: '', age: '', gender: 'male', patientCategory: 'OPD' });
         onRegistered();
       } else {
         toast.error('Failed to merge patient details');
@@ -126,6 +129,11 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
     }
     if (!formData.name || !formData.phone) {
       toast.error('Please fill in required fields');
+      return;
+    }
+
+    if (formData.name.toLowerCase().includes('walk-in') || formData.name.toLowerCase().includes('walk in')) {
+      toast.error('Walk-in customers are not eligible for Lab & Radiology services. Registration must be under OPD or IPD.');
       return;
     }
 
@@ -176,8 +184,8 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
       age: Number(formData.age) || 0,
       gender: formData.gender,
       mrn,
-      status: 'Stable',
-      registration_type: 'Quick-Lab'
+      status: formData.patientCategory === 'IPD' ? 'Admitted' : 'Stable',
+      registration_type: formData.patientCategory
     };
 
     const result = await supabaseService.createPatient(patientToAdd);
@@ -195,8 +203,8 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
         status: 'Active'
       });
 
-      toast.success(`Patient registered successfully! MRN: ${mrn}`);
-      setFormData({ name: '', phone: '', age: '', gender: 'male' });
+      toast.success(`Patient registered as ${formData.patientCategory}! MRN: ${mrn}`);
+      setFormData({ name: '', phone: '', age: '', gender: 'male', patientCategory: 'OPD' });
       onRegistered();
     } else {
       toast.error('Failed to register patient');
@@ -206,6 +214,40 @@ function LabQuickRegisterForm({ onRegistered, canMakeLabAndRadio }: { onRegister
   return (
     <div className="space-y-4 py-4">
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2 col-span-2">
+          <Label className="font-semibold text-slate-800">Patient Category *</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, patientCategory: 'OPD' })}
+              className={`p-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-between ${
+                formData.patientCategory === 'OPD' 
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span>OPD Patient</span>
+              <Badge className={formData.patientCategory === 'OPD' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}>
+                OPD
+              </Badge>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, patientCategory: 'IPD' })}
+              className={`p-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-between ${
+                formData.patientCategory === 'IPD' 
+                  ? 'bg-purple-50 border-purple-500 text-purple-900 ring-2 ring-purple-500/20' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span>IPD Patient (In-patient)</span>
+              <Badge className={formData.patientCategory === 'IPD' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'}>
+                IPD
+              </Badge>
+            </button>
+          </div>
+        </div>
+
         <div className="space-y-2">
           <Label>Full Name *</Label>
           <Input 
@@ -323,6 +365,26 @@ export default function Lab() {
   const [mainTab, setMainTab] = useState<'orders' | 'billing' | 'appointments' | 'setup'>('orders');
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<any[]>([]);
+  const [admissions, setAdmissions] = useState<any[]>([]);
+  const [patientCategoryFilter, setPatientCategoryFilter] = useState<'ALL' | 'OPD' | 'IPD'>('ALL');
+
+  const isWalkInPatient = (p: any) => {
+    if (!p) return true;
+    const name = (p.name || '').toLowerCase().trim();
+    const mrn = (p.mrn || '').toLowerCase().trim();
+    return name.includes('walk-in') || name.includes('walk in') || mrn === 'walk-in' || mrn === 'n/a' || !mrn;
+  };
+
+  const getPatientCategory = (p: any) => {
+    if (isWalkInPatient(p)) return 'Walk-in';
+    const hasActiveAdmission = (admissions || []).some((a: any) => 
+      (a.patient_id === p.id || a.patientId === p.id) && 
+      (a.status === 'Admitted' || !a.discharge_date)
+    ) || p.needs_admission || p.registration_type === 'IPD' || p.status === 'Admitted';
+    
+    return hasActiveAdmission ? 'IPD' : 'OPD';
+  };
+
   const [labRates, setLabRates] = useState<any[]>([]);
   const [testOrders, setTestOrders] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -397,17 +459,19 @@ export default function Lab() {
     if (isInitial) {
       setLoading(true);
     }
-    const [patientsData, testsData, ordersData, radiologyData, invoicesData, appointmentsData] = await Promise.all([
+    const [patientsData, testsData, ordersData, radiologyData, invoicesData, appointmentsData, admissionsData] = await Promise.all([
       supabaseService.getPatients(),
       supabaseService.getLabTests(),
       supabaseService.getLabTestRequests(),
       supabaseService.getRadiologyRecords(),
       supabaseService.getInvoices(),
-      supabaseService.getAppointments()
+      supabaseService.getAppointments(),
+      supabaseService.getAdmissions()
     ]);
 
     if (patientsData) setPatients(patientsData);
     if (testsData) setLabRates(testsData);
+    if (admissionsData) setAdmissions(admissionsData);
     
      // Combine and normalize orders
      const pathOrders = (ordersData || []).map(o => ({ 
@@ -1269,41 +1333,122 @@ export default function Lab() {
       </div>
 
       <Dialog open={isBookingOpen} onOpenChange={setIsBookingOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[440px]">
               <DialogHeader>
                 <DialogTitle>Book Diagnostic Slot</DialogTitle>
-                <DialogDescription>Schedule a time for Lab or Radiology tests.</DialogDescription>
+                <DialogDescription>Schedule a time for Lab or Radiology tests (OPD/IPD Patients Only).</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="space-y-4 py-3">
                 <div className="space-y-2 relative">
-                  <Label>Patient</Label>
+                  <div className="flex justify-between items-center">
+                    <Label className="font-semibold text-slate-800">Select Patient *</Label>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-[10px] font-bold">
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('ALL')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'ALL' ? 'bg-white text-slate-900 shadow-2xs font-extrabold' : 'text-slate-600'}`}
+                      >
+                        All
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('OPD')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'OPD' ? 'bg-emerald-600 text-white font-extrabold' : 'text-emerald-700'}`}
+                      >
+                        OPD
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('IPD')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'IPD' ? 'bg-purple-600 text-white font-extrabold' : 'text-purple-700'}`}
+                      >
+                        IPD
+                      </button>
+                    </div>
+                  </div>
                   <div className="relative">
                     <Input 
-                      placeholder="Search patient..." 
+                      placeholder="Search patient name, phone or MRN..." 
                       value={patientSearchTerm}
                       onChange={(e) => {
                         setPatientSearchTerm(e.target.value);
                         setShowPatientResults(true);
                       }}
+                      onFocus={() => setShowPatientResults(true)}
                     />
+                    <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
                     {showPatientResults && patientSearchTerm.length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto">
-                        {patients.filter(p => p.name.toLowerCase().includes(patientSearchTerm.toLowerCase())).map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer"
-                            onClick={() => {
-                              setNewBooking({...newBooking, patientId: p.id});
-                              setPatientSearchTerm(p.name);
-                              setShowPatientResults(false);
-                            }}
-                          >
-                            <p className="text-sm font-medium">{p.name}</p>
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[220px] overflow-y-auto custom-scrollbar">
+                        {patientSearchTerm.toLowerCase().includes('walk') ? (
+                          <div className="p-3 text-center text-xs font-bold text-rose-600 bg-rose-50">
+                            Walk-in customers are not eligible for Lab & Radiology services.
                           </div>
-                        ))}
+                        ) : patients.filter(p => {
+                            if (isWalkInPatient(p)) return false;
+                            const cat = getPatientCategory(p);
+                            if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                            return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
+                                   (p.phone || '').includes(patientSearchTerm) ||
+                                   (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
+                          }).length > 0 ? (
+                          patients.filter(p => {
+                            if (isWalkInPatient(p)) return false;
+                            const cat = getPatientCategory(p);
+                            if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                            return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
+                                   (p.phone || '').includes(patientSearchTerm) ||
+                                   (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
+                          }).map(p => {
+                            const cat = getPatientCategory(p);
+                            return (
+                              <div 
+                                key={p.id} 
+                                className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
+                                onClick={() => {
+                                  setNewBooking({...newBooking, patientId: p.id});
+                                  setPatientSearchTerm(p.name);
+                                  setShowPatientResults(false);
+                                }}
+                              >
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-bold text-slate-800">{p.name}</p>
+                                    <Badge className={cat === 'IPD' ? 'bg-purple-100 text-purple-800 border-purple-200 text-[9px] font-extrabold' : 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] font-extrabold'}>
+                                      {cat} Patient
+                                    </Badge>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500">MRN: {p.mrn} • Ph: {p.phone || 'N/A'}</p>
+                                </div>
+                                {newBooking.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-3 text-center text-xs text-slate-400 italic">
+                            No matching OPD/IPD patient found.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+                  {newBooking.patientId && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-blue-600 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-blue-800">
+                            {patients.find(p => p.id === newBooking.patientId)?.name}
+                          </p>
+                          <p className="text-[10px] text-blue-600">
+                            MRN: {patients.find(p => p.id === newBooking.patientId)?.mrn}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className={getPatientCategory(patients.find(p => p.id === newBooking.patientId)) === 'IPD' ? 'bg-purple-600 text-white' : 'bg-emerald-600 text-white'}>
+                        {getPatientCategory(patients.find(p => p.id === newBooking.patientId))} Patient
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Service Type</Label>
@@ -1380,14 +1525,39 @@ export default function Lab() {
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>New Diagnostic Test Order</DialogTitle>
-                <DialogDescription>Order pathology or radiology tests for a patient.</DialogDescription>
+                <DialogDescription>Order pathology or radiology tests for OPD and IPD patients.</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="space-y-4 py-3">
                 <div className="space-y-2 relative">
-                  <Label>Patient (Search by Name or Phone)</Label>
+                  <div className="flex justify-between items-center">
+                    <Label className="font-semibold text-slate-800">Patient (Search Name, Phone or MRN) *</Label>
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-[10px] font-bold">
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('ALL')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'ALL' ? 'bg-white text-slate-900 shadow-2xs font-extrabold' : 'text-slate-600'}`}
+                      >
+                        All
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('OPD')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'OPD' ? 'bg-emerald-600 text-white font-extrabold' : 'text-emerald-700'}`}
+                      >
+                        OPD
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setPatientCategoryFilter('IPD')}
+                        className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'IPD' ? 'bg-purple-600 text-white font-extrabold' : 'text-purple-700'}`}
+                      >
+                        IPD
+                      </button>
+                    </div>
+                  </div>
                   <div className="relative">
                     <Input 
-                      placeholder="Start typing name or phone..." 
+                      placeholder="Start typing name, phone or MRN..." 
                       value={patientSearchTerm}
                       onChange={(e) => {
                         setPatientSearchTerm(e.target.value);
@@ -1403,53 +1573,76 @@ export default function Lab() {
                   
                   {showPatientResults && patientSearchTerm.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {patients.filter(p => 
-                        p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                        (p.phone || '').includes(patientSearchTerm) ||
-                        (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                      ).length > 0 ? (
-                        patients.filter(p => 
-                          p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                        ).map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                            onClick={() => {
-                              setNewTestOrder({...newTestOrder, patientId: p.id});
-                              setPatientSearchTerm(p.name);
-                              setShowPatientResults(false);
-                            }}
-                          >
-                            <div>
-                              <p className="text-sm font-medium">{p.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                      {patientSearchTerm.toLowerCase().includes('walk') ? (
+                        <div className="p-3 text-center text-xs font-bold text-rose-600 bg-rose-50">
+                          Walk-in customers are not eligible for Lab & Radiology services. Please select a registered OPD or IPD patient.
+                        </div>
+                      ) : patients.filter(p => {
+                          if (isWalkInPatient(p)) return false;
+                          const cat = getPatientCategory(p);
+                          if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                          return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
+                                 (p.phone || '').includes(patientSearchTerm) ||
+                                 (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
+                        }).length > 0 ? (
+                        patients.filter(p => {
+                          if (isWalkInPatient(p)) return false;
+                          const cat = getPatientCategory(p);
+                          if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                          return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
+                                 (p.phone || '').includes(patientSearchTerm) ||
+                                 (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
+                        }).map(p => {
+                          const cat = getPatientCategory(p);
+                          return (
+                            <div 
+                              key={p.id} 
+                              className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
+                              onClick={() => {
+                                setNewTestOrder({...newTestOrder, patientId: p.id});
+                                setPatientSearchTerm(p.name);
+                                setShowPatientResults(false);
+                              }}
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium">{p.name}</p>
+                                  <Badge className={cat === 'IPD' ? 'bg-purple-100 text-purple-800 border-purple-200 text-[9px] font-extrabold' : 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] font-extrabold'}>
+                                    {cat} Patient
+                                  </Badge>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                              </div>
+                              {newTestOrder.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
                             </div>
-                            {newTestOrder.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
-                        <div className="px-4 py-4 text-center text-sm text-muted-foreground">
-                          No patients found.
+                        <div className="px-4 py-4 text-center text-sm text-muted-foreground italic">
+                          No matching registered OPD/IPD patients found.
                         </div>
                       )}
                     </div>
                   )}
  
                   {newTestOrder.patientId && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center gap-3 animate-in fade-in slide-in-from-top-1">
-                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <User className="h-4 w-4" />
+                    <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-blue-700 truncate">
+                            {patients.find(pat => pat.id === newTestOrder.patientId)?.name}
+                          </p>
+                          <p className="text-[10px] text-blue-600 truncate">
+                            Ph: {patients.find(pat => pat.id === newTestOrder.patientId)?.phone || 'N/A'} • MRN: {patients.find(pat => pat.id === newTestOrder.patientId)?.mrn}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-blue-700 truncate">
-                          {patients.find(pat => pat.id === newTestOrder.patientId)?.name}
-                        </p>
-                        <p className="text-[10px] text-blue-600 truncate">
-                          Ph: {patients.find(pat => pat.id === newTestOrder.patientId)?.phone} • MRN: {patients.find(pat => pat.id === newTestOrder.patientId)?.mrn}
-                        </p>
-                      </div>
+                      <Badge className={getPatientCategory(patients.find(p => p.id === newTestOrder.patientId)) === 'IPD' ? 'bg-purple-600 text-white font-bold' : 'bg-emerald-600 text-white font-bold'}>
+                        {getPatientCategory(patients.find(p => p.id === newTestOrder.patientId))} Patient
+                      </Badge>
                     </div>
                   )}
                 </div>
@@ -2584,15 +2777,40 @@ export default function Lab() {
                 <DialogContent className="sm:max-w-[600px]">
                   <DialogHeader>
                     <DialogTitle>Generate Lab Bill</DialogTitle>
-                    <DialogDescription>Collect payment for lab services.</DialogDescription>
+                    <DialogDescription>Collect payment for lab services (OPD & IPD Patients Only).</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-6 py-4">
+                  <div className="space-y-4 py-3">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2 relative">
-                        <Label>Patient (Search Name/Phone)</Label>
+                        <div className="flex justify-between items-center">
+                          <Label className="font-semibold text-slate-800">Patient (Search Name/Phone/MRN) *</Label>
+                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-[10px] font-bold">
+                            <button 
+                              type="button"
+                              onClick={() => setPatientCategoryFilter('ALL')}
+                              className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'ALL' ? 'bg-white text-slate-900 shadow-2xs font-extrabold' : 'text-slate-600'}`}
+                            >
+                              All
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setPatientCategoryFilter('OPD')}
+                              className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'OPD' ? 'bg-emerald-600 text-white font-extrabold' : 'text-emerald-700'}`}
+                            >
+                              OPD
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setPatientCategoryFilter('IPD')}
+                              className={`px-1.5 py-0.5 rounded ${patientCategoryFilter === 'IPD' ? 'bg-purple-600 text-white font-extrabold' : 'text-purple-700'}`}
+                            >
+                              IPD
+                            </button>
+                          </div>
+                        </div>
                         <div className="relative">
                           <Input 
-                            placeholder="Type name or phone..." 
+                            placeholder="Type initial letter, name, Patient ID, Reg ID, or MRN..." 
                             value={patientSearchTerm}
                             onChange={(e) => {
                               setPatientSearchTerm(e.target.value);
@@ -2608,51 +2826,86 @@ export default function Lab() {
                         </div>
                         
                         {showPatientResults && patientSearchTerm.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[180px] overflow-y-auto custom-scrollbar">
-                            {patients.filter(p => 
-                              p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                              (p.phone && p.phone.includes(patientSearchTerm)) ||
-                              (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                            ).length > 0 ? (
-                              patients.filter(p => 
-                                p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                                (p.phone && p.phone.includes(patientSearchTerm)) ||
-                                (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                              ).map(p => (
-                                <div 
-                                  key={p.id} 
-                                  className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                                  onClick={() => {
-                                    setSelectedPatientId(p.id);
-                                    setPatientSearchTerm(p.name);
-                                    setShowPatientResults(false);
-                                  }}
-                                >
-                                  <div>
-                                    <p className="text-sm font-medium">{p.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">{p.phone || 'No phone'}</p>
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[220px] overflow-y-auto custom-scrollbar">
+                            {patientSearchTerm.toLowerCase().includes('walk') ? (
+                              <div className="p-3 text-center text-xs font-bold text-rose-600 bg-rose-50">
+                                Walk-in billing is disabled for Lab & Radiology. Please select an active OPD or IPD patient.
+                              </div>
+                            ) : patients.filter(p => {
+                                if (isWalkInPatient(p)) return false;
+                                const cat = getPatientCategory(p);
+                                if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                                const term = patientSearchTerm.toLowerCase().trim();
+                                const name = (p.name || '').toLowerCase();
+                                const phone = (p.phone || '');
+                                const mrn = (p.mrn || '').toLowerCase();
+                                const pid = (p.id || '').toLowerCase();
+                                const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                                return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term);
+                              }).length > 0 ? (
+                              patients.filter(p => {
+                                if (isWalkInPatient(p)) return false;
+                                const cat = getPatientCategory(p);
+                                if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
+                                const term = patientSearchTerm.toLowerCase().trim();
+                                const name = (p.name || '').toLowerCase();
+                                const phone = (p.phone || '');
+                                const mrn = (p.mrn || '').toLowerCase();
+                                const pid = (p.id || '').toLowerCase();
+                                const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                                return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term);
+                              }).map(p => {
+                                const cat = getPatientCategory(p);
+                                const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                                return (
+                                  <div 
+                                    key={p.id} 
+                                    className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
+                                    onClick={() => {
+                                      setSelectedPatientId(p.id);
+                                      setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                                      setShowPatientResults(false);
+                                    }}
+                                  >
+                                    <div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                                        <Badge className={cat === 'IPD' ? 'bg-purple-100 text-purple-800 border-purple-200 text-[9px] font-extrabold' : 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] font-extrabold'}>
+                                          {cat} Patient
+                                        </Badge>
+                                        <Badge variant="outline" className="text-[9px] font-mono font-bold bg-teal-50 text-teal-800 border-teal-200 px-1.5 py-0">
+                                          ID: {displayRegId}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-[10px] text-muted-foreground mt-0.5">{p.phone || 'No phone'} • MRN: {p.mrn || displayRegId}</p>
+                                    </div>
+                                    {selectedPatientId === p.id && <CheckCircle2 className="w-3.5 h-3.5 text-medical-blue shrink-0" />}
                                   </div>
-                                  {selectedPatientId === p.id && <CheckCircle2 className="w-3 h-3 text-medical-blue" />}
-                                </div>
-                              ))
+                                );
+                              })
                             ) : (
-                              <div className="px-4 py-3 text-center text-xs text-muted-foreground">
-                                No patients found.
+                              <div className="px-4 py-3 text-center text-xs text-muted-foreground italic">
+                                No matching OPD/IPD patient found.
                               </div>
                             )}
                           </div>
                         )}
 
                         {selectedPatientId && (
-                          <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                              <User className="h-3 w-3" />
+                          <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                                <User className="h-3 w-3" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-bold text-blue-700 truncate">
+                                  {patients.find(pat => pat.id === selectedPatientId)?.name}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-bold text-blue-700 truncate">
-                                {patients.find(pat => pat.id === selectedPatientId)?.name}
-                              </p>
-                            </div>
+                            <Badge className={getPatientCategory(patients.find(p => p.id === selectedPatientId)) === 'IPD' ? 'bg-purple-600 text-white font-bold' : 'bg-emerald-600 text-white font-bold'}>
+                              {getPatientCategory(patients.find(p => p.id === selectedPatientId))} Patient
+                            </Badge>
                           </div>
                         )}
                       </div>

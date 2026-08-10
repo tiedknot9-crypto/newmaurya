@@ -147,6 +147,35 @@ export interface InventoryItem {
   loose_selling_price?: number;
   loose_stock?: number;
   is_loose_sale_enabled?: boolean;
+  vendorName?: string;
+  vendor_name?: string;
+  vendorPhone?: string;
+  vendor_phone?: string;
+  purchaseDate?: string;
+  purchase_date?: string;
+  purchaseBillNo?: string;
+  purchase_bill_no?: string;
+  mfgDate?: string;
+  mfg_date?: string;
+}
+
+export interface PharmacyPurchaseReturn {
+  id: string;
+  returnNo: string;
+  date: string;
+  vendorName: string;
+  vendorPhone?: string;
+  itemId: string;
+  itemName: string;
+  batchNumber?: string;
+  quantity: number;
+  unitType?: 'strip' | 'loose' | 'unit';
+  unitPrice: number;
+  totalAmount: number;
+  reason: string;
+  debitNoteNo?: string;
+  performedBy?: string;
+  notes?: string;
 }
 
 export interface OperationTheatre {

@@ -2039,7 +2039,7 @@ export default function Billing() {
                   <Label>Select Patient (Search by Name or Phone)</Label>
                   <div className="relative">
                     <Input 
-                      placeholder="Start typing name or phone..." 
+                      placeholder="Start typing initial alphabet, name, Patient ID, or Reg ID..." 
                       value={patientSearchTerm}
                       onChange={(e) => {
                         setPatientSearchTerm(e.target.value);
@@ -2054,36 +2054,56 @@ export default function Billing() {
                   </div>
                   
                   {showPatientResults && patientSearchTerm.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {patients.filter(p => 
-                        p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                        (p.phone || '').includes(patientSearchTerm) ||
-                        (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                      ).length > 0 ? (
-                        patients.filter(p => 
-                          p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                        ).map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                            onClick={() => {
-                              setNewInvoice({...newInvoice, patientId: p.id});
-                              setPatientSearchTerm(p.name);
-                              setShowPatientResults(false);
-                            }}
-                          >
-                            <div>
-                              <p className="text-sm font-medium">{p.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-[220px] overflow-y-auto custom-scrollbar">
+                      {patients.filter((p: any) => {
+                        const term = patientSearchTerm.toLowerCase().trim();
+                        const name = (p.name || '').toLowerCase();
+                        const phone = (p.phone || '');
+                        const mrn = (p.mrn || '').toLowerCase();
+                        const pid = (p.id || '').toLowerCase();
+                        const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                        const uhid = (p.uhid || '').toLowerCase();
+                        return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
+                      }).length > 0 ? (
+                        patients.filter((p: any) => {
+                          const term = patientSearchTerm.toLowerCase().trim();
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const pid = (p.id || '').toLowerCase();
+                          const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                          const uhid = (p.uhid || '').toLowerCase();
+                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
+                        }).map((p: any) => {
+                          const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                          return (
+                            <div 
+                              key={p.id} 
+                              className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
+                              onClick={() => {
+                                setNewInvoice({...newInvoice, patientId: p.id});
+                                setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                                setShowPatientResults(false);
+                              }}
+                            >
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                                  <Badge variant="outline" className="text-[9px] font-mono font-bold bg-blue-50 text-blue-800 border-blue-200 px-1.5 py-0">
+                                    ID: {displayRegId}
+                                  </Badge>
+                                </div>
+                                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Phone: {p.phone || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''}
+                                </p>
+                              </div>
+                              {newInvoice.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
                             </div>
-                            {newInvoice.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
-                        <div className="px-4 py-4 text-center text-sm text-muted-foreground">
-                          No patients found.
+                        <div className="px-4 py-4 text-center text-xs text-muted-foreground font-medium">
+                          No matching patients found.
                         </div>
                       )}
                     </div>
@@ -3299,13 +3319,26 @@ export default function Billing() {
           return false;
         });
 
+        const totalFilteredValue = displayedBills.reduce((acc, b) => {
+          return acc + (Number(b.payable_amount ?? b.payableAmount ?? b.total_amount ?? b.totalAmount) || 0);
+        }, 0);
+
+        const totalFilteredPaid = displayedBills.reduce((acc, b) => {
+          return acc + (Number(b.paid_amount ?? b.paidAmount) || 0);
+        }, 0);
+
         const startIndex = (recentInvoicesPage - 1) * itemsPerPage;
         const paginatedBills = displayedBills.slice(startIndex, startIndex + itemsPerPage);
 
         return (
           <Card className="border-none shadow-sm rounded-t-none">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between space-y-0 pb-4 gap-4">
-              <CardTitle className="text-lg">Recent Invoices</CardTitle>
+              <div>
+                <CardTitle className="text-lg font-black text-slate-800">Recent Invoices</CardTitle>
+                <CardDescription className="text-xs">
+                  Showing {displayedBills.length} invoice(s) matching selected filters. Total Value: <span className="font-bold text-slate-900">{formatCurrency(totalFilteredValue)}</span>
+                </CardDescription>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative w-56">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -3387,6 +3420,34 @@ export default function Billing() {
                 </div>
               </div>
             </CardHeader>
+
+            {/* Filtered Recent Invoices Total Summary Banner */}
+            <div className="mx-6 mb-4 p-3.5 bg-gradient-to-r from-blue-50/80 via-slate-50 to-emerald-50/60 border border-blue-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-xs">
+              <div className="flex flex-wrap items-center gap-6">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Total Filtered Invoices Value</span>
+                  <span className="text-2xl font-black text-slate-900 leading-none">{formatCurrency(totalFilteredValue)}</span>
+                </div>
+                <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+                <div>
+                  <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block">Total Paid Collection</span>
+                  <span className="text-xl font-black text-emerald-700 leading-none">{formatCurrency(totalFilteredPaid)}</span>
+                </div>
+                {totalFilteredValue - totalFilteredPaid > 0 && (
+                  <>
+                    <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider block">Pending Due</span>
+                      <span className="text-sm font-black text-amber-800 leading-none">{formatCurrency(totalFilteredValue - totalFilteredPaid)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <Badge variant="outline" className="bg-white text-medical-blue border-blue-300 font-extrabold text-xs px-3 py-1.5 shadow-2xs">
+                {displayedBills.length} Matching Invoice{displayedBills.length === 1 ? '' : 's'}
+              </Badge>
+            </div>
+
             <CardContent className="p-0">
               <div className="overflow-x-auto custom-scrollbar">
                 <Table>

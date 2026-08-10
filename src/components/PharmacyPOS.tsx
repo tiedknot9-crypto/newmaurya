@@ -295,8 +295,13 @@ export default function PharmacyPOS() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLooseOnly, setFilterLooseOnly] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('walk-in');
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [paymentMode, setPaymentMode] = useState('Cash');
+  const [multiSplit, setMultiSplit] = useState({ cash: 0, upi: 0, card: 0, other: 0 });
+  const [discountValue, setDiscountValue] = useState<string>('0');
+  const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent');
+  const [printPageSize, setPrintPageSize] = useState<'A4_FULL' | 'A4_HALF'>('A4_HALF');
+  const [customUnitPrice, setCustomUnitPrice] = useState<string>('');
   const [billingSetupItem, setBillingSetupItem] = useState<any | null>(null);
   const [billingUnit, setBillingUnit] = useState<'strip' | 'loose'>('strip');
   const [billingQty, setBillingQty] = useState<number>(1);
@@ -470,6 +475,8 @@ export default function PharmacyPOS() {
       setBillingSetupItem(item);
       setBillingUnit('loose');
       setBillingQty(1);
+      const defaultPrice = (item.loose_selling_price || (item.selling_price / (item.units_per_strip || 10)));
+      setCustomUnitPrice(defaultPrice ? defaultPrice.toFixed(2) : '0');
     } else {
       addToCart(item);
     }
@@ -478,17 +485,22 @@ export default function PharmacyPOS() {
   const addBillingSetupToCart = () => {
     if (!billingSetupItem) return;
     
+    const qty = Math.max(1, Number(billingQty) || 1);
     const isLoose = billingUnit === 'loose';
-    const price = isLoose 
+    let price = isLoose 
       ? (billingSetupItem.loose_selling_price || (billingSetupItem.selling_price / (billingSetupItem.units_per_strip || 10)))
       : (billingSetupItem.selling_price || 0);
     
+    if (customUnitPrice && !isNaN(parseFloat(customUnitPrice)) && parseFloat(customUnitPrice) >= 0) {
+      price = parseFloat(customUnitPrice);
+    }
+
     const qtyText = isLoose ? 'Tablet(s)' : 'Strip(s)';
     const cartItemId = `${billingSetupItem.id}-${billingUnit}`;
     
     const unitsPerStrip = billingSetupItem.units_per_strip || 10;
     const totalUnitsAvailable = (billingSetupItem.stock * unitsPerStrip) + (billingSetupItem.loose_stock || 0);
-    const requestedUnits = isLoose ? billingQty : (billingQty * unitsPerStrip);
+    const requestedUnits = isLoose ? qty : (qty * unitsPerStrip);
     
     if (requestedUnits > totalUnitsAvailable) {
       toast.error(`Insufficient stock! Only ${totalUnitsAvailable} total tablets left.`);
@@ -498,7 +510,7 @@ export default function PharmacyPOS() {
     const existingIndex = cart.findIndex(c => c.cartId === cartItemId);
     if (existingIndex > -1) {
       const newCart = [...cart];
-      const newQty = newCart[existingIndex].quantity + billingQty;
+      const newQty = newCart[existingIndex].quantity + qty;
       const newRequestedUnits = isLoose ? newQty : (newQty * unitsPerStrip);
       
       if (newRequestedUnits > totalUnitsAvailable) {
@@ -506,6 +518,7 @@ export default function PharmacyPOS() {
         return;
       }
       newCart[existingIndex].quantity = newQty;
+      newCart[existingIndex].price = price;
       setCart(newCart);
     } else {
       setCart([...cart, {
@@ -513,7 +526,7 @@ export default function PharmacyPOS() {
         cartId: cartItemId,
         name: `${billingSetupItem.name} (${billingUnit === 'loose' ? 'Loose' : 'Strip'})`,
         price: price,
-        quantity: billingQty,
+        quantity: qty,
         isLoose: isLoose,
         unitsPerStrip: unitsPerStrip,
         taxPercentage: billingSetupItem.tax_percentage || 0,
@@ -526,7 +539,7 @@ export default function PharmacyPOS() {
     
     setCartPulse(true);
     setTimeout(() => setCartPulse(false), 300);
-    toast.success(`${billingQty} ${qtyText} of ${billingSetupItem.name} added to cart`);
+    toast.success(`${qty} ${qtyText} of ${billingSetupItem.name} added to cart`);
     setBillingSetupItem(null);
   };
 
@@ -562,39 +575,114 @@ export default function PharmacyPOS() {
     }));
   };
 
+  const setDirectQuantity = (cartId: string, val: number) => {
+    if (isNaN(val) || val < 1) val = 1;
+    setCart(cart.map(c => {
+      const cId = c.cartId || c.id;
+      if (cId === cartId) {
+        if (c.id.startsWith('custom-loose')) {
+          return { ...c, quantity: val };
+        }
+        const itemInInventory = inventory.find((i: any) => i.id === c.id);
+        if (!itemInInventory) return { ...c, quantity: val };
+        
+        const unitsPerStrip = c.unitsPerStrip || itemInInventory.units_per_strip || 10;
+        const totalUnitsAvailable = c.isLoose 
+          ? ((itemInInventory.stock * unitsPerStrip) + (itemInInventory.loose_stock || 0))
+          : itemInInventory.stock;
+        
+        if (val > totalUnitsAvailable) {
+          toast.error(`Only ${totalUnitsAvailable} ${c.isLoose ? 'tablets' : 'strips'} available in stock`);
+          return { ...c, quantity: totalUnitsAvailable };
+        }
+        return { ...c, quantity: val };
+      }
+      return c;
+    }));
+  };
+
   const removeFromCart = (cartId: string) => {
     setCart(cart.filter(c => (c.cartId || c.id) !== cartId));
   };
 
+  const updateCartUnitPrice = (cartId: string, newPrice: number) => {
+    if (isNaN(newPrice) || newPrice < 0) return;
+    setCart(cart.map(c => (c.cartId || c.id) === cartId ? { ...c, price: newPrice } : c));
+  };
+
+  const pharmacySettings = storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS);
+  const maxDiscountPercent = Number(pharmacySettings?.maxDiscountPercent) || 20;
+
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = cart.reduce((sum, item) => sum + (item.price * item.quantity * ((item as any).taxPercentage || 0) / 100), 0);
-  const total = subtotal + tax;
+
+  let computedDiscountAmount = 0;
+  let appliedDiscountPercent = 0;
+  if (discountType === 'percent') {
+    const rawPct = Number(discountValue) || 0;
+    appliedDiscountPercent = Math.min(Math.max(0, rawPct), maxDiscountPercent);
+    computedDiscountAmount = subtotal * (appliedDiscountPercent / 100);
+  } else {
+    const rawAmt = Number(discountValue) || 0;
+    const maxAmt = subtotal * (maxDiscountPercent / 100);
+    computedDiscountAmount = Math.min(Math.max(0, rawAmt), maxAmt);
+    appliedDiscountPercent = subtotal > 0 ? (computedDiscountAmount / subtotal) * 100 : 0;
+  }
+
+  const total = Math.max(0, subtotal + tax - computedDiscountAmount);
 
   const handleCheckout = () => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
     }
+    if (!selectedPatientId || selectedPatientId === 'walk-in') {
+      toast.error('Sales are restricted to registered OPD/IPD Patients only. Please select a patient.');
+      return;
+    }
+
+    // Check discount limit warning if user entered higher
+    if (discountType === 'percent' && (Number(discountValue) || 0) > maxDiscountPercent) {
+      toast.warning(`Discount automatically capped at admin limit of ${maxDiscountPercent}%`);
+    } else if (discountType === 'amount') {
+      const maxAmt = subtotal * (maxDiscountPercent / 100);
+      if ((Number(discountValue) || 0) > maxAmt) {
+        toast.warning(`Discount capped at max admin limit ₹${maxAmt.toFixed(2)} (${maxDiscountPercent}%)`);
+      }
+    }
+
     setIsCheckoutOpen(true);
   };
 
   const completeSale = async () => {
     if (cart.length === 0) return;
-    
-    const patientName = selectedPatientId === 'walk-in' 
-      ? (walkInDetails.name || 'Walk-in Customer') 
-      : patients.find(p => p.id === selectedPatientId)?.name || 'Unknown';
-    
-    const patientPhone = selectedPatientId === 'walk-in' ? walkInDetails.phone : patients.find(p => p.id === selectedPatientId)?.phone;
-    const doctorName = selectedPatientId === 'walk-in' ? walkInDetails.doctorName : 'Hospital Doctor';
+    if (!selectedPatientId || selectedPatientId === 'walk-in') {
+      toast.error('Sales are restricted to OPD/IPD Patients only.');
+      return;
+    }
+
+    const selectedPatient = patients.find(p => p.id === selectedPatientId);
+    const patientName = selectedPatient?.name || 'Patient';
+    const patientPhone = selectedPatient?.phone || 'N/A';
+    const doctorName = 'Hospital OPD/IPD Doctor';
+
+    let formattedPaymentMethod = paymentMode;
+    if (paymentMode === 'Multi-mode') {
+      const splitTotal = Number(multiSplit.cash) + Number(multiSplit.upi) + Number(multiSplit.card) + Number(multiSplit.other);
+      if (Math.abs(splitTotal - total) > 0.5) {
+        toast.error(`Multi-mode split sum (₹${splitTotal.toFixed(2)}) must equal Total Bill (₹${total.toFixed(2)})`);
+        return;
+      }
+      formattedPaymentMethod = `Multi-mode (Cash: ₹${multiSplit.cash}, UPI: ₹${multiSplit.upi}, Card: ₹${multiSplit.card}${multiSplit.other > 0 ? `, Other: ₹${multiSplit.other}` : ''})`;
+    }
 
     const invoice = {
-      patient_id: selectedPatientId === 'walk-in' ? null : selectedPatientId,
+      patient_id: selectedPatientId,
       total_amount: total,
       paid_amount: total,
-      discount_amount: 0,
+      discount_amount: computedDiscountAmount,
       payment_status: 'Paid',
-      payment_method: paymentMode,
+      payment_method: formattedPaymentMethod,
       status: 'Settled',
       type: 'Pharmacy'
     };
@@ -686,11 +774,10 @@ export default function PharmacyPOS() {
       setIsCheckoutOpen(false);
       setIsSuccessOpen(true);
       setCart([]);
-      if (selectedPatientId === 'walk-in') {
-        setWalkInDetails({ name: '', phone: '', doctorName: '' });
-      }
       setPatientSearchTerm('');
-      setSelectedPatientId('walk-in');
+      setSelectedPatientId('');
+      setDiscountValue('0');
+      setMultiSplit({ cash: 0, upi: 0, card: 0, other: 0 });
       fetchData(); // Refresh inventory and patients
       toast.success('Sale completed successfully');
     } else {
@@ -798,17 +885,18 @@ export default function PharmacyPOS() {
     printHtmlWithPreview(receiptHtml, `POS Receipt - ${lastOrder.invoiceId}`);
   };
 
-  const printTaxInvoice = () => {
+  const printTaxInvoice = (overridePageSize?: 'A4_FULL' | 'A4_HALF') => {
     if (!lastOrder) return;
 
     const patientDetails = {
-      name: lastOrder.patient || 'Walk-in Customer',
+      name: lastOrder.patient || 'Patient',
       phone: lastOrder.phone || 'N/A',
-      address: 'N/A',
+      address: 'Hospital Ward / OPD',
       gstin: 'N/A'
     };
 
     const pharmacySettings = storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS);
+    const selectedSize = overridePageSize || printPageSize || 'A4_HALF';
 
     // Adapt lastOrder to bill format expected by the template
     const billAdapter = {
@@ -830,8 +918,8 @@ export default function PharmacyPOS() {
       totalAmount: lastOrder.total
     };
 
-    const invoiceHtml = generatePharmacyInvoiceHtml(billAdapter, inventory, patientDetails, pharmacySettings);
-    printHtmlWithPreview(invoiceHtml, `POS Tax Invoice - ${lastOrder.invoiceId}`);
+    const invoiceHtml = generatePharmacyInvoiceHtml(billAdapter, inventory, patientDetails, pharmacySettings, selectedSize);
+    printHtmlWithPreview(invoiceHtml, `POS Tax Invoice (${selectedSize}) - ${lastOrder.invoiceId}`);
   };
 
   if (loading) {
@@ -1078,58 +1166,73 @@ export default function PharmacyPOS() {
 
         <div className="p-5 border-b bg-white space-y-4">
           <div className="space-y-3 relative">
-            <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Select Patient (Name / Phone / MRN)</Label>
+            <div className="flex justify-between items-center">
+              <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Select Registered Patient (OPD / IPD) *</Label>
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-black uppercase">
+                OPD/IPD Restricted
+              </Badge>
+            </div>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
-                  placeholder="Walk-in or Search..." 
+                  placeholder="Type initial letter or name, Patient ID, Reg ID, Phone..." 
                   className="h-11 bg-slate-50 border-slate-200 pr-10 rounded-xl"
                   value={patientSearchTerm}
                   onChange={(e) => {
                     setPatientSearchTerm(e.target.value);
                     setShowPatientResults(true);
-                    if (e.target.value === '') {
-                      setSelectedPatientId('walk-in');
-                    }
                   }}
                   onFocus={() => setShowPatientResults(true)}
                 />
                 <Search className="absolute right-3 top-3.5 h-4 w-4 text-slate-400" />
                 
-                {showPatientResults && patientSearchTerm.length > 0 && (
+                {showPatientResults && (
                   <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[250px] overflow-y-auto custom-scrollbar">
-                    <div 
-                      className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                      onClick={() => {
-                        setSelectedPatientId('walk-in');
-                        setPatientSearchTerm('');
-                        setShowPatientResults(false);
-                      }}
-                    >
-                      <span className="text-xs font-black text-slate-700">Walk-in Customer</span>
-                      {selectedPatientId === 'walk-in' && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                    </div>
-                    {patients.filter((p: any) => 
-                      p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                      (p.phone || '').includes(patientSearchTerm) ||
-                      (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                    ).map((p: any) => (
-                      <div 
-                        key={p.id} 
-                        className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                        onClick={() => {
-                          setSelectedPatientId(p.id);
-                          setPatientSearchTerm(p.name);
-                          setShowPatientResults(false);
-                        }}
-                      >
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{p.phone} • {p.mrn}</p>
+                    {patients.filter((p: any) => {
+                      if (!patientSearchTerm || patientSearchTerm.trim() === '') return true;
+                      const term = patientSearchTerm.toLowerCase().trim();
+                      const name = (p.name || '').toLowerCase();
+                      const phone = (p.phone || '');
+                      const mrn = (p.mrn || '').toLowerCase();
+                      const pid = (p.id || '').toLowerCase();
+                      const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                      const uhid = (p.uhid || '').toLowerCase();
+                      return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
+                    }).map((p: any) => {
+                      const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                      return (
+                        <div 
+                          key={p.id} 
+                          className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
+                          onClick={() => {
+                            setSelectedPatientId(p.id);
+                            setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                            setShowPatientResults(false);
+                          }}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                              <Badge variant="outline" className={`text-[8px] font-black px-1.5 py-0 ${p.type === 'IPD' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                {p.type || 'OPD'}
+                              </Badge>
+                              <Badge variant="outline" className="text-[9px] font-mono font-bold bg-teal-50 text-teal-800 border-teal-200 px-1.5 py-0">
+                                Reg/ID: {displayRegId}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                              Phone: {p.phone || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''} {p.uhid ? `• UHID: ${p.uhid}` : ''}
+                            </p>
+                          </div>
+                          {selectedPatientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
                         </div>
-                        {selectedPatientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
+                      );
+                    })}
+                    {patients.length === 0 && (
+                      <div className="p-4 text-center text-xs text-slate-400 font-bold">
+                        No registered OPD/IPD patients found. Use + to register.
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -1141,8 +1244,8 @@ export default function PharmacyPOS() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[400px]">
                   <DialogHeader>
-                    <DialogTitle>Quick Pharmacy Registration</DialogTitle>
-                    <DialogDescription>Create a quick record for this customer.</DialogDescription>
+                    <DialogTitle>Quick Patient Registration</DialogTitle>
+                    <DialogDescription>Create a patient record for OPD/IPD prescription billing.</DialogDescription>
                   </DialogHeader>
                   <PharmacyQuickRegisterForm logAudit={logAudit} onRegister={() => fetchData()} />
                 </DialogContent>
@@ -1150,65 +1253,27 @@ export default function PharmacyPOS() {
             </div>
           </div>
 
-          {selectedPatientId === 'walk-in' && (
-            <div className="space-y-4 pt-4 border-t-2 border-dashed border-slate-100 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-medical-blue" />
-                <span className="text-[11px] font-black uppercase tracking-widest text-medical-blue">Walk-in Details</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-tighter">Customer Name</Label>
-                  <Input 
-                    placeholder="Full name" 
-                    className="h-10 text-sm border-slate-100 focus:border-medical-blue/30 rounded-lg bg-slate-50/50"
-                    value={walkInDetails.name}
-                    onChange={(e) => setWalkInDetails(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-tighter">Mobile No.</Label>
-                  <Input 
-                    placeholder="+91 00000 00000" 
-                    className="h-10 text-sm border-slate-100 focus:border-medical-blue/30 rounded-lg bg-slate-50/50"
-                    value={walkInDetails.phone}
-                    onChange={(e) => setWalkInDetails(prev => ({ ...prev, phone: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-tighter">Prescribing Doctor</Label>
-                <Input 
-                  placeholder="Dr. Name / Previous Hospital" 
-                  className="h-10 text-sm border-slate-100 focus:border-medical-blue/30 rounded-lg bg-slate-50/50"
-                  value={walkInDetails.doctorName}
-                  onChange={(e) => setWalkInDetails(prev => ({ ...prev, doctorName: e.target.value }))}
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedPatientId !== 'walk-in' && (
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                  <User className="h-6 w-6" />
+          {selectedPatientId && (
+            <div className="p-4 bg-blue-50/80 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                  <User className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-black text-blue-900 text-base truncate leading-none mb-1">
+                  <p className="font-black text-blue-900 text-sm truncate leading-none mb-1">
                     {patients.find(p => p.id === selectedPatientId)?.name}
                   </p>
-                  <p className="text-[11px] text-blue-700 font-bold uppercase tracking-tight">
-                    {patients.find(p => p.id === selectedPatientId)?.mrn} • {patients.find(p => p.id === selectedPatientId)?.phone}
+                  <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight">
+                    MRN: {patients.find(p => p.id === selectedPatientId)?.mrn} • Ph: {patients.find(p => p.id === selectedPatientId)?.phone}
                   </p>
                 </div>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg"
+                className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg shrink-0"
                 onClick={() => {
-                  setSelectedPatientId('walk-in');
+                  setSelectedPatientId('');
                   setPatientSearchTerm('');
                 }}
               >
@@ -1269,10 +1334,21 @@ export default function PharmacyPOS() {
                           <p className="text-sm font-black text-slate-800 leading-tight mb-2 group-hover:text-medical-blue transition-colors">
                             {item.name}
                           </p>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3">
                             <div className="flex flex-col">
-                              <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Rate</span>
-                              <span className="text-xs font-black text-medical-blue">₹{item.price.toFixed(2)}</span>
+                              <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1">
+                                Rate (₹)
+                              </span>
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 focus-within:border-medical-blue">
+                                <span className="text-xs font-black text-slate-400">₹</span>
+                                <input 
+                                  type="number"
+                                  step="0.01"
+                                  className="w-16 text-xs font-black text-medical-blue bg-transparent focus:outline-none"
+                                  value={item.price}
+                                  onChange={(e) => updateCartUnitPrice(item.cartId || item.id, parseFloat(e.target.value))}
+                                />
+                              </div>
                             </div>
                             <div className="flex flex-col">
                               <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Total</span>
@@ -1296,7 +1372,21 @@ export default function PharmacyPOS() {
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="w-6 text-center text-xs font-black text-slate-800">{item.quantity}</span>
+                            <input 
+                              type="number" 
+                              min="1"
+                              onFocus={(e) => e.target.select()}
+                              className="w-12 h-7 text-center text-xs font-black text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-medical-blue font-mono"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val >= 1) {
+                                  setDirectQuantity(item.cartId || item.id, val);
+                                } else if (e.target.value === '') {
+                                  setDirectQuantity(item.cartId || item.id, 1);
+                                }
+                              }}
+                            />
                             <button 
                               className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-lg transition-colors text-slate-500"
                               onClick={() => updateQuantity(item.cartId || item.id, 1)}
@@ -1314,19 +1404,67 @@ export default function PharmacyPOS() {
           </div>
         </ScrollArea>
 
-        <div className="p-6 border-t border-slate-200 bg-white space-y-6 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm font-bold text-slate-500">
+        <div className="p-5 border-t border-slate-200 bg-white space-y-4 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+          <div className="space-y-2.5">
+            <div className="flex justify-between text-xs font-bold text-slate-500">
               <span className="uppercase tracking-widest text-[10px]">Subtotal Cost</span>
               <span className="text-slate-700">{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold text-slate-500">
-              <span className="uppercase tracking-widest text-[10px]">Estimated Tax (5%)</span>
+            <div className="flex justify-between text-xs font-bold text-slate-500">
+              <span className="uppercase tracking-widest text-[10px]">Estimated Tax</span>
               <span className="text-slate-700">{formatCurrency(tax)}</span>
             </div>
-            <Separator className="bg-slate-100" />
-            <div className="flex justify-between items-end">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Grand Total</span>
+
+            {/* Discount Row */}
+            <div className="pt-1 pb-1 border-y border-dashed border-slate-200 space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="uppercase tracking-widest text-[10px] font-black text-slate-600">Discount Option</span>
+                  <Badge variant="outline" className="text-[8px] font-black px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200">
+                    Max: {maxDiscountPercent}%
+                  </Badge>
+                </div>
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg">
+                  <button 
+                    type="button"
+                    className={`px-2 py-0.5 text-[10px] font-black rounded-md transition-all ${discountType === 'percent' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
+                    onClick={() => setDiscountType('percent')}
+                  >
+                    %
+                  </button>
+                  <button 
+                    type="button"
+                    className={`px-2 py-0.5 text-[10px] font-black rounded-md transition-all ${discountType === 'amount' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
+                    onClick={() => setDiscountType('amount')}
+                  >
+                    ₹
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 flex-1 focus-within:border-emerald-500">
+                  <span className="text-xs font-black text-slate-400">{discountType === 'percent' ? '%' : '₹'}</span>
+                  <input 
+                    type="number"
+                    step="0.1"
+                    className="w-full text-xs font-black text-slate-800 bg-transparent focus:outline-none"
+                    placeholder={`Enter ${discountType === 'percent' ? 'percentage' : 'amount'}`}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                  />
+                </div>
+                <span className="text-xs font-black text-emerald-600 shrink-0">
+                  - {formatCurrency(computedDiscountAmount)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-end pt-1">
+              <div>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] block">Grand Total</span>
+                <span className="text-[9px] font-bold text-slate-400">Incl. Taxes & Discounts</span>
+              </div>
               <span className="text-3xl font-black text-medical-blue tracking-tighter leading-none">{formatCurrency(total)}</span>
             </div>
           </div>
@@ -1533,52 +1671,104 @@ export default function PharmacyPOS() {
                   </div>
                 </div>
 
-                {/* Input Qty & Estimated Cost */}
-                <div className="pt-2 grid grid-cols-2 gap-4 items-center">
-                  <div className="space-y-1.5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
-                      ENTER BILLING QTY ({billingUnit === 'loose' ? 'TABLETS' : 'STRIPS'})
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="icon" 
-                        className="rounded-xl border-slate-200 hover:bg-slate-50 w-9 h-9 shadow-sm"
-                        onClick={() => setBillingQty(prev => Math.max(1, prev - 1))}
-                      >
-                        <Minus className="w-3.5 h-3.5 text-slate-600" />
-                      </Button>
-                      <Input 
-                        disabled
-                        type="number" 
-                        className="w-14 h-9 text-center font-black text-slate-800 border-slate-200 rounded-xl bg-white focus:ring-0 cursor-default text-xs"
-                        value={billingQty}
-                      />
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="icon" 
-                        className="rounded-xl border-slate-200 hover:bg-slate-50 w-9 h-9 shadow-sm"
-                        onClick={() => setBillingQty(prev => prev + 1)}
-                      >
-                        <Plus className="w-3.5 h-3.5 text-slate-600" />
-                      </Button>
+                {/* Input Qty & Custom Unit Price & Estimated Cost */}
+                <div className="pt-2 grid grid-cols-2 gap-4 items-start">
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">
+                          ENTER BILLING QTY ({billingUnit === 'loose' ? 'TABLETS' : 'STRIPS'}) *
+                        </span>
+                        <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded">
+                          Type any qty
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="icon" 
+                          className="rounded-xl border-slate-200 hover:bg-slate-50 w-9 h-9 shadow-sm shrink-0"
+                          onClick={() => setBillingQty(prev => Math.max(1, (Number(prev) || 1) - 1))}
+                        >
+                          <Minus className="w-3.5 h-3.5 text-slate-600" />
+                        </Button>
+                        <Input 
+                          type="number" 
+                          min="1"
+                          autoFocus
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addBillingSetupToCart();
+                            }
+                          }}
+                          className="w-24 h-9 text-center font-black text-slate-900 border-2 border-teal-500/80 focus:border-teal-600 focus:ring-2 focus:ring-teal-500/30 rounded-xl bg-white text-base font-mono shadow-sm cursor-text"
+                          value={billingQty === 0 ? '' : billingQty}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setBillingQty(0 as any);
+                            } else {
+                              const parsed = parseInt(val, 10);
+                              if (!isNaN(parsed) && parsed >= 0) {
+                                setBillingQty(parsed);
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!billingQty || Number(billingQty) < 1) {
+                              setBillingQty(1);
+                            }
+                          }}
+                        />
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="icon" 
+                          className="rounded-xl border-slate-200 hover:bg-slate-50 w-9 h-9 shadow-sm shrink-0"
+                          onClick={() => setBillingQty(prev => (Number(prev) || 0) + 1)}
+                        >
+                          <Plus className="w-3.5 h-3.5 text-slate-600" />
+                        </Button>
+                      </div>
+
+                      {/* Quick Qty Presets */}
+                      <div className="flex items-center gap-1 pt-1">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">Quick:</span>
+                        {[1, 2, 5, 10, 15, 30].map(q => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => setBillingQty(q)}
+                            className={`px-1.5 py-0.5 text-[10px] font-black rounded-md border transition-all ${
+                              (Number(billingQty) || 1) === q 
+                                ? 'bg-teal-600 text-white border-teal-600 shadow-2xs' 
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                            }`}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100 flex flex-col justify-center">
+                  <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100 flex flex-col justify-center h-full">
                     <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-widest block text-right">ESTIMATED COST</span>
-                    <span className="text-xl font-black text-slate-800 text-right mt-0.5 leading-none">
+                    <span className="text-2xl font-black text-slate-800 text-right mt-0.5 leading-none">
                       ₹{(
-                        billingQty * 
-                        (billingUnit === 'loose' 
-                          ? (billingSetupItem.loose_selling_price || (billingSetupItem.selling_price / (billingSetupItem.units_per_strip || 10))) 
-                          : billingSetupItem.selling_price)
+                        (Number(billingQty) || 0) * 
+                        (customUnitPrice && !isNaN(parseFloat(customUnitPrice)) 
+                          ? parseFloat(customUnitPrice) 
+                          : (billingUnit === 'loose' 
+                              ? (billingSetupItem.loose_selling_price || (billingSetupItem.selling_price / (billingSetupItem.units_per_strip || 10))) 
+                              : billingSetupItem.selling_price))
                       ).toFixed(2)}
                     </span>
                     <span className="text-[8px] text-indigo-650 text-right mt-1 leading-tight block font-black uppercase tracking-wider">
-                      DEDUCTS {billingUnit === 'loose' ? `${billingQty}` : `${billingQty * (billingSetupItem.units_per_strip || 10)}`} LOOSE UNITS
+                      DEDUCTS {billingUnit === 'loose' ? `${Number(billingQty) || 0}` : `${(Number(billingQty) || 0) * (billingSetupItem.units_per_strip || 10)}`} LOOSE UNITS
                     </span>
                   </div>
                 </div>
@@ -1599,7 +1789,7 @@ export default function PharmacyPOS() {
                   className="flex-[1.5] rounded-xl font-black text-white px-6 h-12 border-none shadow-md bg-[#108595] hover:bg-[#0e7c8a] transition-all"
                   onClick={addBillingSetupToCart}
                 >
-                  Add {billingQty} {billingUnit === 'loose' ? (billingQty === 1 ? 'Tablet' : 'Tablets') : (billingQty === 1 ? 'Strip' : 'Strips')} to Bill
+                  Add to Bill
                 </Button>
               </div>
             </div>
@@ -1609,60 +1799,146 @@ export default function PharmacyPOS() {
 
       {/* Checkout Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
-            <DialogDescription>Select payment method to complete the sale.</DialogDescription>
+            <DialogTitle className="text-xl font-black text-slate-800">Complete Payment</DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">Select payment method or split payment across multiple modes.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 border-2 hover:border-medical-blue hover:bg-medical-blue/5">
-              <CreditCard className="w-6 h-6" />
-              Cash
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-2 hover:border-medical-blue hover:bg-medical-blue/5">
-              <CreditCard className="w-6 h-6" />
-              Card
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-2 hover:border-medical-blue hover:bg-medical-blue/5">
-              <CreditCard className="w-6 h-6" />
-              UPI / QR
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-2 hover:border-medical-blue hover:bg-medical-blue/5">
-              <User className="w-6 h-6" />
-              Credit
-            </Button>
+
+          <div className="space-y-4 py-3">
+            <div className="grid grid-cols-2 gap-2.5">
+              {['Cash', 'UPI', 'Card', 'Credit', 'Multi-mode'].map((mode) => (
+                <Button 
+                  key={mode}
+                  type="button"
+                  variant="outline" 
+                  className={`h-14 font-black text-xs flex items-center justify-between px-4 border-2 rounded-xl transition-all ${
+                    paymentMode === mode 
+                      ? 'border-medical-blue bg-medical-blue/10 text-medical-blue shadow-sm' 
+                      : 'border-slate-150 hover:border-slate-300 text-slate-700'
+                  }`}
+                  onClick={() => {
+                    setPaymentMode(mode);
+                    if (mode === 'Multi-mode' && (multiSplit.cash === 0 && multiSplit.upi === 0)) {
+                      setMultiSplit({ cash: Math.round(total / 2), upi: Math.round(total / 2), card: 0, other: 0 });
+                    }
+                  }}
+                >
+                  <span>{mode === 'UPI' ? 'UPI / QR' : mode}</span>
+                  {paymentMode === mode && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
+                </Button>
+              ))}
+            </div>
+
+            {paymentMode === 'Multi-mode' && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-in fade-in">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Split Payment Breakdown</span>
+                  <span className="text-xs font-black text-medical-blue">Total Needed: {formatCurrency(total)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500">Cash (₹)</Label>
+                    <Input 
+                      type="number" 
+                      className="h-9 text-xs font-bold bg-white"
+                      value={multiSplit.cash}
+                      onChange={(e) => setMultiSplit(prev => ({ ...prev, cash: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500">UPI / QR (₹)</Label>
+                    <Input 
+                      type="number" 
+                      className="h-9 text-xs font-bold bg-white"
+                      value={multiSplit.upi}
+                      onChange={(e) => setMultiSplit(prev => ({ ...prev, upi: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500">Card (₹)</Label>
+                    <Input 
+                      type="number" 
+                      className="h-9 text-xs font-bold bg-white"
+                      value={multiSplit.card}
+                      onChange={(e) => setMultiSplit(prev => ({ ...prev, card: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500">Other / Credit (₹)</Label>
+                    <Input 
+                      type="number" 
+                      className="h-9 text-xs font-bold bg-white"
+                      value={multiSplit.other}
+                      onChange={(e) => setMultiSplit(prev => ({ ...prev, other: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] font-bold flex justify-between pt-1">
+                  <span className="text-slate-500">Split Total Entered:</span>
+                  <span className={Math.abs((multiSplit.cash + multiSplit.upi + multiSplit.card + multiSplit.other) - total) < 0.5 ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
+                    ₹{(multiSplit.cash + multiSplit.upi + multiSplit.card + multiSplit.other).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Cancel</Button>
-            <Button className="bg-medical-blue" onClick={completeSale}>Confirm Payment</Button>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setIsCheckoutOpen(false)}>Cancel</Button>
+            <Button className="bg-medical-blue hover:bg-medical-blue/90 font-black rounded-xl" onClick={completeSale}>
+              Confirm & Complete Sale ({formatCurrency(total)})
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Success Dialog */}
       <Dialog open={isSuccessOpen} onOpenChange={setIsSuccessOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+        <DialogContent className="sm:max-w-[420px]">
+          <div className="flex flex-col items-center justify-center py-6 space-y-4">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
               <CheckCircle2 className="w-10 h-10" />
             </div>
             <div className="text-center">
-              <h3 className="text-xl font-bold">Payment Successful!</h3>
-              <p className="text-sm text-muted-foreground">Invoice #{lastOrder?.invoiceId} has been generated.</p>
+              <h3 className="text-xl font-black text-slate-800">Billing Completed!</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Invoice #{lastOrder?.invoiceId} has been generated.</p>
             </div>
-            <div className="w-full flex flex-col gap-2 pt-4">
-              <div className="flex gap-2 w-full">
-                <Button variant="outline" className="flex-grow gap-1.5 text-xs h-9 justify-center items-center" onClick={printReceipt}>
-                  <Printer className="w-3.5 h-3.5" />
-                  Print Receipt
+
+            <div className="w-full flex flex-col gap-2 pt-2">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider text-center block">
+                Select Bill Print Format
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant="outline" 
+                  className="gap-1.5 text-xs h-11 font-bold border-emerald-500 text-emerald-700 hover:bg-emerald-50 rounded-xl" 
+                  onClick={() => printTaxInvoice('A4_HALF')}
+                >
+                  <Printer className="w-4 h-4" />
+                  A4 Half Page
                 </Button>
-                <Button variant="outline" className="flex-grow gap-1.5 text-xs h-9 justify-center items-center border-emerald-500 text-emerald-600 hover:bg-emerald-50" onClick={printTaxInvoice}>
-                  <Printer className="w-3.5 h-3.5" />
-                  Print Tax Bill
+                <Button 
+                  variant="outline" 
+                  className="gap-1.5 text-xs h-11 font-bold border-blue-500 text-blue-700 hover:bg-blue-50 rounded-xl" 
+                  onClick={() => printTaxInvoice('A4_FULL')}
+                >
+                  <Printer className="w-4 h-4" />
+                  A4 Full Page
                 </Button>
               </div>
-              <Button className="w-full bg-medical-blue h-9 text-xs" onClick={() => setIsSuccessOpen(false)}>
-                New Sale
+
+              <Button 
+                variant="ghost" 
+                className="w-full text-xs font-bold text-slate-500 gap-1.5 h-9" 
+                onClick={printReceipt}
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print Small Slip / Thermal Receipt
+              </Button>
+
+              <Button className="w-full bg-medical-blue h-11 font-black text-xs rounded-xl mt-2" onClick={() => setIsSuccessOpen(false)}>
+                Start New Sale
               </Button>
             </div>
           </div>
@@ -1947,9 +2223,10 @@ export default function PharmacyPOS() {
                     type="number"
                     min="1"
                     placeholder="1"
+                    onFocus={(e) => e.target.select()}
                     value={customLooseItem.quantity}
                     onChange={(e) => setCustomLooseItem({...customLooseItem, quantity: e.target.value})}
-                    className="rounded-xl border-slate-200/80 h-10 focus:ring-amber-500/30 focus:border-amber-500"
+                    className="rounded-xl border-slate-200/80 h-10 focus:ring-amber-500/30 focus:border-amber-500 font-mono font-bold"
                   />
                 </div>
               </div>

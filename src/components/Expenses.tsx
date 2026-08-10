@@ -58,11 +58,16 @@ export default function Expenses() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [paymentModeFilter, setPaymentModeFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [newExpense, setNewExpense] = useState({ 
     expense_date: new Date().toISOString().split('T')[0], 
     category: 'Utilities', 
     description: '', 
     amount: 0,
+    payment_mode: 'Cash',
     status: 'Paid'
   });
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -86,7 +91,7 @@ export default function Expenses() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, period, dateRange]);
+  }, [searchQuery, period, dateRange, paymentModeFilter, categoryFilter, startDate, endDate]);
 
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   const [users, setUsers] = useState<any[]>(() => {
@@ -137,6 +142,7 @@ export default function Expenses() {
 
     const expenseData = {
       ...newExpense,
+      payment_mode: newExpense.payment_mode || 'Cash',
       created_by: currentUser?.id || 'u-accounts'
     };
 
@@ -150,6 +156,7 @@ export default function Expenses() {
         category: 'Utilities', 
         description: '', 
         amount: 0,
+        payment_mode: 'Cash',
         status: 'Paid'
       });
       setIsAddExpenseOpen(false);
@@ -175,6 +182,7 @@ export default function Expenses() {
       category: updates.category,
       description: updates.description,
       amount: Number(updates.amount),
+      payment_mode: updates.payment_mode || updates.payment_method || 'Cash',
       status: updates.status,
       created_by: editingExpense.created_by || editingExpense.issued_by
     });
@@ -220,11 +228,12 @@ export default function Expenses() {
   };
 
   const handleExportExpenses = () => {
-    const headers = ['Date', 'Category', 'Description', 'Amount', 'Status'];
-    const rows = expenses.map(e => [
+    const headers = ['Date', 'Category', 'Description', 'Payment Mode', 'Amount', 'Status'];
+    const rows = filteredExpenses.map(e => [
       e.expense_date,
       e.category,
-      e.description,
+      `"${(e.description || '').replace(/"/g, '""')}"`,
+      e.payment_mode || e.payment_method || 'Cash',
       e.amount,
       e.status
     ]);
@@ -239,12 +248,15 @@ export default function Expenses() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    toast.success('Expenses exported as CSV');
+    toast.success('Filtered expenses exported as CSV');
   };
 
   const getLocalDateStrFromVal = (val: any): string => getLocalDateStr(val);
 
   const getPeriodLabel = () => {
+    if (startDate || endDate) {
+      return `Custom (${startDate || 'Start'} to ${endDate || 'End'})`;
+    }
     switch (period) {
       case 'today': return 'Today';
       case 'yesterday': return 'Yesterday';
@@ -252,74 +264,106 @@ export default function Expenses() {
       case 'this-month': return 'This Month';
       case 'last-month': return 'Last Month';
       case 'this-year': return 'This Year';
-      case 'custom': return 'Custom';
+      case 'custom': return 'Custom Range';
       default: return 'All Time';
     }
   };
 
   const filteredExpenses = expenses.filter(e => {
-    // 1. Search Query Filter
-    const matchesSearch = (e.description?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-                          (e.category?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+    // 1. Search Query Filter (description, category, payment mode, date, amount)
+    const modeStr = e.payment_mode || e.payment_method || 'Cash';
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q || 
+      (e.description?.toLowerCase() || '').includes(q) ||
+      (e.category?.toLowerCase() || '').includes(q) ||
+      modeStr.toLowerCase().includes(q) ||
+      String(e.amount || '').includes(q) ||
+      (e.expense_date || '').includes(q);
     if (!matchesSearch) return false;
 
-    // 2. Date-wise & Period-wise Filter
+    // 2. Category Filter
+    if (categoryFilter !== 'all' && (e.category || '').toLowerCase() !== categoryFilter.toLowerCase()) {
+      return false;
+    }
+
+    // 3. Payment Mode Filter
+    if (paymentModeFilter !== 'all') {
+      const pm = (e.payment_mode || e.payment_method || 'Cash').toLowerCase();
+      if (paymentModeFilter === 'cash' && pm !== 'cash') return false;
+      if (paymentModeFilter === 'upi' && !pm.includes('upi')) return false;
+      if (paymentModeFilter === 'card' && !pm.includes('card')) return false;
+      if (paymentModeFilter === 'netbanking' && !pm.includes('net') && !pm.includes('bank')) return false;
+      if (paymentModeFilter === 'cheque' && !pm.includes('cheque')) return false;
+      if (paymentModeFilter === 'other' && (pm === 'cash' || pm.includes('upi') || pm.includes('card') || pm.includes('net') || pm.includes('cheque'))) return false;
+    }
+
+    // 4. Date-wise & Period-wise Filter
     const dateVal = e.expense_date || e.created_at;
     if (!dateVal) return false;
     const expDateStr = getLocalDateStrFromVal(dateVal);
     if (!expDateStr) return false;
 
-    const now = new Date();
-    const todayStr = getLocalDateStrFromVal(now);
-    const [y, m] = expDateStr.split('-').map(Number);
+    // Direct Start & End date inputs override
+    if (startDate && expDateStr < startDate) return false;
+    if (endDate && expDateStr > endDate) return false;
 
-    if (period === 'today') {
-      return expDateStr === todayStr;
+    if (!startDate && !endDate && period !== 'all') {
+      const now = new Date();
+      const todayStr = getLocalDateStrFromVal(now);
+      const [y, m] = expDateStr.split('-').map(Number);
+
+      if (period === 'today') {
+        return expDateStr === todayStr;
+      }
+
+      if (period === 'yesterday') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = getLocalDateStrFromVal(yesterday);
+        return expDateStr === yesterdayStr;
+      }
+
+      if (period === 'this-week') {
+        const startOfWeek = new Date();
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        const startOfWeekStr = getLocalDateStrFromVal(startOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        const endOfWeekStr = getLocalDateStrFromVal(endOfWeek);
+        return expDateStr >= startOfWeekStr && expDateStr <= endOfWeekStr;
+      }
+
+      if (period === 'this-month') {
+        return m === (now.getMonth() + 1) && y === now.getFullYear();
+      }
+
+      if (period === 'last-month') {
+        const lastMonthDate = new Date();
+        lastMonthDate.setMonth(now.getMonth() - 1);
+        const lm = lastMonthDate.getMonth() + 1;
+        const ly = lastMonthDate.getFullYear();
+        return m === lm && y === ly;
+      }
+
+      if (period === 'this-year') {
+        return y === now.getFullYear();
+      }
+
+      if (period === 'custom' && dateRange.start && dateRange.end) {
+        const start = getLocalDateStrFromVal(dateRange.start);
+        const end = getLocalDateStrFromVal(dateRange.end);
+        return expDateStr >= start && expDateStr <= end;
+      }
     }
 
-    if (period === 'yesterday') {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = getLocalDateStrFromVal(yesterday);
-      return expDateStr === yesterdayStr;
-    }
-
-    if (period === 'this-week') {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      const startOfWeekStr = getLocalDateStrFromVal(startOfWeek);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      const endOfWeekStr = getLocalDateStrFromVal(endOfWeek);
-      return expDateStr >= startOfWeekStr && expDateStr <= endOfWeekStr;
-    }
-
-    if (period === 'this-month') {
-      return m === (now.getMonth() + 1) && y === now.getFullYear();
-    }
-
-    if (period === 'last-month') {
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(now.getMonth() - 1);
-      const lm = lastMonthDate.getMonth() + 1;
-      const ly = lastMonthDate.getFullYear();
-      return m === lm && y === ly;
-    }
-
-    if (period === 'this-year') {
-      return y === now.getFullYear();
-    }
-
-    if (period === 'custom' && dateRange.start && dateRange.end) {
-      const start = getLocalDateStrFromVal(dateRange.start);
-      const end = getLocalDateStrFromVal(dateRange.end);
-      return expDateStr >= start && expDateStr <= end;
-    }
-
-    return true; // default/all
+    return true;
   });
 
   const totalFiltered = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const cashExpenses = filteredExpenses
+    .filter(e => (e.payment_mode || e.payment_method || 'Cash').toLowerCase() === 'cash')
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const digitalExpenses = totalFiltered - cashExpenses;
   const utilityBills = filteredExpenses
     .filter(e => e.category === 'Utilities')
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -403,20 +447,41 @@ export default function Expenses() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Payment Status</Label>
-                  <Select 
-                    value={newExpense.status}
-                    onValueChange={(v) => setNewExpense({...newExpense, status: v})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Paid">Paid</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Payment Mode</Label>
+                    <Select 
+                      value={newExpense.payment_mode || 'Cash'}
+                      onValueChange={(v) => setNewExpense({...newExpense, payment_mode: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="UPI">UPI / QR</SelectItem>
+                        <SelectItem value="Card">Card</SelectItem>
+                        <SelectItem value="Net Banking">Net Banking</SelectItem>
+                        <SelectItem value="Cheque">Cheque</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Payment Status</Label>
+                    <Select 
+                      value={newExpense.status}
+                      onValueChange={(v) => setNewExpense({...newExpense, status: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Paid">Paid</SelectItem>
+                        <SelectItem value="Pending">Pending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -479,20 +544,41 @@ export default function Expenses() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Payment Status</Label>
-                    <Select 
-                      value={editingExpense.status}
-                      onValueChange={(v) => setEditingExpense({...editingExpense, status: v})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Paid">Paid</SelectItem>
-                        <SelectItem value="Pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Payment Mode</Label>
+                      <Select 
+                        value={editingExpense.payment_mode || editingExpense.payment_method || 'Cash'}
+                        onValueChange={(v) => setEditingExpense({...editingExpense, payment_mode: v})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="UPI">UPI / QR</SelectItem>
+                          <SelectItem value="Card">Card</SelectItem>
+                          <SelectItem value="Net Banking">Net Banking</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Payment Status</Label>
+                      <Select 
+                        value={editingExpense.status}
+                        onValueChange={(v) => setEditingExpense({...editingExpense, status: v})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Paid">Paid</SelectItem>
+                          <SelectItem value="Pending">Pending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
@@ -508,100 +594,203 @@ export default function Expenses() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-none shadow-sm">
-          <CardContent className="p-6 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1">Total Expenses ({getPeriodLabel()})</p>
-              <h3 className="text-3xl font-bold text-rose-600">{formatCurrency(totalFiltered)}</h3>
+              <p className="text-[11px] text-muted-foreground font-black uppercase tracking-wider mb-1">Total Filtered Expenses</p>
+              <h3 className="text-2xl font-black text-rose-600">{formatCurrency(totalFiltered)}</h3>
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">{getPeriodLabel()}</p>
             </div>
             <div className="p-3 rounded-xl bg-rose-50 text-rose-600">
-              <TrendingDown className="w-6 h-6" />
+              <TrendingDown className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
-          <CardContent className="p-6 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1">Utility Bills</p>
-              <h3 className="text-3xl font-bold text-blue-600">{formatCurrency(utilityBills)}</h3>
+              <p className="text-[11px] text-muted-foreground font-black uppercase tracking-wider mb-1">Cash Expenses</p>
+              <h3 className="text-2xl font-black text-slate-800">{formatCurrency(cashExpenses)}</h3>
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">Paid in Cash</p>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-100 text-slate-700">
+              <Wallet className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] text-muted-foreground font-black uppercase tracking-wider mb-1">Digital / Cheque</p>
+              <h3 className="text-2xl font-black text-blue-600">{formatCurrency(digitalExpenses)}</h3>
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">UPI, Card, NetBanking</p>
             </div>
             <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-              <Wallet className="w-6 h-6" />
+              <Wallet className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">
-          <CardContent className="p-6 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1">Pending Vouchers</p>
-              <h3 className="text-3xl font-bold text-amber-600">{pendingVouchers}</h3>
+              <p className="text-[11px] text-muted-foreground font-black uppercase tracking-wider mb-1">Pending Vouchers</p>
+              <h3 className="text-2xl font-black text-amber-600">{pendingVouchers}</h3>
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">Unsettled Payments</p>
             </div>
             <div className="p-3 rounded-xl bg-amber-50 text-amber-600">
-              <Receipt className="w-6 h-6" />
+              <Receipt className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       <Card className="border-none shadow-sm">
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-          <CardTitle className="text-lg">Expense Log</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search expense..." 
-                className="pl-10 bg-slate-50 border-none h-9 w-full" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+        <CardHeader className="flex flex-col gap-4 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg font-black text-slate-800">Expense Log</CardTitle>
+              <CardDescription className="text-xs">
+                Showing <span className="font-bold text-slate-900">{filteredExpenses.length}</span> record(s) matching selected filters. Total Amount: <span className="font-black text-rose-600">{formatCurrency(totalFiltered)}</span>
+              </CardDescription>
             </div>
-            
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[150px] h-9 bg-slate-50 border-none rounded-md font-medium text-slate-700 flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-medical-blue shrink-0" />
-                <SelectValue placeholder="Period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="yesterday">Yesterday</SelectItem>
-                <SelectItem value="this-week">This Week</SelectItem>
-                <SelectItem value="this-month">This Month</SelectItem>
-                <SelectItem value="last-month">Last Month</SelectItem>
-                <SelectItem value="this-year">This Year</SelectItem>
-                <SelectItem value="custom">Custom Range</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {period === 'custom' && (
-              <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 p-1 rounded-md text-slate-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
-                  type="date" 
-                  className="h-7 w-28 text-[11px] border-none font-medium bg-transparent focus-visible:ring-0" 
-                  value={dateRange.start} 
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                />
-                <span className="text-slate-400 text-xs px-0.5">-</span>
-                <Input 
-                  type="date" 
-                  className="h-7 w-28 text-[11px] border-none font-medium bg-transparent focus-visible:ring-0" 
-                  value={dateRange.end} 
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  placeholder="Search description, category, date..." 
+                  className="pl-10 bg-slate-50 border-none h-9 w-full text-xs" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-            )}
+
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[130px] h-9 bg-white border-slate-200 text-xs font-semibold">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <SelectValue placeholder="Category" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="Utilities">Utilities</SelectItem>
+                  <SelectItem value="Medical Supplies">Medical Supplies</SelectItem>
+                  <SelectItem value="Maintenance">Maintenance</SelectItem>
+                  <SelectItem value="Salary">Salary</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={paymentModeFilter} onValueChange={setPaymentModeFilter}>
+                <SelectTrigger className="w-[135px] h-9 bg-white border-slate-200 text-xs font-semibold">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Wallet className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <SelectValue placeholder="Payment Mode" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Modes</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI / QR</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="netbanking">Net Banking</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={period} onValueChange={(v) => {
+                setPeriod(v);
+                if (v !== 'custom') {
+                  setDateRange({ start: '', end: '' });
+                }
+              }}>
+                <SelectTrigger className="w-[130px] h-9 bg-white border-slate-200 text-xs font-semibold">
+                  <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="this-week">This Week</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
+                  <SelectItem value="last-month">Last Month</SelectItem>
+                  <SelectItem value="this-year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Date Search (From / To inputs) */}
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 h-9">
+                <span className="text-[9px] uppercase font-bold text-muted-foreground px-1">From:</span>
+                <Input 
+                  type="date" 
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-7 w-28 text-[11px] border-none bg-transparent font-bold p-0 focus-visible:ring-0"
+                />
+                <span className="text-[9px] uppercase font-bold text-muted-foreground px-1">To:</span>
+                <Input 
+                  type="date" 
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-7 w-28 text-[11px] border-none bg-transparent font-bold p-0 focus-visible:ring-0"
+                />
+                {(startDate || endDate || paymentModeFilter !== 'all' || categoryFilter !== 'all' || searchQuery || period !== 'all') && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 text-[10px] uppercase font-bold"
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                      setPaymentModeFilter('all');
+                      setCategoryFilter('all');
+                      setSearchQuery('');
+                      setPeriod('all');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </CardHeader>
+
+        {/* Filtered Expenses Banner */}
+        <div className="mx-6 mb-4 p-3.5 bg-gradient-to-r from-rose-50/80 via-slate-50 to-amber-50/60 border border-rose-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-xs">
+          <div className="flex flex-wrap items-center gap-6">
+            <div>
+              <span className="text-[10px] font-black uppercase text-rose-800 tracking-wider block">Total Filtered Expenses</span>
+              <span className="text-2xl font-black text-rose-700 leading-none">{formatCurrency(totalFiltered)}</span>
+            </div>
+            <div className="h-8 w-px bg-rose-200 hidden sm:block" />
+            <div>
+              <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Cash Expenses</span>
+              <span className="text-lg font-black text-slate-800 leading-none">{formatCurrency(cashExpenses)}</span>
+            </div>
+            <div className="h-8 w-px bg-rose-200 hidden sm:block" />
+            <div>
+              <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">Digital / Online</span>
+              <span className="text-lg font-black text-blue-700 leading-none">{formatCurrency(digitalExpenses)}</span>
+            </div>
+          </div>
+          <Badge variant="outline" className="bg-white text-rose-700 border-rose-300 font-extrabold text-xs px-3 py-1.5 shadow-2xs">
+            {filteredExpenses.length} Expense Record{filteredExpenses.length === 1 ? '' : 's'}
+          </Badge>
+        </div>
+
         <CardContent className="p-0">
           <div className="overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-slate-100">
+                <TableRow className="hover:bg-transparent border-slate-100 text-[11px] uppercase tracking-wider font-bold text-slate-500">
                   <TableHead className="whitespace-nowrap">Date</TableHead>
                   <TableHead className="whitespace-nowrap">Category</TableHead>
                   <TableHead className="whitespace-nowrap">Description</TableHead>
+                  <TableHead className="whitespace-nowrap">Payment Mode</TableHead>
                   <TableHead className="whitespace-nowrap">Amount</TableHead>
                   <TableHead className="whitespace-nowrap">Status</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
@@ -610,8 +799,8 @@ export default function Expenses() {
               <TableBody>
                 {filteredExpenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium">
-                      No matching expense records found for the selected period.
+                    <TableCell colSpan={7} className="text-center py-10 text-slate-400 font-medium">
+                      No matching expense records found for the selected filter criteria.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -619,16 +808,21 @@ export default function Expenses() {
                     const startIndex = (currentPage - 1) * itemsPerPage;
                     const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
                     return paginatedExpenses.map((expense) => (
-                      <TableRow key={expense.id} className="border-slate-50">
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(expense.expense_date)}</TableCell>
+                      <TableRow key={expense.id} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap font-medium">{formatDate(expense.expense_date)}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <Badge variant="outline" className="text-[10px] font-bold uppercase">{expense.category}</Badge>
+                          <Badge variant="outline" className="text-[10px] font-bold uppercase border-slate-200">{expense.category}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm font-medium whitespace-nowrap">{expense.description}</TableCell>
-                        <TableCell className="font-bold whitespace-nowrap">{formatCurrency(expense.amount)}</TableCell>
+                        <TableCell className="text-sm font-semibold text-slate-800 whitespace-nowrap">{expense.description}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant="secondary" className="text-[10px] font-extrabold uppercase bg-slate-100 text-slate-700 border border-slate-200/60">
+                            {expense.payment_mode || expense.payment_method || 'Cash'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-bold text-slate-900 whitespace-nowrap">{formatCurrency(expense.amount)}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           <Badge variant="secondary" className={`border-none ${
-                            expense.status === 'Paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                            expense.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 font-bold' : 'bg-amber-50 text-amber-600 font-bold'
                           }`}>
                             {expense.status}
                           </Badge>
