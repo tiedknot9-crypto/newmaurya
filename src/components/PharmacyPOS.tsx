@@ -614,7 +614,6 @@ export default function PharmacyPOS() {
   const maxDiscountPercent = Number((pharmacySettings as any)?.maxDiscountPercent) || 20;
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = cart.reduce((sum, item) => sum + (item.price * item.quantity * ((item as any).taxPercentage || 0) / 100), 0);
 
   let computedDiscountAmount = 0;
   let appliedDiscountPercent = 0;
@@ -629,7 +628,17 @@ export default function PharmacyPOS() {
     appliedDiscountPercent = subtotal > 0 ? (computedDiscountAmount / subtotal) * 100 : 0;
   }
 
-  const total = Math.max(0, subtotal + tax - computedDiscountAmount);
+  const discountedSubtotal = Math.max(0, subtotal - computedDiscountAmount);
+
+  const tax = cart.reduce((sum, item) => {
+    const itemGross = item.price * item.quantity;
+    const itemDisc = subtotal > 0 ? (itemGross / subtotal) * computedDiscountAmount : 0;
+    const itemTaxable = Math.max(0, itemGross - itemDisc);
+    const itemTaxRate = Number((item as any).taxPercentage || (item as any).tax_percentage || 0);
+    return sum + (itemTaxable * (itemTaxRate / 100));
+  }, 0);
+
+  const total = Math.max(0, discountedSubtotal + tax);
 
   const handleCheckout = () => {
     if (cart.length === 0) {

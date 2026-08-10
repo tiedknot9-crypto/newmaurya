@@ -170,9 +170,10 @@ export function generatePharmacyInvoiceHtml(
   const invoiceDate = formatDateToInvoice(rawDate);
   const invoiceNo = bill.invoiceId || bill.sequenceNumber || (bill.id ? bill.id.substring(0, 8).toUpperCase() : 'TEMP-01');
 
-  // Extract bill-level discounts
+  // Extract bill-level discounts and tax
   const billDiscountAmount = Number(bill.discountAmount || bill.discount_amount || 0);
   const billDiscountPercent = Number(bill.discountPercent || bill.discount_percent || 0);
+  const billTaxAmount = Number(bill.taxAmount || bill.tax_amount || bill.tax || 0);
 
   // Parse items
   let rawItems = bill.items || bill.invoice_items || [];
@@ -190,7 +191,7 @@ export function generatePharmacyInvoiceHtml(
 
     const price = Number(item.price || item.unit_price || 0);
     const quantity = Number(item.quantity || 1);
-    const taxPercentage = Number(item.taxPercentage || item.tax_percentage || invItem?.tax_percentage || 0);
+    const taxPercentage = Number(item.taxPercentage ?? item.tax_percentage ?? invItem?.tax_percentage ?? invItem?.taxPercentage ?? 0);
     const batchNo = item.batchNumber || item.batch_number || invItem?.batch_number || invItem?.batchNumber || 'A1';
 
     // 1. Manufacturing Date
@@ -213,7 +214,7 @@ export function generatePharmacyInvoiceHtml(
         if (!isNaN(expDate.getTime())) {
           const mfgDate = new Date(expDate.getFullYear() - 2, expDate.getMonth());
           const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          mfgDateStr = `${monthsShort[mfgDate.getMonth()]} ${expDate.getFullYear()}`;
+          mfgDateStr = `${monthsShort[mfgDate.getMonth()]} ${mfgDate.getFullYear()}`;
         }
       } catch {}
     }
@@ -264,8 +265,17 @@ export function generatePharmacyInvoiceHtml(
     effectiveBillDiscPct = (billDiscountAmount / grossSubtotal) * 100;
   }
 
-  // Hydrate items with final discount percentage and net taxable values
-  const hydratedItems = preItems.map(item => {
+  // Pre-calculate line taxable values
+  let preTaxableSubtotal = 0;
+  const itemsWithTaxable = preItems.map(item => {
+    let lineTaxable = item.grossAmount;
+    if (effectiveBillDiscPct > 0 && item.explicitDiscPct === 0) {
+      lineTaxable = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
+    } else if (item.explicitDiscPct > 0) {
+      lineTaxable = item.grossAmount * (1 - (item.explicitDiscPct / 100));
+    }
+    preTaxableSubtotal += lineTaxable;
+
     let finalDiscPct = item.explicitDiscPct;
     if (finalDiscPct === 0) {
       if (effectiveBillDiscPct > 0) {
@@ -275,18 +285,32 @@ export function generatePharmacyInvoiceHtml(
       }
     }
 
-    let lineTaxable = item.grossAmount;
-    if (effectiveBillDiscPct > 0 && item.explicitDiscPct === 0) {
-      lineTaxable = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
-    } else if (item.explicitDiscPct > 0) {
-      lineTaxable = item.grossAmount * (1 - (item.explicitDiscPct / 100));
-    }
+    return {
+      ...item,
+      lineTaxable,
+      finalDiscPct
+    };
+  });
+
+  // Infer tax rate if bill-level tax was recorded but items defaulted to 0%
+  const totalItemTaxSpecified = itemsWithTaxable.reduce((sum, i) => sum + (i.lineTaxable * i.taxPercentage / 100), 0);
+  let inferredTaxRate = 0;
+  if (totalItemTaxSpecified === 0 && billTaxAmount > 0 && preTaxableSubtotal > 0) {
+    inferredTaxRate = (billTaxAmount / preTaxableSubtotal) * 100;
+  }
+
+  // Hydrate items with final discount percentage and net taxable values
+  const hydratedItems = itemsWithTaxable.map(item => {
+    const finalTaxRate = item.taxPercentage > 0 ? item.taxPercentage : inferredTaxRate;
+    const lineTaxAmount = item.lineTaxable * (finalTaxRate / 100);
 
     return {
       ...item,
       mrp: item.unitMrp,
-      discount: Math.min(100, Math.max(0, parseFloat(finalDiscPct.toFixed(1)))),
-      taxableValue: lineTaxable
+      discount: Math.min(100, Math.max(0, parseFloat(item.finalDiscPct.toFixed(1)))),
+      taxPercentage: finalTaxRate,
+      taxableValue: item.lineTaxable,
+      taxAmount: lineTaxAmount
     };
   });
 
@@ -299,7 +323,7 @@ export function generatePharmacyInvoiceHtml(
   hydratedItems.forEach(item => {
     const key = item.hsnCode;
     const taxRate = item.taxPercentage;
-    const taxAmount = item.taxableValue * (taxRate / 100);
+    const taxAmount = item.taxAmount;
     
     if (hsnMap[key]) {
       hsnMap[key].taxableValue += item.taxableValue;
@@ -316,7 +340,9 @@ export function generatePharmacyInvoiceHtml(
 
   const hsnRowsArray = Object.values(hsnMap);
   const totalTaxCalculated = hsnRowsArray.reduce((sum, row) => sum + row.taxAmount, 0);
-  const grandTotal = Math.max(0, Number(bill.totalAmount || bill.total_amount || (calculatedTaxableSubtotal + totalTaxCalculated)));
+
+  // Grand total is strictly taxable subtotal + total tax calculated
+  const grandTotal = Math.max(0, calculatedTaxableSubtotal + totalTaxCalculated);
 
   const totalInWordsString = numberToWords(grandTotal);
 
@@ -882,33 +908,43 @@ export function generatePharmacyInvoiceHtml(
             <table class="bottom-layout">
               <tr>
                 <td style="width: 50%;">
-                  <div style="font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; font-size: 10px;">Tax Breakdown (GST)</div>
+                  <div style="font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; font-size: 10px;">Tax Breakdown (GST - CGST & SGST)</div>
                   <table class="hsn-table">
                     <thead>
                       <tr>
                         <th>HSN / SAC</th>
                         <th>Taxable Value</th>
-                        <th>IGST Avg %</th>
-                        <th>IGST Amount</th>
-                        <th>Total</th>
+                        <th>CGST %</th>
+                        <th>CGST Amt</th>
+                        <th>SGST %</th>
+                        <th>SGST Amt</th>
+                        <th>Total Tax</th>
                       </tr>
                     </thead>
                     <tbody>
-                      ${hsnRowsArray.map(row => `
-                        <tr>
-                          <td class="text-center">${row.hsn}</td>
-                          <td class="text-right">${row.taxableValue.toFixed(2)}</td>
-                          <td class="text-center">${row.taxRate.toFixed(1)}%</td>
-                          <td class="text-right">${row.taxAmount.toFixed(2)}</td>
-                          <td class="text-right">${(row.taxableValue + row.taxAmount).toFixed(2)}</td>
-                        </tr>
-                      `).join('')}
+                      ${hsnRowsArray.map(row => {
+                        const halfRate = row.taxRate / 2;
+                        const halfTax = row.taxAmount / 2;
+                        return `
+                          <tr>
+                            <td class="text-center">${row.hsn}</td>
+                            <td class="text-right">${row.taxableValue.toFixed(2)}</td>
+                            <td class="text-center">${halfRate.toFixed(1)}%</td>
+                            <td class="text-right">${halfTax.toFixed(2)}</td>
+                            <td class="text-center">${halfRate.toFixed(1)}%</td>
+                            <td class="text-right">${halfTax.toFixed(2)}</td>
+                            <td class="text-right">${row.taxAmount.toFixed(2)}</td>
+                          </tr>
+                        `;
+                      }).join('')}
                       <tr style="font-weight: 800; background: #eef2fd;">
                         <td>Total</td>
                         <td class="text-right">${calculatedTaxableSubtotal.toFixed(2)}</td>
                         <td class="text-center">-</td>
-                        <td class="text-right">${totalTaxCalculated.toFixed(2)}</td>
-                        <td class="text-right">₹${grandTotal.toFixed(2)}</td>
+                        <td class="text-right">${(totalTaxCalculated / 2).toFixed(2)}</td>
+                        <td class="text-center">-</td>
+                        <td class="text-right">${(totalTaxCalculated / 2).toFixed(2)}</td>
+                        <td class="text-right">₹${totalTaxCalculated.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
