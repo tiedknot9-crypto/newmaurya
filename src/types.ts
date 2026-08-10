@@ -178,6 +178,36 @@ export interface PharmacyPurchaseReturn {
   notes?: string;
 }
 
+export interface PharmacyPatientReturn {
+  id: string;
+  returnNo: string;
+  date: string;
+  patientId?: string | null;
+  patientName: string;
+  patientPhone?: string;
+  mrn?: string;
+  patientType: 'OPD' | 'IPD' | 'Walk-in';
+  ipdNo?: string;
+  bedNo?: string;
+  originalBillNo?: string;
+  prescribingDoctor?: string;
+  items: Array<{
+    itemId?: string;
+    name: string;
+    quantity: number;
+    isLoose?: boolean;
+    unitType?: string;
+    price: number;
+    total: number;
+    reason?: string;
+  }>;
+  totalRefundAmount: number;
+  refundMode: string;
+  notes?: string;
+  restocked?: boolean;
+  performedBy?: string;
+}
+
 export interface OperationTheatre {
   id: string;
   name: string;

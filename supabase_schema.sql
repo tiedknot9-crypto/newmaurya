@@ -30,6 +30,7 @@
 -- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_date DATE;
 -- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_bill_no TEXT;
 -- CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), return_no TEXT UNIQUE NOT NULL, return_number TEXT, date TIMESTAMPTZ DEFAULT NOW(), vendor_name TEXT NOT NULL, vendor_phone TEXT, purchase_bill_no TEXT, item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL, item_name TEXT NOT NULL, batch_number TEXT, quantity INTEGER NOT NULL DEFAULT 1, unit_type TEXT DEFAULT 'unit', purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00, total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, reason TEXT NOT NULL DEFAULT 'Near Expiry', debit_note_no TEXT, performed_by TEXT, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+-- CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), return_no TEXT UNIQUE NOT NULL, date TIMESTAMPTZ DEFAULT NOW(), patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL, patient_name TEXT NOT NULL, patient_phone TEXT, mrn TEXT, patient_type TEXT DEFAULT 'OPD', ipd_no TEXT, bed_no TEXT, original_bill_no TEXT, prescribing_doctor TEXT, items JSONB DEFAULT '[]'::jsonb, total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, refund_mode TEXT DEFAULT 'Cash Refund', notes TEXT, restocked BOOLEAN DEFAULT TRUE, performed_by TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 -- ===============================================
 
 -- 1. Profiles / Users (Optional reference to auth.users handled manually without FK block constraint)
@@ -561,6 +562,30 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 10.3 Pharmacy Patient Returns (Tracking OPD/IPD Patient Medicine Returns & Refunds)
+CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+  patient_name TEXT NOT NULL,
+  patient_phone TEXT,
+  mrn TEXT,
+  patient_type TEXT DEFAULT 'OPD',
+  ipd_no TEXT,
+  bed_no TEXT,
+  original_bill_no TEXT,
+  prescribing_doctor TEXT,
+  items JSONB DEFAULT '[]'::jsonb,
+  total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  refund_mode TEXT DEFAULT 'Cash Refund',
+  notes TEXT,
+  restocked BOOLEAN DEFAULT TRUE,
+  performed_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS public.inventory_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id UUID REFERENCES public.pharmacy_items(id),
@@ -867,6 +892,7 @@ ALTER TABLE public.lab_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_package_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pharmacy_purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pharmacy_purchase_returns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_patient_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.birth_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.external_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.radiology_records ENABLE ROW LEVEL SECURITY;
@@ -1426,6 +1452,30 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
   debit_note_no TEXT,
   performed_by TEXT,
   notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Update pharmacy_patient_returns table
+CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+  patient_name TEXT NOT NULL,
+  patient_phone TEXT,
+  mrn TEXT,
+  patient_type TEXT DEFAULT 'OPD',
+  ipd_no TEXT,
+  bed_no TEXT,
+  original_bill_no TEXT,
+  prescribing_doctor TEXT,
+  items JSONB DEFAULT '[]'::jsonb,
+  total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  refund_mode TEXT DEFAULT 'Cash Refund',
+  notes TEXT,
+  restocked BOOLEAN DEFAULT TRUE,
+  performed_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

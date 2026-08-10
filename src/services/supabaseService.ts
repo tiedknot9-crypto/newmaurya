@@ -4366,6 +4366,79 @@ const rawSupabaseService = {
     }
   },
 
+  getPharmacyPatientReturns: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pharmacy_patient_returns')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((ret: any) => ({
+        id: ret.id,
+        returnNo: ret.return_no || ret.id,
+        date: ret.date || ret.created_at,
+        patientId: ret.patient_id,
+        patientName: ret.patient_name,
+        patientPhone: ret.patient_phone || '',
+        mrn: ret.mrn || 'N/A',
+        patientType: ret.patient_type || 'OPD',
+        ipdNo: ret.ipd_no || '',
+        bedNo: ret.bed_no || '',
+        originalBillNo: ret.original_bill_no || '',
+        prescribingDoctor: ret.prescribing_doctor || '',
+        items: Array.isArray(ret.items) ? ret.items : [],
+        totalRefundAmount: Number(ret.total_refund_amount || 0),
+        refundMode: ret.refund_mode || 'Cash Refund',
+        notes: ret.notes || '',
+        restocked: ret.restocked ?? true,
+        performedBy: ret.performed_by || 'Pharmacist'
+      }));
+    } catch (error: any) {
+      console.warn('Error fetching pharmacy patient returns:', error.message);
+      return storage.get(STORAGE_KEYS.PHARMACY_RETURNS, []);
+    }
+  },
+
+  createPharmacyPatientReturn: async (record: any) => {
+    try {
+      const dbRecord = {
+        return_no: record.returnNo || record.return_no || `RET-${Date.now()}`,
+        date: record.date || new Date().toISOString(),
+        patient_id: cleanUuidFields({ id: record.patientId || record.patient_id })?.id,
+        patient_name: record.patientName || record.patient_name || 'Patient',
+        patient_phone: record.patientPhone || record.patient_phone || '',
+        mrn: record.mrn || record.mrn_number || 'N/A',
+        patient_type: record.patientType || record.patient_type || 'OPD',
+        ipd_no: record.ipdNo || record.ipd_no || '',
+        bed_no: record.bedNo || record.bed_no || '',
+        original_bill_no: record.originalBillNo || record.original_bill_no || '',
+        prescribing_doctor: record.prescribingDoctor || record.prescribing_doctor || '',
+        items: Array.isArray(record.items) ? record.items : [],
+        total_refund_amount: Number(record.totalRefundAmount || record.total_refund_amount || 0),
+        refund_mode: record.refundMode || record.refund_mode || 'Cash Refund',
+        notes: record.notes || '',
+        restocked: record.restocked ?? true,
+        performed_by: record.performedBy || record.performed_by || 'Pharmacist'
+      };
+
+      const data = await selfHealingQuery('insert', 'pharmacy_patient_returns', dbRecord);
+      const inserted = data && data[0] ? data[0] : record;
+
+      // Update local storage cache
+      const current = storage.get(STORAGE_KEYS.PHARMACY_RETURNS, []);
+      const updated = [record, ...current.filter((c: any) => c.id !== record.id)];
+      storage.set(STORAGE_KEYS.PHARMACY_RETURNS, updated);
+
+      return inserted;
+    } catch (error: any) {
+      console.error('Error creating pharmacy patient return:', error.message);
+      const current = storage.get(STORAGE_KEYS.PHARMACY_RETURNS, []);
+      const updated = [record, ...current.filter((c: any) => c.id !== record.id)];
+      storage.set(STORAGE_KEYS.PHARMACY_RETURNS, updated);
+      return record;
+    }
+  },
+
   // Dashboard Stats
   getDashboardStats: async () => {
     try {

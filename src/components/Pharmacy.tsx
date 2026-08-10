@@ -184,13 +184,14 @@ export default function Pharmacy() {
     if (inventory.length === 0) {
       setLoading(true);
     }
-    const [invData, invoicesData, patientsData, admissionsData, dbSettings, purchaseReturnsData] = await Promise.all([
+    const [invData, invoicesData, patientsData, admissionsData, dbSettings, purchaseReturnsData, patientReturnsData] = await Promise.all([
       supabaseService.getPharmacyItems(),
       supabaseService.getInvoices(),
       supabaseService.getPatients(),
       supabaseService.getAdmissions ? supabaseService.getAdmissions() : Promise.resolve([]),
       supabaseService.getPharmacySettings ? supabaseService.getPharmacySettings() : Promise.resolve(null),
-      supabaseService.getPharmacyPurchaseReturns ? supabaseService.getPharmacyPurchaseReturns() : Promise.resolve([])
+      supabaseService.getPharmacyPurchaseReturns ? supabaseService.getPharmacyPurchaseReturns() : Promise.resolve([]),
+      supabaseService.getPharmacyPatientReturns ? supabaseService.getPharmacyPatientReturns() : Promise.resolve([])
     ]);
 
     if (invData) setInventory(invData);
@@ -198,6 +199,10 @@ export default function Pharmacy() {
     if (patientsData) setPatients(patientsData);
     if (admissionsData) setAdmissions(admissionsData);
     if (purchaseReturnsData && purchaseReturnsData.length > 0) setPurchaseReturns(purchaseReturnsData);
+    if (patientReturnsData && patientReturnsData.length > 0) {
+      setReturnRecords(patientReturnsData);
+      storage.set(STORAGE_KEYS.PHARMACY_RETURNS, patientReturnsData);
+    }
     if (dbSettings) {
       setPharmacySettings(dbSettings);
       const currentSettings = storage.get('hms_pharmacy_settings', null);
@@ -462,7 +467,9 @@ export default function Pharmacy() {
       }
     }
 
-    // 3. Save to Storage
+    // 3. Save to Database & Storage
+    await supabaseService.createPharmacyPatientReturn(record);
+
     const updatedReturns = [record, ...returnRecords];
     setReturnRecords(updatedReturns);
     storage.set(STORAGE_KEYS.PHARMACY_RETURNS, updatedReturns);
