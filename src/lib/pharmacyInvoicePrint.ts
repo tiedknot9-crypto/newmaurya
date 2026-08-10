@@ -123,6 +123,28 @@ function formatMonthYearDate(dateStr: any): string {
 
   const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+  // Full ISO date YYYY-MM-DD
+  const isoFullMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (isoFullMatch) {
+    const yearNum = parseInt(isoFullMatch[1], 10);
+    const monthNum = parseInt(isoFullMatch[2], 10);
+    const dayNum = parseInt(isoFullMatch[3], 10);
+    if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+      return `${String(dayNum).padStart(2, '0')} ${monthsShort[monthNum - 1]} ${yearNum}`;
+    }
+  }
+
+  // Full date DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const dayNum = parseInt(dmyMatch[1], 10);
+    const monthNum = parseInt(dmyMatch[2], 10);
+    const yearNum = parseInt(dmyMatch[3], 10);
+    if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+      return `${String(dayNum).padStart(2, '0')} ${monthsShort[monthNum - 1]} ${yearNum}`;
+    }
+  }
+
   if (str.includes('/')) {
     const parts = str.split('/');
     if (parts.length === 2) {
@@ -139,7 +161,7 @@ function formatMonthYearDate(dateStr: any): string {
 
   if (str.includes('-')) {
     const parts = str.split('-');
-    if (parts.length >= 2) {
+    if (parts.length === 2) {
       const yearNum = parseInt(parts[0], 10);
       const monthNum = parseInt(parts[1], 10);
       if (!isNaN(yearNum) && !isNaN(monthNum) && yearNum > 1900 && monthNum >= 1 && monthNum <= 12) {
@@ -150,6 +172,9 @@ function formatMonthYearDate(dateStr: any): string {
 
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
+    if (/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(str) || /\d{1,2}[-/.]\d{1,2}[-/.]\d{4}/.test(str)) {
+      return `${String(parsed.getDate()).padStart(2, '0')} ${monthsShort[parsed.getMonth()]} ${parsed.getFullYear()}`;
+    }
     return `${monthsShort[parsed.getMonth()]} ${parsed.getFullYear()}`;
   }
 
@@ -272,31 +297,33 @@ export function generatePharmacyInvoiceHtml(
 
   const grossSubtotal = preItems.reduce((sum, item) => sum + item.grossAmount, 0);
 
+  // Bill level payable amount expected
+  const billPayableAmount = Number(bill.payable_amount ?? bill.payableAmount ?? (bill.total_amount ? (bill.total_amount - billDiscountAmount) : 0));
+
+  // Compute actual total discount amount
+  let totalDiscountAmt = billDiscountAmount;
+  if (totalDiscountAmt === 0 && billPayableAmount > 0 && grossSubtotal > billPayableAmount) {
+    totalDiscountAmt = grossSubtotal - billPayableAmount;
+  }
+
   // Compute effective bill discount percentage
   let effectiveBillDiscPct = billDiscountPercent;
-  if (effectiveBillDiscPct === 0 && billDiscountAmount > 0 && grossSubtotal > 0) {
-    effectiveBillDiscPct = (billDiscountAmount / grossSubtotal) * 100;
+  if (effectiveBillDiscPct === 0 && totalDiscountAmt > 0 && grossSubtotal > 0) {
+    effectiveBillDiscPct = (totalDiscountAmt / grossSubtotal) * 100;
   }
 
   // Pre-calculate line taxable values
   let preTaxableSubtotal = 0;
   const itemsWithTaxable = preItems.map(item => {
     let lineTaxable = item.grossAmount;
-    if (effectiveBillDiscPct > 0 && item.explicitDiscPct === 0) {
+    if (effectiveBillDiscPct > 0) {
       lineTaxable = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
     } else if (item.explicitDiscPct > 0) {
       lineTaxable = item.grossAmount * (1 - (item.explicitDiscPct / 100));
     }
     preTaxableSubtotal += lineTaxable;
 
-    let finalDiscPct = item.explicitDiscPct;
-    if (finalDiscPct === 0) {
-      if (effectiveBillDiscPct > 0) {
-        finalDiscPct = item.mrpDiscountPct + effectiveBillDiscPct;
-      } else {
-        finalDiscPct = item.mrpDiscountPct;
-      }
-    }
+    let finalDiscPct = item.explicitDiscPct > 0 ? item.explicitDiscPct : (effectiveBillDiscPct > 0 ? effectiveBillDiscPct : item.mrpDiscountPct);
 
     return {
       ...item,
