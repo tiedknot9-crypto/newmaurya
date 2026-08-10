@@ -354,7 +354,24 @@ export function generatePharmacyInvoiceHtml(
     };
   });
 
-  // Calculations
+  // Scale line items if bill-level payable amount differs from items sum (e.g. after editing bill total)
+  let initialTaxableSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
+  let initialTaxTotal = hydratedItems.reduce((sum, item) => sum + item.taxAmount, 0);
+  const initialSum = initialTaxableSubtotal + initialTaxTotal;
+
+  if (billPayableAmount > 0 && initialSum > 0 && Math.abs(initialSum - billPayableAmount) > 0.01) {
+    const scale = billPayableAmount / initialSum;
+    hydratedItems.forEach(item => {
+      item.taxableValue = item.taxableValue * scale;
+      item.taxAmount = item.taxAmount * scale;
+      if (item.grossAmount > 0) {
+        const lineDisc = ((item.grossAmount - item.taxableValue) / item.grossAmount) * 100;
+        item.discount = Math.min(100, Math.max(0, parseFloat(lineDisc.toFixed(1))));
+      }
+    });
+  }
+
+  // Final Calculations
   const calculatedTaxableSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
   
   // Group by HSN for tax grid
@@ -381,8 +398,8 @@ export function generatePharmacyInvoiceHtml(
   const hsnRowsArray = Object.values(hsnMap);
   const totalTaxCalculated = hsnRowsArray.reduce((sum, row) => sum + row.taxAmount, 0);
 
-  // Grand total is strictly taxable subtotal + total tax calculated
-  const grandTotal = Math.max(0, calculatedTaxableSubtotal + totalTaxCalculated);
+  // Grand total is strictly billPayableAmount when specified, otherwise calculated sum
+  const grandTotal = billPayableAmount > 0 ? billPayableAmount : Math.max(0, calculatedTaxableSubtotal + totalTaxCalculated);
 
   const totalInWordsString = numberToWords(grandTotal);
 

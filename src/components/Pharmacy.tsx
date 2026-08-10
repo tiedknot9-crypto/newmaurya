@@ -129,12 +129,18 @@ export default function Pharmacy() {
   const handleSaveEditBillInner = async () => {
     if (!editingBillInner) return;
     
+    const newTotal = Number(editingBillInner.totalAmount ?? editingBillInner.total_amount ?? 0);
+
     const updatedBill = {
       ...editingBillInner,
       is_edited: true,
       tpa_approval_status: 'Edited',
-      total_amount: Number(editingBillInner.totalAmount) || Number(editingBillInner.total_amount),
-      paid_amount: Number(editingBillInner.paidAmount) || Number(editingBillInner.paid_amount) || Number(editingBillInner.totalAmount) || Number(editingBillInner.total_amount),
+      total_amount: newTotal,
+      totalAmount: newTotal,
+      payable_amount: newTotal,
+      payableAmount: newTotal,
+      paid_amount: Number(editingBillInner.paidAmount ?? editingBillInner.paid_amount ?? newTotal),
+      paidAmount: Number(editingBillInner.paidAmount ?? editingBillInner.paid_amount ?? newTotal),
     };
 
     try {
@@ -150,12 +156,15 @@ export default function Pharmacy() {
         sessionBills[index] = {
           ...sessionBills[index],
           ...updatedBill,
-          patient_name: editingBillInner.patient_name || editingBillInner.patient_name,
-          patient_phone: editingBillInner.patient_phone || editingBillInner.patient_phone,
-          prescribing_doctor: editingBillInner.prescribing_doctor || editingBillInner.prescribing_doctor,
-          totalAmount: Number(editingBillInner.totalAmount),
-          total_amount: Number(editingBillInner.totalAmount),
-          paid_amount: Number(editingBillInner.totalAmount),
+          patient_name: editingBillInner.patient_name,
+          patient_phone: editingBillInner.patient_phone,
+          prescribing_doctor: editingBillInner.prescribing_doctor,
+          totalAmount: newTotal,
+          total_amount: newTotal,
+          payable_amount: newTotal,
+          payableAmount: newTotal,
+          paidAmount: newTotal,
+          paid_amount: newTotal,
           is_edited: true
         };
         storage.set(STORAGE_KEYS.BILLING, sessionBills);
