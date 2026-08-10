@@ -307,8 +307,16 @@ export function generatePharmacyInvoiceHtml(
 
   const grossSubtotal = preItems.reduce((sum, item) => sum + item.grossAmount, 0);
 
-  // Bill level payable amount expected
-  const billPayableAmount = Number(bill.payable_amount ?? bill.payableAmount ?? (bill.total_amount ? (bill.total_amount - billDiscountAmount) : 0));
+  // Raw bill level payable amount
+  const rawBillPayable = Number(bill.payable_amount ?? bill.payableAmount ?? (bill.total_amount ? (bill.total_amount - billDiscountAmount) : 0));
+
+  // In retail pharmacy billing, item prices/rates are tax-inclusive.
+  // If a bill was stored with tax added on top of the tax-inclusive subtotal (rawBillPayable == grossSubtotal - discount + tax),
+  // correct billPayableAmount back to the true tax-inclusive payable amount (grossSubtotal - discount).
+  let billPayableAmount = rawBillPayable;
+  if (rawBillPayable > 0 && grossSubtotal > 0 && billTaxAmount > 0 && Math.abs(rawBillPayable - (grossSubtotal - billDiscountAmount + billTaxAmount)) < 0.05) {
+    billPayableAmount = Math.max(0, grossSubtotal - billDiscountAmount);
+  }
 
   // Compute actual total discount amount
   let totalDiscountAmt = billDiscountAmount;
@@ -322,60 +330,61 @@ export function generatePharmacyInvoiceHtml(
     effectiveBillDiscPct = (totalDiscountAmt / grossSubtotal) * 100;
   }
 
-  // Pre-calculate line taxable values
+  // Pre-calculate line totals (tax-inclusive)
   let preTaxableSubtotal = 0;
   const itemsWithTaxable = preItems.map(item => {
-    let lineTaxable = item.grossAmount;
+    let lineTotal = item.grossAmount;
     if (effectiveBillDiscPct > 0) {
-      lineTaxable = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
+      lineTotal = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
     } else if (item.explicitDiscPct > 0) {
-      lineTaxable = item.grossAmount * (1 - (item.explicitDiscPct / 100));
+      lineTotal = item.grossAmount * (1 - (item.explicitDiscPct / 100));
     }
-    preTaxableSubtotal += lineTaxable;
+    preTaxableSubtotal += lineTotal;
 
     let finalDiscPct = item.explicitDiscPct > 0 ? item.explicitDiscPct : (effectiveBillDiscPct > 0 ? effectiveBillDiscPct : item.mrpDiscountPct);
 
     return {
       ...item,
-      lineTaxable,
+      lineTotal,
       finalDiscPct
     };
   });
 
   // Infer tax rate if bill-level tax was recorded but items defaulted to 0%
-  const totalItemTaxSpecified = itemsWithTaxable.reduce((sum, i) => sum + (i.lineTaxable * i.taxPercentage / 100), 0);
+  const totalItemTaxSpecified = itemsWithTaxable.reduce((sum, i) => sum + (i.lineTotal * (i.taxPercentage / 100)), 0);
   let inferredTaxRate = 0;
   if (totalItemTaxSpecified === 0 && billTaxAmount > 0 && preTaxableSubtotal > 0) {
     inferredTaxRate = (billTaxAmount / preTaxableSubtotal) * 100;
   }
 
-  // Hydrate items with final discount percentage and net taxable values
+  // Hydrate items with final discount percentage and net taxable/tax values (tax-inclusive)
   const hydratedItems = itemsWithTaxable.map(item => {
     const finalTaxRate = item.taxPercentage > 0 ? item.taxPercentage : inferredTaxRate;
-    const lineTaxAmount = item.lineTaxable * (finalTaxRate / 100);
+    // Medicine rates are tax-inclusive: extract GST taxable value
+    const lineTaxable = finalTaxRate > 0 ? (item.lineTotal / (1 + (finalTaxRate / 100))) : item.lineTotal;
+    const lineTaxAmount = item.lineTotal - lineTaxable;
 
     return {
       ...item,
       mrp: item.unitMrp,
       discount: Math.min(100, Math.max(0, parseFloat(item.finalDiscPct.toFixed(1)))),
       taxPercentage: finalTaxRate,
-      taxableValue: item.lineTaxable,
+      taxableValue: lineTaxable,
       taxAmount: lineTaxAmount
     };
   });
 
   // Scale line items if bill-level payable amount differs from items sum (e.g. after editing bill total)
-  let initialTaxableSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
-  let initialTaxTotal = hydratedItems.reduce((sum, item) => sum + item.taxAmount, 0);
-  const initialSum = initialTaxableSubtotal + initialTaxTotal;
+  let initialLineTotalsSum = hydratedItems.reduce((sum, item) => sum + item.lineTotal, 0);
 
-  if (billPayableAmount > 0 && initialSum > 0 && Math.abs(initialSum - billPayableAmount) > 0.01) {
-    const scale = billPayableAmount / initialSum;
+  if (billPayableAmount > 0 && initialLineTotalsSum > 0 && Math.abs(initialLineTotalsSum - billPayableAmount) > 0.01) {
+    const scale = billPayableAmount / initialLineTotalsSum;
     hydratedItems.forEach(item => {
-      item.taxableValue = item.taxableValue * scale;
-      item.taxAmount = item.taxAmount * scale;
+      item.lineTotal = item.lineTotal * scale;
+      item.taxableValue = item.taxPercentage > 0 ? (item.lineTotal / (1 + (item.taxPercentage / 100))) : item.lineTotal;
+      item.taxAmount = item.lineTotal - item.taxableValue;
       if (item.grossAmount > 0) {
-        const lineDisc = ((item.grossAmount - item.taxableValue) / item.grossAmount) * 100;
+        const lineDisc = ((item.grossAmount - item.lineTotal) / item.grossAmount) * 100;
         item.discount = Math.min(100, Math.max(0, parseFloat(lineDisc.toFixed(1))));
       }
     });

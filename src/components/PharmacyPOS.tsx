@@ -630,15 +630,19 @@ export default function PharmacyPOS() {
 
   const discountedSubtotal = Math.max(0, subtotal - computedDiscountAmount);
 
+  // Pharmacy retail selling prices are tax-inclusive
+  const total = discountedSubtotal;
+
   const tax = cart.reduce((sum, item) => {
     const itemGross = item.price * item.quantity;
     const itemDisc = subtotal > 0 ? (itemGross / subtotal) * computedDiscountAmount : 0;
-    const itemTaxable = Math.max(0, itemGross - itemDisc);
+    const itemPayable = Math.max(0, itemGross - itemDisc);
     const itemTaxRate = Number((item as any).taxPercentage || (item as any).tax_percentage || 0);
-    return sum + (itemTaxable * (itemTaxRate / 100));
+    if (itemTaxRate <= 0) return sum;
+    // Extract inclusive GST
+    const itemTaxAmount = itemPayable - (itemPayable / (1 + (itemTaxRate / 100)));
+    return sum + itemTaxAmount;
   }, 0);
-
-  const total = Math.max(0, discountedSubtotal + tax);
 
   const handleCheckout = () => {
     if (cart.length === 0) {
