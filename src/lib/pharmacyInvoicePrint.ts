@@ -112,18 +112,67 @@ function formatDateToInvoice(dateStr: any): string {
   }
 }
 
+function formatMonthYearDate(dateStr: any): string {
+  if (!dateStr) return 'N/A';
+  const str = String(dateStr).trim();
+  if (!str || str.toLowerCase() === 'n/a' || str === 'undefined' || str === 'null') return 'N/A';
+  
+  if (/^[A-Za-z]{3}[-\s]\d{4}$/i.test(str)) {
+    return str.replace('-', ' ');
+  }
+
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 2) {
+      const monthNum = parseInt(parts[0], 10);
+      let yearNum = parseInt(parts[1], 10);
+      if (!isNaN(monthNum) && !isNaN(yearNum)) {
+        if (yearNum < 100) yearNum += 2000;
+        if (monthNum >= 1 && monthNum <= 12) {
+          return `${monthsShort[monthNum - 1]} ${yearNum}`;
+        }
+      }
+    }
+  }
+
+  if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length >= 2) {
+      const yearNum = parseInt(parts[0], 10);
+      const monthNum = parseInt(parts[1], 10);
+      if (!isNaN(yearNum) && !isNaN(monthNum) && yearNum > 1900 && monthNum >= 1 && monthNum <= 12) {
+        return `${monthsShort[monthNum - 1]} ${yearNum}`;
+      }
+    }
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return `${monthsShort[parsed.getMonth()]} ${parsed.getFullYear()}`;
+  }
+
+  return str;
+}
+
 export function generatePharmacyInvoiceHtml(
   bill: any,
   inventory: any[],
   patientDetails?: { name: string; phone?: string; address?: string; gstin?: string },
-  customSettings?: PharmacySettings
+  customSettings?: PharmacySettings,
+  pageSize?: 'A4_FULL' | 'A4_HALF' | 'A5'
 ): string {
   const settings = customSettings || DEFAULT_PHARMACY_SETTINGS;
 
   // Extract date
   const rawDate = bill.date || bill.created_at || new Date().toISOString();
   const invoiceDate = formatDateToInvoice(rawDate);
-  const invoiceNo = bill.invoiceId || (bill.id ? bill.id.substring(0, 8).toUpperCase() : 'TEMP-01');
+  const invoiceNo = bill.invoiceId || bill.sequenceNumber || (bill.id ? bill.id.substring(0, 8).toUpperCase() : 'TEMP-01');
+
+  // Extract bill-level discounts
+  const billDiscountAmount = Number(bill.discountAmount || bill.discount_amount || 0);
+  const billDiscountPercent = Number(bill.discountPercent || bill.discount_percent || 0);
 
   // Parse items
   let rawItems = bill.items || bill.invoice_items || [];
@@ -131,9 +180,8 @@ export function generatePharmacyInvoiceHtml(
     rawItems = [{ description: 'Pharmacy Consultation & Sales', quantity: 1, unit_price: bill.total_amount, total_price: bill.total_amount }];
   }
 
-  // Map and hydrate item properties from current inventory
-  const hydratedItems = rawItems.map((item: any, idx: number) => {
-    // Attempt lookup in inventory
+  // Pre-process items
+  const preItems = rawItems.map((item: any, idx: number) => {
     const itemName = item.name || item.item_name || item.description || 'Unknown Medicine';
     const invItem = inventory.find(i => 
       i.name?.toLowerCase().trim() === itemName.toLowerCase().trim() || 
@@ -142,34 +190,53 @@ export function generatePharmacyInvoiceHtml(
 
     const price = Number(item.price || item.unit_price || 0);
     const quantity = Number(item.quantity || 1);
-    const taxPercentage = Number(item.taxPercentage || item.tax_percentage || invItem?.tax_percentage || 12);
+    const taxPercentage = Number(item.taxPercentage || item.tax_percentage || invItem?.tax_percentage || 0);
     const batchNo = item.batchNumber || item.batch_number || invItem?.batch_number || invItem?.batchNumber || 'A1';
-    
-    // Guess manufacturing date by subtracting 2 years from expiry or default to current year minus 1
-    let expiryVal = item.expiryDate || item.expiry_date || invItem?.expiry_date || invItem?.expiryDate;
-    let mfgDateStr = 'Dec 2024';
-    let expiryDateStr = 'Dec 2026';
 
-    if (expiryVal) {
+    // 1. Manufacturing Date
+    let mfgRaw = item.mfgDate || item.mfg_date || invItem?.mfg_date || invItem?.mfgDate;
+    // 2. Expiry Date
+    let expiryRaw = item.expiryDate || item.expiry_date || invItem?.expiry_date || invItem?.expiryDate;
+
+    let mfgDateStr = 'N/A';
+    let expiryDateStr = 'N/A';
+
+    if (expiryRaw) {
+      expiryDateStr = formatMonthYearDate(expiryRaw);
+    }
+
+    if (mfgRaw) {
+      mfgDateStr = formatMonthYearDate(mfgRaw);
+    } else if (expiryRaw) {
       try {
-        const expDate = new Date(expiryVal);
-        const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        expiryDateStr = `${monthsShort[expDate.getMonth()]} ${expDate.getFullYear()}`;
-        
-        // MFG is typical 2 years earlier
-        const mfgDate = new Date(expDate.getFullYear() - 2, expDate.getMonth());
-        mfgDateStr = `${monthsShort[mfgDate.getMonth()]} ${mfgDate.getFullYear()}`;
-      } catch {
-        expiryDateStr = expiryVal;
-      }
+        const expDate = new Date(expiryRaw);
+        if (!isNaN(expDate.getTime())) {
+          const mfgDate = new Date(expDate.getFullYear() - 2, expDate.getMonth());
+          const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          mfgDateStr = `${monthsShort[mfgDate.getMonth()]} ${expDate.getFullYear()}`;
+        }
+      } catch {}
     }
 
     const hsnCode = item.hsnCode || item.hsn_code || invItem?.hsn_code || invItem?.hsnCode || '30045031';
-    const mrp = Number(item.mrp || invItem?.mrp || (price * 1.25));
-    const discount = mrp > price ? Math.max(0, parseFloat((((mrp - price) / mrp) * 100).toFixed(2))) : 0;
     
-    const taxableValue = price * quantity;
+    // Loose unit detection
+    const isLoose = Boolean(
+      item.isLoose || item.is_loose || item.unit === 'Loose' || 
+      (itemName && itemName.toLowerCase().includes('(loose)'))
+    );
+    const unitsPerStrip = Number(item.unitsPerStrip || item.units_per_strip || invItem?.units_per_strip || 10);
+
+    // MRP calculation
+    const stripMrp = Number(item.mrp || invItem?.mrp || (price * (isLoose ? unitsPerStrip : 1.25)));
+    const unitMrp = (isLoose && unitsPerStrip > 0) ? (stripMrp / unitsPerStrip) : stripMrp;
     
+    const rate = price;
+    const mrpDiscountPct = unitMrp > rate ? ((unitMrp - rate) / unitMrp) * 100 : 0;
+    const explicitDiscPct = Number(item.discountPercent || item.discount_percent || item.discount || 0);
+
+    const grossAmount = quantity * rate;
+
     return {
       srNo: idx + 1,
       name: itemName,
@@ -178,17 +245,53 @@ export function generatePharmacyInvoiceHtml(
       expiryDateStr,
       hsnCode,
       quantity,
-      unit: item.isLoose ? 'Loose' : (invItem?.unit || 'TBS'),
-      mrp,
-      rate: price,
-      discount,
-      taxableValue,
-      taxPercentage
+      unit: isLoose ? 'Loose' : (item.unit || invItem?.unit || 'Strip'),
+      unitMrp,
+      rate,
+      mrpDiscountPct,
+      explicitDiscPct,
+      grossAmount,
+      taxPercentage,
+      isLoose
+    };
+  });
+
+  const grossSubtotal = preItems.reduce((sum, item) => sum + item.grossAmount, 0);
+
+  // Compute effective bill discount percentage
+  let effectiveBillDiscPct = billDiscountPercent;
+  if (effectiveBillDiscPct === 0 && billDiscountAmount > 0 && grossSubtotal > 0) {
+    effectiveBillDiscPct = (billDiscountAmount / grossSubtotal) * 100;
+  }
+
+  // Hydrate items with final discount percentage and net taxable values
+  const hydratedItems = preItems.map(item => {
+    let finalDiscPct = item.explicitDiscPct;
+    if (finalDiscPct === 0) {
+      if (effectiveBillDiscPct > 0) {
+        finalDiscPct = item.mrpDiscountPct + effectiveBillDiscPct;
+      } else {
+        finalDiscPct = item.mrpDiscountPct;
+      }
+    }
+
+    let lineTaxable = item.grossAmount;
+    if (effectiveBillDiscPct > 0 && item.explicitDiscPct === 0) {
+      lineTaxable = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
+    } else if (item.explicitDiscPct > 0) {
+      lineTaxable = item.grossAmount * (1 - (item.explicitDiscPct / 100));
+    }
+
+    return {
+      ...item,
+      mrp: item.unitMrp,
+      discount: Math.min(100, Math.max(0, parseFloat(finalDiscPct.toFixed(1)))),
+      taxableValue: lineTaxable
     };
   });
 
   // Calculations
-  const calculatedSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
+  const calculatedTaxableSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
   
   // Group by HSN for tax grid
   const hsnMap: Record<string, { hsn: string; taxableValue: number; taxRate: number; taxAmount: number }> = {};
@@ -213,7 +316,7 @@ export function generatePharmacyInvoiceHtml(
 
   const hsnRowsArray = Object.values(hsnMap);
   const totalTaxCalculated = hsnRowsArray.reduce((sum, row) => sum + row.taxAmount, 0);
-  const grandTotal = bill.totalAmount || bill.total_amount || (calculatedSubtotal + totalTaxCalculated);
+  const grandTotal = Math.max(0, Number(bill.totalAmount || bill.total_amount || (calculatedTaxableSubtotal + totalTaxCalculated)));
 
   const totalInWordsString = numberToWords(grandTotal);
 
@@ -751,12 +854,21 @@ export function generatePharmacyInvoiceHtml(
                   </tr>
                 `).join('')}
 
+                ${(billDiscountAmount > 0 || effectiveBillDiscPct > 0) ? `
+                  <tr style="font-weight: 600; font-size: 10px; background-color: #fafbfc;">
+                    <td colspan="6" class="text-right" style="padding-right: 10px; color: #475569;">Gross Amount: ₹${grossSubtotal.toFixed(2)}</td>
+                    <td class="text-center"></td>
+                    <td colspan="3" class="text-right" style="color: #dc2626;">Discount (${effectiveBillDiscPct > 0 ? effectiveBillDiscPct.toFixed(1) + '%' : 'Bill Disc'}):</td>
+                    <td class="text-right" style="color: #dc2626;">-₹${(grossSubtotal - calculatedTaxableSubtotal).toFixed(2)}</td>
+                  </tr>
+                ` : ''}
+
                 <!-- Totals row -->
-                <tr style="font-weight: 700; background-color: #fafbfc;">
+                <tr style="font-weight: 700; background-color: #f1f5f9;">
                   <td colspan="6" class="text-right" style="padding-right: 10px;">Total Qty:</td>
                   <td class="text-center">${hydratedItems.reduce((sum, item) => sum + item.quantity, 0)}</td>
                   <td colspan="3" class="text-right">Total Payable Price:</td>
-                  <td class="text-right">₹${calculatedSubtotal.toFixed(2)}</td>
+                  <td class="text-right">₹${grandTotal.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>
@@ -793,7 +905,7 @@ export function generatePharmacyInvoiceHtml(
                       `).join('')}
                       <tr style="font-weight: 800; background: #eef2fd;">
                         <td>Total</td>
-                        <td class="text-right">${calculatedSubtotal.toFixed(2)}</td>
+                        <td class="text-right">${calculatedTaxableSubtotal.toFixed(2)}</td>
                         <td class="text-center">-</td>
                         <td class="text-right">${totalTaxCalculated.toFixed(2)}</td>
                         <td class="text-right">₹${grandTotal.toFixed(2)}</td>

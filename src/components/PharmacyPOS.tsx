@@ -611,7 +611,7 @@ export default function PharmacyPOS() {
   };
 
   const pharmacySettings = storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS);
-  const maxDiscountPercent = Number(pharmacySettings?.maxDiscountPercent) || 20;
+  const maxDiscountPercent = Number((pharmacySettings as any)?.maxDiscountPercent) || 20;
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = cart.reduce((sum, item) => sum + (item.price * item.quantity * ((item as any).taxPercentage || 0) / 100), 0);
