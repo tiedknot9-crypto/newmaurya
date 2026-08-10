@@ -245,14 +245,24 @@ export function generatePharmacyInvoiceHtml(
     }
 
     if (mfgRaw) {
-      mfgDateStr = formatMonthYearDate(mfgRaw);
+      let mfgToFormat = mfgRaw;
+      if (typeof mfgRaw === 'string' && /^\d{4}-\d{2}$/.test(mfgRaw.trim()) && typeof expiryRaw === 'string') {
+        const expMatch = expiryRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (expMatch) {
+          mfgToFormat = `${mfgRaw.trim()}-${expMatch[3]}`;
+        }
+      }
+      mfgDateStr = formatMonthYearDate(mfgToFormat);
     } else if (expiryRaw) {
       try {
         const expDate = new Date(expiryRaw);
         if (!isNaN(expDate.getTime())) {
-          const mfgDate = new Date(expDate.getFullYear() - 2, expDate.getMonth());
-          const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          mfgDateStr = `${monthsShort[mfgDate.getMonth()]} ${mfgDate.getFullYear()}`;
+          const day = expDate.getDate() || 1;
+          const mfgDate = new Date(expDate.getFullYear() - 2, expDate.getMonth(), day);
+          const yyyy = mfgDate.getFullYear();
+          const mm = String(mfgDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(mfgDate.getDate()).padStart(2, '0');
+          mfgDateStr = formatMonthYearDate(`${yyyy}-${mm}-${dd}`);
         }
       } catch {}
     }
