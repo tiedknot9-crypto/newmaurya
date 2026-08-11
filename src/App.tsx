@@ -60,6 +60,7 @@ import AdminSettings from './components/Settings';
 import Staff from './components/Staff';
 import Pharmacy from './components/Pharmacy';
 import PharmacyPOS from './components/PharmacyPOS';
+import { SyncStatusBadge } from './components/SyncStatusBadge';
 
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_PATIENTS, MOCK_USERS } from './mockData';
@@ -784,6 +785,8 @@ function AppLayout({ user, hospitalInfo, handleLogout, isMobileMenuOpen, setIsMo
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            <SyncStatusBadge />
+
             {(user?.role === 'SUPER_ADMIN' || user?.role === 'DOCTOR' || user?.role === 'RECEPTION' || user?.role === 'RECEPTIONIST' || user?.role === 'FRONT_DESK' || user?.role === 'NURSE') && (
               <Dialog>
                 <DialogTrigger asChild>

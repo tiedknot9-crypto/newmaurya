@@ -5722,6 +5722,38 @@ export function getSupabaseUnreachable() {
   return supabaseUnreachable;
 }
 
+export function getPendingOfflineCount(): number {
+  try {
+    let count = 0;
+    const keysToCheck = [
+      STORAGE_KEYS.PATIENTS,
+      STORAGE_KEYS.APPOINTMENTS,
+      'hms_admissions',
+      STORAGE_KEYS.BILLING,
+      'hms_lab_tests',
+      STORAGE_KEYS.LAB_TEST_ORDERS,
+      'hms_radiology_records',
+      'hms_pharmacy_items',
+      STORAGE_KEYS.EXPENSES,
+      'hms_clinical_notes',
+      STORAGE_KEYS.NURSING_TASKS,
+      'hms_nursing_handovers',
+      'hms_ot_schedules',
+      'hms_insurance_claims'
+    ];
+
+    for (const key of keysToCheck) {
+      const items = storage.get(key, []);
+      if (Array.isArray(items)) {
+        count += items.filter((item: any) => item && item.id && String(item.id).startsWith('off-')).length;
+      }
+    }
+    return count;
+  } catch (e) {
+    return 0;
+  }
+}
+
 export function setSupabaseUnreachable(val: boolean) {
   supabaseUnreachable = val;
   if (!val) {
