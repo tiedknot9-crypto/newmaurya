@@ -408,6 +408,20 @@ function cleanAppointmentForPostgres(apt: any) {
       urgencyVal = `${urgencyVal} [refby:${safeRefBy}]`;
     }
 
+    // Encode payment mode (defaults to Cash if empty/undefined)
+    const payMode = cleaned.payment_method || cleaned.paymentMode || cleaned.payment_mode || 'Cash';
+    if (payMode && payMode !== 'N/A') {
+      const safePayMode = String(payMode).replace(/[\[\]]/g, '');
+      urgencyVal = `${urgencyVal} [paymode:${safePayMode}]`;
+    }
+
+    // Encode payment ref no
+    const payRef = cleaned.payment_ref_no || cleaned.paymentRefNo;
+    if (payRef) {
+      const safePayRef = String(payRef).replace(/[\[\]]/g, '');
+      urgencyVal = `${urgencyVal} [payref:${safePayRef}]`;
+    }
+
     cleaned.urgency = urgencyVal;
   }
 
@@ -445,6 +459,32 @@ function mapAppointmentFromPostgres(apt: any) {
   let discountAmountParsed = 0;
   let discountGivenByParsed = '';
   let refundGivenByParsed = '';
+  let payModeParsed = '';
+  let payRefParsed = '';
+
+  // Parse [paymode:...]
+  if (urgency.includes('[paymode:')) {
+    const paymodeParts = urgency.split('[paymode:');
+    if (paymodeParts.length > 1) {
+      const paymodeSubParts = paymodeParts[1].split(']');
+      if (paymodeSubParts.length > 0) {
+        payModeParsed = paymodeSubParts[0].trim();
+      }
+    }
+    urgency = urgency.replace(/\[paymode:.*?\]/g, '').trim();
+  }
+
+  // Parse [payref:...]
+  if (urgency.includes('[payref:')) {
+    const payrefParts = urgency.split('[payref:');
+    if (payrefParts.length > 1) {
+      const payrefSubParts = payrefParts[1].split(']');
+      if (payrefSubParts.length > 0) {
+        payRefParsed = payrefSubParts[0].trim();
+      }
+    }
+    urgency = urgency.replace(/\[payref:.*?\]/g, '').trim();
+  }
 
   // Parse [doc:...]
   if (urgency.includes('[doc:')) {
@@ -515,6 +555,15 @@ function mapAppointmentFromPostgres(apt: any) {
     mapped.refund_given_by = refundGivenByParsed;
     mapped.refundGivenBy = refundGivenByParsed;
   }
+
+  const finalPayMode = payModeParsed || mapped.payment_method || mapped.paymentMode || mapped.payment_mode || 'Cash';
+  mapped.payment_method = finalPayMode;
+  mapped.paymentMode = finalPayMode;
+  mapped.payment_mode = finalPayMode;
+
+  const finalPayRef = payRefParsed || mapped.payment_ref_no || mapped.paymentRefNo || '';
+  mapped.payment_ref_no = finalPayRef;
+  mapped.paymentRefNo = finalPayRef;
 
   if (doctorNameParsed) {
     mapped.doctor = doctorNameParsed;

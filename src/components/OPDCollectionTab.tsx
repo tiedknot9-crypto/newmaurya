@@ -125,7 +125,7 @@ export function OPDCollectionTab({
       const patObj = matchedPatient || { id: pId, name: apt.patientName, phone: apt.patientPhone };
       return !isDummyPatient(patObj);
     });
-  }, [appointments, patients, users]);
+  }, [appointments, patients, users, bills]);
 
   // Filter mapped appointments by date range and selected doctor
   const filteredApts = useMemo(() => {
