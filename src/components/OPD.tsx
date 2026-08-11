@@ -1378,7 +1378,8 @@ export default function OPD() {
     const tokenNumber = `#${nextDailyToken}`;
     
     const isFeePaid = (newAppointment.paymentStatus || 'Paid') === 'Paid';
-    const payMethodStr = isFeePaid ? (newAppointment.paymentMode || 'Cash') : 'N/A';
+    const rawMode = newAppointment.paymentMode;
+    const payMethodStr = (rawMode && rawMode !== 'N/A' && rawMode !== '') ? rawMode : 'Cash';
     const payRefNoStr = newAppointment.paymentRefNo || '';
 
     const synced = await supabaseService.createAppointment({
@@ -1599,7 +1600,9 @@ export default function OPD() {
 
   const openPayModal = (apt: any) => {
     setPayModalApt(apt);
-    setPayModalMode(apt.payment_method || apt.paymentMode || apt.payment_mode || 'Cash');
+    const existingMode = apt.payment_method || apt.paymentMode || apt.payment_mode;
+    const initialMode = (existingMode && existingMode !== 'N/A' && existingMode !== '') ? existingMode : 'Cash';
+    setPayModalMode(initialMode);
     setPayModalRefNo(apt.payment_ref_no || apt.paymentRefNo || '');
     setPayModalNotes('');
     setIsPayModalOpen(true);
@@ -1609,7 +1612,7 @@ export default function OPD() {
     if (!payModalApt) return;
     setPayModalSubmitting(true);
     const id = payModalApt.id;
-    const mode = payModalMode || 'Cash';
+    const mode = (payModalMode && payModalMode !== 'N/A' && payModalMode !== '') ? payModalMode : 'Cash';
     const refNo = payModalRefNo || '';
 
     const updatePayload = { 
