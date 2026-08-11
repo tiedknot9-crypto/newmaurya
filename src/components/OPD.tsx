@@ -167,7 +167,10 @@ export default function OPD() {
         time: '', 
         urgency: 'Routine',
         discountAmount: '0',
-        discountGivenBy: ''
+        discountGivenBy: '',
+        paymentStatus: 'Paid',
+        paymentMode: 'Cash',
+        paymentRefNo: ''
       });
     }
   };
@@ -262,8 +265,17 @@ export default function OPD() {
     time: '', 
     urgency: 'Routine',
     discountAmount: '0',
-    discountGivenBy: ''
+    discountGivenBy: '',
+    paymentStatus: 'Paid',
+    paymentMode: 'Cash',
+    paymentRefNo: ''
   });
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payModalApt, setPayModalApt] = useState<any | null>(null);
+  const [payModalMode, setPayModalMode] = useState<string>('Cash');
+  const [payModalRefNo, setPayModalRefNo] = useState<string>('');
+  const [payModalNotes, setPayModalNotes] = useState<string>('');
+  const [payModalSubmitting, setPayModalSubmitting] = useState<boolean>(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [showPatientResults, setShowPatientResults] = useState(false);
   const [lastToken, setLastToken] = useState<{
@@ -1365,6 +1377,10 @@ export default function OPD() {
     const nextDailyToken = sameDayCount + 1;
     const tokenNumber = `#${nextDailyToken}`;
     
+    const isFeePaid = (newAppointment.paymentStatus || 'Paid') === 'Paid';
+    const payMethodStr = isFeePaid ? (newAppointment.paymentMode || 'Cash') : 'N/A';
+    const payRefNoStr = newAppointment.paymentRefNo || '';
+
     const synced = await supabaseService.createAppointment({
       patient_id: newAppointment.patientId,
       patientName: patient?.name || undefined,
@@ -1378,7 +1394,11 @@ export default function OPD() {
       fee: selectedDocObj && selectedDocObj.consultationFee ? Number(selectedDocObj.consultationFee) : appointmentFee,
       discount_amount: Number(newAppointment.discountAmount || 0),
       discount_given_by: newAppointment.discountGivenBy || currentUser?.name || null,
-      token_number: nextDailyToken
+      token_number: nextDailyToken,
+      payment_status: isFeePaid ? 'Paid' : 'Unpaid',
+      payment_method: payMethodStr,
+      payment_mode: payMethodStr,
+      payment_ref_no: payRefNoStr
     });
 
     if (synced) {
@@ -1440,16 +1460,19 @@ export default function OPD() {
       if (selectedInvoiceItems.length > 0) {
         // Create Invoice for selected Consultation/Appointment Fees
         const discountVal = Number(newAppointment.discountAmount || 0);
+        const payableVal = Math.max(0, calculatedTotal - discountVal);
         const invoiceData = {
           patient_id: newAppointment.patientId,
           patient_name: patient?.name || undefined,
           invoice_number: `INV-OPD-${Date.now()}`,
-          status: 'Unpaid',
+          status: isFeePaid ? 'Paid' : 'Unpaid',
+          payment_status: isFeePaid ? 'Paid' : 'Unpaid',
           total_amount: calculatedTotal,
           discount_amount: discountVal,
-          payable_amount: Math.max(0, calculatedTotal - discountVal),
-          paid_amount: 0,
-          payment_method: 'Cash',
+          payable_amount: payableVal,
+          paid_amount: isFeePaid ? payableVal : 0,
+          payment_method: payMethodStr,
+          payment_reference: payRefNoStr,
           type: 'OPD',
           created_by: currentUser?.id
         };
@@ -1574,105 +1597,139 @@ export default function OPD() {
     });
   };
 
-  const handlePayAppointment = async (id: string) => {
-    const success = await supabaseService.updateAppointment(id, { payment_status: 'Paid' });
+  const openPayModal = (apt: any) => {
+    setPayModalApt(apt);
+    setPayModalMode(apt.payment_method || apt.paymentMode || apt.payment_mode || 'Cash');
+    setPayModalRefNo(apt.payment_ref_no || apt.paymentRefNo || '');
+    setPayModalNotes('');
+    setIsPayModalOpen(true);
+  };
+
+  const handleConfirmPaymentSubmit = async () => {
+    if (!payModalApt) return;
+    setPayModalSubmitting(true);
+    const id = payModalApt.id;
+    const mode = payModalMode || 'Cash';
+    const refNo = payModalRefNo || '';
+
+    const updatePayload = { 
+      payment_status: 'Paid',
+      payment_method: mode,
+      payment_mode: mode,
+      payment_ref_no: refNo,
+      payment_remarks: payModalNotes
+    };
+
+    const success = await supabaseService.updateAppointment(id, updatePayload);
     if (success) {
-      const nextApts = appointments.map(a => a.id === id ? { ...a, payment_status: 'Paid' } : a);
+      const nextApts = appointments.map(a => a.id === id ? { 
+        ...a, 
+        ...updatePayload,
+        paymentStatus: 'Paid'
+      } : a);
       setAppointments(nextApts);
       
       try {
-        // Find the patient associated with this appointment to sync invoice status
-        const apt = appointments.find(a => a.id === id);
-        if (apt) {
-          const patientId = apt.patientId || apt.patient_id;
-          if (patientId) {
-            const invoices = await supabaseService.getInvoices();
-            const pendingOPDInvoices = invoices && invoices.length > 0 ? invoices.filter((inv: any) => {
-              const cleanInvPid = toDeterministicUuid(inv.patient_id || inv.patientId);
-              const cleanAptPid = toDeterministicUuid(patientId);
-              const isMatchPatient = cleanInvPid === cleanAptPid;
-              const isUnpaid = (inv.status || inv.payment_status || '').toLowerCase() === 'unpaid';
-              const isOPD = inv.type === 'OPD' || 
-                            inv.invoice_number?.startsWith('INV-REG') || 
-                            inv.invoice_number?.startsWith('INV-OPD') ||
-                            inv.invoice_number?.includes('REG') ||
-                            inv.invoice_number?.includes('OPD');
-              return isMatchPatient && isUnpaid && isOPD;
-            }) : [];
+        const patientId = payModalApt.patientId || payModalApt.patient_id;
+        if (patientId) {
+          const invoices = await supabaseService.getInvoices();
+          const pendingOPDInvoices = invoices && invoices.length > 0 ? invoices.filter((inv: any) => {
+            const cleanInvPid = toDeterministicUuid(inv.patient_id || inv.patientId);
+            const cleanAptPid = toDeterministicUuid(patientId);
+            const isMatchPatient = cleanInvPid === cleanAptPid;
+            const isUnpaid = (inv.status || inv.payment_status || '').toLowerCase() === 'unpaid';
+            const isOPD = inv.type === 'OPD' || 
+                          inv.invoice_number?.startsWith('INV-REG') || 
+                          inv.invoice_number?.startsWith('INV-OPD') ||
+                          inv.invoice_number?.includes('REG') ||
+                          inv.invoice_number?.includes('OPD');
+            return isMatchPatient && isUnpaid && isOPD;
+          }) : [];
 
-            const currentBills = storage.get(STORAGE_KEYS.BILLING, []);
-            let updatedBills = [...currentBills];
+          const currentBills = storage.get(STORAGE_KEYS.BILLING, []);
+          let updatedBills = [...currentBills];
 
-            if (pendingOPDInvoices.length > 0) {
-              for (const inv of pendingOPDInvoices) {
-                const discountVal = Number(inv.discount_amount || inv.discountAmount || apt.discount_amount || apt.discountAmount || 0);
-                const totalAmt = Number(inv.total_amount || inv.totalAmount || apt.fee || 0);
-                const payableAmt = Math.max(0, totalAmt - discountVal);
-                
-                const updatedInv = { 
-                  ...inv, 
-                  status: 'Paid', 
-                  payment_status: 'Paid', 
-                  discount_amount: discountVal,
-                  payable_amount: payableAmt,
-                  paid_amount: payableAmt 
-                };
-
-                await supabaseService.updateInvoice(inv.id, updatedInv);
-
-                updatedBills = updatedBills.map((b: any) => b.id === inv.id ? updatedInv : b);
-              }
-            } else {
-              // Creating a Paid OPD Consultation Invoice as backup fallback so it immediately appears in Billing logs
-              const baseFee = Number(apt.fee || appointmentFee || 500);
-              const discount = Number(apt.discount_amount || apt.discountAmount || 0);
-              const feeToCollect = Math.max(0, baseFee - discount);
-              const invoiceData = {
-                patient_id: patientId,
-                invoice_number: `INV-OPD-${Date.now()}`,
-                status: 'Paid',
-                payment_status: 'Paid',
-                total_amount: baseFee,
-                discount_amount: discount,
-                payable_amount: feeToCollect,
-                paid_amount: feeToCollect,
-                payment_method: 'Cash',
-                type: 'OPD',
-                created_by: currentUser?.id
+          if (pendingOPDInvoices.length > 0) {
+            for (const inv of pendingOPDInvoices) {
+              const discountVal = Number(inv.discount_amount || inv.discountAmount || payModalApt.discount_amount || payModalApt.discountAmount || 0);
+              const totalAmt = Number(inv.total_amount || inv.totalAmount || payModalApt.fee || 0);
+              const payableAmt = Math.max(0, totalAmt - discountVal);
+              
+              const updatedInv = { 
+                ...inv, 
+                status: 'Paid', 
+                payment_status: 'Paid', 
+                discount_amount: discountVal,
+                payable_amount: payableAmt,
+                paid_amount: payableAmt,
+                payment_method: mode,
+                payment_reference: refNo,
+                payment_remarks: payModalNotes
               };
-              const invoiceItems = [{
-                item_name: `Consultation Fee - ${apt.doctor || apt.doctorName || 'Doctor'}`,
-                category: 'Consultation',
-                quantity: 1,
-                unit_price: baseFee,
-                total_price: baseFee
-              }];
-              const created = await supabaseService.createInvoice(invoiceData, invoiceItems);
-              if (created) {
-                updatedBills = [created, ...updatedBills];
-              }
+
+              await supabaseService.updateInvoice(inv.id, updatedInv);
+              updatedBills = updatedBills.map((b: any) => b.id === inv.id ? updatedInv : b);
             }
-
-            // Update local storage caches to keep everything in sync
-            storage.set(STORAGE_KEYS.APPOINTMENTS, nextApts);
-            storage.set(STORAGE_KEYS.BILLING, updatedBills);
-
-            window.dispatchEvent(new Event('storage'));
-            window.dispatchEvent(new CustomEvent('supabase-data-sync', { 
-              detail: { table: 'invoices', action: 'update' } 
-            }));
-            window.dispatchEvent(new CustomEvent('supabase-data-sync', { 
-              detail: { table: 'appointments', action: 'update' } 
-            }));
+          } else {
+            const baseFee = Number(payModalApt.fee || appointmentFee || 500);
+            const discount = Number(payModalApt.discount_amount || payModalApt.discountAmount || 0);
+            const feeToCollect = Math.max(0, baseFee - discount);
+            const invoiceData = {
+              patient_id: patientId,
+              invoice_number: `INV-OPD-${Date.now()}`,
+              status: 'Paid',
+              payment_status: 'Paid',
+              total_amount: baseFee,
+              discount_amount: discount,
+              payable_amount: feeToCollect,
+              paid_amount: feeToCollect,
+              payment_method: mode,
+              payment_reference: refNo,
+              payment_remarks: payModalNotes,
+              type: 'OPD',
+              created_by: currentUser?.id
+            };
+            const invoiceItems = [{
+              item_name: `Consultation Fee - ${payModalApt.doctor || payModalApt.doctorName || 'Doctor'}`,
+              category: 'Consultation',
+              quantity: 1,
+              unit_price: baseFee,
+              total_price: baseFee
+            }];
+            const created = await supabaseService.createInvoice(invoiceData, invoiceItems);
+            if (created) {
+              updatedBills = [created, ...updatedBills];
+            }
           }
+
+          storage.set(STORAGE_KEYS.APPOINTMENTS, nextApts);
+          storage.set(STORAGE_KEYS.BILLING, updatedBills);
+
+          window.dispatchEvent(new Event('storage'));
+          window.dispatchEvent(new CustomEvent('supabase-data-sync', { 
+            detail: { table: 'invoices', action: 'update' } 
+          }));
+          window.dispatchEvent(new CustomEvent('supabase-data-sync', { 
+            detail: { table: 'appointments', action: 'update' } 
+          }));
         }
       } catch (err) {
         console.error('Error syncing invoice payment:', err);
       }
 
-      toast.success('Consultation fee collected successfully');
+      toast.success(`Consultation fee collected via ${mode} successfully!`);
+      setIsPayModalOpen(false);
+      setPayModalApt(null);
     } else {
       toast.error('Failed to update payment status');
+    }
+    setPayModalSubmitting(false);
+  };
+
+  const handlePayAppointment = async (id: string) => {
+    const apt = appointments.find(a => a.id === id);
+    if (apt) {
+      openPayModal(apt);
     }
   };
 
@@ -2377,6 +2434,68 @@ export default function OPD() {
                         <SelectItem value="Emergency">🔴 Emergency</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Fee Collection & Payment Mode Block */}
+                  <div className="border bg-slate-50 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-black uppercase text-slate-700 tracking-wider">Fee Collection & Payment Mode</Label>
+                      <Badge variant="outline" className="text-[10px] font-bold bg-white text-emerald-700 border-emerald-200">
+                        Syncs with Billing & Accounts
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-600">Payment Collection Status</Label>
+                        <Select 
+                          value={newAppointment.paymentStatus || 'Paid'}
+                          onValueChange={(v) => setNewAppointment({...newAppointment, paymentStatus: v})}
+                        >
+                          <SelectTrigger className="bg-white text-xs h-9 font-semibold">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Paid">🟢 Collect Fee Now (Paid)</SelectItem>
+                            <SelectItem value="Unpaid">🔴 Unpaid / Pay Later</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {(newAppointment.paymentStatus || 'Paid') === 'Paid' && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-600">Mode of Payment *</Label>
+                          <Select 
+                            value={newAppointment.paymentMode || 'Cash'}
+                            onValueChange={(v) => setNewAppointment({...newAppointment, paymentMode: v})}
+                          >
+                            <SelectTrigger className="bg-white text-xs h-9 font-semibold">
+                              <SelectValue placeholder="Select mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Cash">💵 Cash</SelectItem>
+                              <SelectItem value="UPI">📱 UPI / QR Code</SelectItem>
+                              <SelectItem value="Card">💳 Debit / Credit Card</SelectItem>
+                              <SelectItem value="Net Banking">🏦 Net Banking</SelectItem>
+                              <SelectItem value="Cheque">📄 Cheque / DD</SelectItem>
+                              <SelectItem value="Insurance">🏥 Insurance / TPA</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {(newAppointment.paymentStatus || 'Paid') === 'Paid' && (
+                      <div className="space-y-1.5 pt-1">
+                        <Label className="text-xs font-bold text-slate-600">Reference / UTR / Auth No. (Optional)</Label>
+                        <Input 
+                          placeholder="e.g. UPI Ref / Card Txn ID / Cheque No"
+                          value={newAppointment.paymentRefNo || ''}
+                          onChange={(e) => setNewAppointment({...newAppointment, paymentRefNo: e.target.value})}
+                          className="bg-white text-xs h-9"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <DialogFooter className="shrink-0 mt-auto pt-2 border-t">
@@ -3917,6 +4036,121 @@ export default function OPD() {
             }}>
               <Download className="w-4 h-4 mr-2" />
               Download File
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Collect OPD Fee & Payment Mode Modal */}
+      <Dialog open={isPayModalOpen} onOpenChange={setIsPayModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700 text-lg font-bold">
+              <CheckCircle2 className="w-5 h-5" /> Collect OPD Consultation Fee
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Record payment mode and collect consultation charges synchronized with Billing & Accounts.
+            </DialogDescription>
+          </DialogHeader>
+
+          {payModalApt && (
+            <div className="space-y-4 py-2 text-xs">
+              {/* Patient Info Banner */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-slate-800 text-sm">{payModalApt.patientName || 'Patient'}</span>
+                  <Badge variant="outline" className="text-[10px] font-bold text-slate-600 bg-white">
+                    MRN: {payModalApt.patientMrn || 'N/A'}
+                  </Badge>
+                </div>
+                <p className="text-slate-500 text-[11px]">
+                  Doctor: <span className="font-medium text-slate-700">{payModalApt.doctor || 'GP / Specialist'}</span>
+                </p>
+              </div>
+
+              {/* Fee Summary Card */}
+              <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Base Consultation Charge:</span>
+                  <span className="font-bold">₹{payModalApt.fee || appointmentFee}</span>
+                </div>
+                {Number(payModalApt.discount_amount || payModalApt.discountAmount || 0) > 0 && (
+                  <div className="flex justify-between items-center text-amber-700 font-medium">
+                    <span>Discount Allowed:</span>
+                    <span>-₹{Number(payModalApt.discount_amount || payModalApt.discountAmount)}</span>
+                  </div>
+                )}
+                <div className="border-t border-emerald-200 pt-2 flex justify-between items-center font-black text-slate-800 text-sm">
+                  <span>Net Amount Payable:</span>
+                  <span className="text-emerald-700 text-xl font-extrabold">
+                    ₹{Math.max(0, (payModalApt.fee || appointmentFee) - Number(payModalApt.discount_amount || payModalApt.discountAmount || 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Mode Selector */}
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">Select Mode of Payment *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'Cash', label: '💵 Cash' },
+                    { id: 'UPI', label: '📱 UPI / QR Code' },
+                    { id: 'Card', label: '💳 Debit / Credit Card' },
+                    { id: 'Net Banking', label: '🏦 Net Banking' },
+                    { id: 'Cheque', label: '📄 Cheque / DD' },
+                    { id: 'Insurance', label: '🏥 Insurance / TPA' }
+                  ].map((pm) => (
+                    <button
+                      key={pm.id}
+                      type="button"
+                      onClick={() => setPayModalMode(pm.id)}
+                      className={`p-2.5 rounded-lg border text-left font-bold transition-all flex items-center justify-between ${
+                        payModalMode === pm.id 
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20' 
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span>{pm.label}</span>
+                      {payModalMode === pm.id && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference Number */}
+              <div className="space-y-1.5">
+                <Label className="font-bold text-slate-700">Transaction / Reference No. (Optional)</Label>
+                <Input 
+                  placeholder="e.g. UTR / Approval Code / Cheque No"
+                  value={payModalRefNo}
+                  onChange={(e) => setPayModalRefNo(e.target.value)}
+                  className="bg-white h-9"
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <Label className="font-bold text-slate-700">Payment Remarks / Notes</Label>
+                <Input 
+                  placeholder="e.g. Collected at OPD counter"
+                  value={payModalNotes}
+                  onChange={(e) => setPayModalNotes(e.target.value)}
+                  className="bg-white h-9"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsPayModalOpen(false)} disabled={payModalSubmitting}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2"
+              onClick={handleConfirmPaymentSubmit}
+              disabled={payModalSubmitting}
+            >
+              {payModalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Confirm Payment & Collect Fee
             </Button>
           </DialogFooter>
         </DialogContent>

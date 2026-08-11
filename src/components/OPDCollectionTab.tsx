@@ -88,6 +88,16 @@ export function OPDCollectionTab({
       const aptDate = apt.appointment_date || apt.date || apt.created_at || '';
       const dateStr = getLocalDateStr(aptDate);
       
+      const matchedBill = bills.find((b: any) => {
+        const bPid = b.patient_id || b.patientId;
+        const isMatchP = bPid === pId || (pId && String(bPid).includes(String(pId)));
+        const isOpdInv = b.type === 'OPD' || String(b.invoice_number || '').includes('OPD');
+        return isMatchP && isOpdInv;
+      });
+
+      const paymentMethod = matchedBill?.payment_method || matchedBill?.paymentMode || apt.payment_method || apt.payment_mode || apt.paymentMode || 'Cash';
+      const paymentRefNo = matchedBill?.payment_reference || apt.payment_ref_no || apt.paymentRefNo || '';
+
       return {
         ...apt,
         id: apt.id,
@@ -101,7 +111,9 @@ export function OPDCollectionTab({
         discountAmount: Number(apt.discount_amount || apt.discountAmount || 0),
         discountGivenBy: apt.discount_given_by || apt.discountGivenBy || null,
         refundGivenBy: apt.refund_given_by || apt.refundGivenBy || null,
-        paymentStatus: apt.payment_status || 'Pending'
+        paymentStatus: apt.payment_status || 'Pending',
+        paymentMethod,
+        paymentRefNo
       };
     }).filter((apt: any) => {
       const pId = apt.patient_id || apt.patientId;
@@ -401,13 +413,14 @@ export function OPDCollectionTab({
                     <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Discount</TableHead>
                     <TableHead className="text-right">Net</TableHead>
+                    <TableHead className="text-center">Mode</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {detailedTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-xs text-muted-foreground">
                         No transactions found matching the filter criteria.
                       </TableCell>
                     </TableRow>
@@ -444,6 +457,26 @@ export function OPDCollectionTab({
                         </TableCell>
                         <TableCell className="text-right text-xs font-bold text-slate-800">
                           ₹{tx.paymentStatus === 'Refunded' ? 0 : (tx.fee - tx.discountAmount)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center justify-center">
+                            <Badge 
+                              variant="outline" 
+                              className={`text-[9px] font-bold ${
+                                tx.paymentMethod === 'Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                tx.paymentMethod === 'UPI' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                tx.paymentMethod === 'Card' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                tx.paymentMethod === 'Net Banking' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                tx.paymentMethod === 'Cheque' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                'bg-slate-50 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {tx.paymentMethod || 'Cash'}
+                            </Badge>
+                            {tx.paymentRefNo && (
+                              <span className="text-[8px] text-slate-500 font-mono mt-0.5">Ref: {tx.paymentRefNo}</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex flex-col items-center justify-center">
