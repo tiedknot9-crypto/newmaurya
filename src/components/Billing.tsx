@@ -1310,6 +1310,24 @@ export default function Billing() {
     });
   };
 
+  const handleDeleteAllInvoices = () => {
+    setDeleteConfirm({
+      isOpen: true,
+      title: "Delete ALL Billing Data",
+      description: "Are you sure you want to permanently delete ALL invoices and recent billing data? This action cannot be undone.",
+      onConfirm: async () => {
+        const ok = await supabaseService.deleteAllInvoices();
+        if (ok) {
+          setBills([]);
+          toast.success("All billing data and invoices deleted successfully");
+          fetchData();
+        } else {
+          toast.error("Failed to delete all billing records");
+        }
+      }
+    });
+  };
+
   const handleExportBilling = () => {
     const headers = ['Invoice ID', 'Patient MRN', 'Date', 'Amount', 'Status', 'Mode'];
     const rows = bills.map(b => [
@@ -1434,22 +1452,45 @@ export default function Billing() {
   const printInvoice = (rawBill: any) => {
     const patientObj = patients.find(p => p.id === rawBill.patientId || p.id === rawBill.patient_id || p.mrn === rawBill.patient_id) || rawBill.patients;
     const itemsList = rawBill.invoice_items || rawBill.items || [];
-    const subTotal = Number(rawBill.total_amount || rawBill.totalAmount || rawBill.total || 0);
-    const discountAmt = Number(rawBill.discount_amount || rawBill.discount || 0);
-    const totalPaid = Number(rawBill.paid_amount || rawBill.paidAmount || (subTotal - discountAmt));
-    
+
+    const mappedItems = itemsList.map((item: any) => {
+      const qty = Number(item.quantity || item.qty || 1);
+      const uPrice = Number(item.unit_price || item.unitPrice || item.rate || 0);
+      const tPrice = Number(item.total_price || item.totalPrice || item.amount || 0);
+      const calcRate = uPrice > 0 ? uPrice : (tPrice && qty ? tPrice / qty : tPrice);
+      const calcTotal = tPrice > 0 ? tPrice : (calcRate * qty);
+
+      return {
+        description: item.item_name || item.name || item.description || 'Service/Medicine',
+        category: item.category || 'General',
+        quantity: qty,
+        qty: qty,
+        unit_price: calcRate,
+        unitPrice: calcRate,
+        total_price: calcTotal,
+        amount: calcTotal
+      };
+    });
+
+    const itemsSum = mappedItems.reduce((sum: number, it: any) => sum + it.total_price, 0);
+    const subTotal = itemsSum > 0 ? itemsSum : Number(rawBill.total_amount || rawBill.totalAmount || rawBill.total || 0);
+    const discountAmt = Number(rawBill.discount_amount || rawBill.discountAmount || rawBill.discount || 0);
+    const payableVal = Math.max(0, subTotal - discountAmt);
+    const totalPaid = Number(rawBill.paid_amount || rawBill.paidAmount || (rawBill.status === 'Paid' || rawBill.status === 'Settled' ? payableVal : 0));
+
     const bill = {
       ...rawBill,
       date: rawBill.created_at || rawBill.date || new Date().toISOString(),
       paymentMode: rawBill.payment_method || rawBill.paymentMode || 'Cash',
       totalAmount: subTotal,
+      total_amount: subTotal,
       discount: discountAmt,
+      discount_amount: discountAmt,
+      payable_amount: payableVal,
+      payableAmount: payableVal,
       paidAmount: totalPaid,
-      items: itemsList.map((item: any) => ({
-        description: item.item_name || item.name || item.description || 'Service/Medicine',
-        category: item.category || 'General',
-        amount: Number(item.unit_price || item.total_price || item.amount || 0)
-      }))
+      paid_amount: totalPaid,
+      items: mappedItems
     };
 
     const patient = patientObj;
@@ -1986,6 +2027,14 @@ export default function Billing() {
           </div>
           
           <div className="flex flex-wrap items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-inner">
+            <Button 
+              variant="outline" 
+              className="gap-2 bg-rose-500/20 text-white border-rose-400/30 hover:bg-rose-600 hover:text-white rounded-xl font-bold h-10" 
+              onClick={handleDeleteAllInvoices}
+            >
+              <Trash2 className="w-4 h-4 text-rose-200" />
+              Clear All Invoices
+            </Button>
             <Button variant="outline" className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white hover:text-emerald-900 rounded-xl font-bold h-10" onClick={handleExportBilling}>
               <Download className="w-4 h-4" />
               Export
@@ -3571,11 +3620,22 @@ export default function Billing() {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(bill.created_at)}</TableCell>
                           <TableCell className="font-bold whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="text-slate-900 font-bold">{formatCurrency(bill.payable_amount ?? bill.payableAmount ?? bill.total_amount ?? bill.totalAmount ?? 0)}</span>
-                              <span className="text-[10px] text-emerald-600 font-bold">Paid: {formatCurrency(bill.paid_amount ?? bill.paidAmount ?? 0)}</span>
-                              <span className="text-[10px] text-rose-500 font-bold">Discount: {formatCurrency(bill.discount_amount ?? bill.discountAmount ?? bill.discount ?? 0)}</span>
-                            </div>
+                            {(() => {
+                              const grossAmt = Number(bill.total_amount ?? bill.totalAmount ?? 0);
+                              const discAmt = Number(bill.discount_amount ?? bill.discountAmount ?? bill.discount ?? 0);
+                              const payAmt = Math.max(0, grossAmt - discAmt);
+                              const paidAmt = Number(bill.paid_amount ?? bill.paidAmount ?? (bill.status === 'Paid' || bill.status === 'Settled' ? payAmt : 0));
+
+                              return (
+                                <div className="flex flex-col">
+                                  <span className="text-slate-900 font-bold">{formatCurrency(payAmt)}</span>
+                                  <span className="text-[10px] text-emerald-600 font-bold">Paid: {formatCurrency(paidAmt)}</span>
+                                  {discAmt > 0 && (
+                                    <span className="text-[10px] text-rose-500 font-bold">Discount: {formatCurrency(discAmt)}</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <Badge variant="secondary" className={`border-none ${

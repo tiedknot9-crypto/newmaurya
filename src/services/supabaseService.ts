@@ -691,9 +691,14 @@ function cleanInvoiceForPostgres(inv: any) {
     cleaned.issued_by = cleaned.created_by;
   }
   
-  // calculate payable_amount if missing
-  if (!('payable_amount' in cleaned)) {
-    cleaned.payable_amount = Number(cleaned.total_amount) || 0;
+  // calculate payable_amount and paid_amount strictly
+  const gross = Number(cleaned.total_amount) || 0;
+  const disc = Number(cleaned.discount_amount) || 0;
+  cleaned.payable_amount = Math.max(0, gross - disc);
+
+  const pStat = String(cleaned.payment_status || cleaned.status || '').toLowerCase();
+  if (pStat === 'paid' || pStat === 'settled') {
+    cleaned.paid_amount = cleaned.payable_amount;
   }
   
   // list of actual columns in supabase_schema.sql
@@ -772,13 +777,19 @@ function mapInvoiceFromPostgres(inv: any) {
     items = inv.items.map(mapInvoiceItemFromPostgres);
   }
 
-  const amt = Number(inv.total_amount ?? inv.totalAmount ?? inv.total ?? 0);
+  const itemsSum = items.reduce((sum: number, it: any) => sum + Number(it.total_price || it.amount || 0), 0);
+  const amt = itemsSum > 0 ? itemsSum : Number(inv.total_amount ?? inv.totalAmount ?? inv.total ?? 0);
   const disc = Number(inv.discount_amount ?? inv.discountAmount ?? inv.discount ?? 0);
-  const pay = Number(inv.payable_amount ?? inv.payableAmount ?? (amt - disc));
-  const paid = Number(inv.paid_amount ?? inv.paidAmount ?? 0);
+  const pay = Math.max(0, amt - disc);
   const pStatus = inv.payment_status || inv.paymentStatus || inv.status || 'Unpaid';
   const pMethod = inv.payment_method || inv.paymentMethod || inv.paymentMode || 'Cash';
   const iNum = inv.invoice_number || inv.invoiceNumber || inv.id || '';
+
+  const pStatLower = String(pStatus).toLowerCase();
+  let paid = Number(inv.paid_amount ?? inv.paidAmount ?? 0);
+  if (pStatLower === 'paid' || pStatLower === 'settled') {
+    paid = pay;
+  }
   
   let iType = inv.type || inv.invoice_type;
   if (!iType) {
@@ -881,22 +892,35 @@ function cleanInvoiceItemForPostgres(item: any) {
 
 function mapInvoiceItemFromPostgres(item: any) {
   if (!item) return item;
-  const desc = item.description || item.item_name || '';
-  const cat = item.category || item.item_type || '';
-  const price = Number(item.amount || item.total_price || item.unit_price || 0);
-  const qty = Number(item.quantity || 1);
+  const desc = item.description || item.item_name || item.name || 'Service Item';
+  const cat = item.category || item.item_type || 'General';
+  const qty = Number(item.quantity || item.qty || 1);
+  const uPrice = Number(item.unit_price || item.unitPrice || item.rate || 0);
+  const tPrice = Number(item.total_price || item.totalPrice || item.amount || 0);
+
+  let calcRate = uPrice;
+  let calcTotal = tPrice;
+
+  if (calcRate === 0 && calcTotal > 0 && qty > 0) {
+    calcRate = calcTotal / qty;
+  } else if (calcTotal === 0 && calcRate > 0) {
+    calcTotal = calcRate * qty;
+  }
+
   return {
     ...item,
     item_name: desc,
     description: desc,
+    name: desc,
     item_type: cat,
     category: cat,
-    amount: price,
-    total_price: price,
-    totalPrice: price,
-    unit_price: price / qty,
-    unitPrice: price / qty,
-    quantity: qty
+    quantity: qty,
+    qty: qty,
+    unit_price: calcRate,
+    unitPrice: calcRate,
+    total_price: calcTotal,
+    totalPrice: calcTotal,
+    amount: calcTotal
   };
 }
 
@@ -1976,16 +2000,59 @@ const rawSupabaseService = {
 
   deleteInvoice: async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
+      if (id.startsWith('virtual-inv-opd-')) {
+        const aptId = id.replace('virtual-inv-opd-', '');
+        await supabaseService.updateAppointment(aptId, { payment_status: 'Unpaid', paymentStatus: 'Unpaid' });
+      } else {
+        const { error } = await supabase
+          .from('invoices')
+          .delete()
+          .eq('id', id);
+        if (error) console.warn('Supabase invoice delete warning:', error.message);
+      }
       
-      if (error) throw error;
+      const localBills = storage.get(STORAGE_KEYS.BILLING, []);
+      const updatedLocal = localBills.filter((b: any) => String(b.id) !== String(id));
+      storage.set(STORAGE_KEYS.BILLING, updatedLocal);
       return true;
     } catch (error: any) {
       console.error('Error deleting invoice:', error.message);
-      return false;
+      const localBills = storage.get(STORAGE_KEYS.BILLING, []);
+      const updatedLocal = localBills.filter((b: any) => String(b.id) !== String(id));
+      storage.set(STORAGE_KEYS.BILLING, updatedLocal);
+      return true;
+    }
+  },
+
+  deleteAllInvoices: async () => {
+    try {
+      // 1. Delete all invoices in Supabase
+      const { error: invErr } = await supabase
+        .from('invoices')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (invErr) console.warn('Supabase delete all invoices warning:', invErr.message);
+
+      // 2. Delete invoice_items if exists
+      try {
+        await supabase.from('invoice_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (e) {
+        // Table may not exist or non-blocking
+      }
+
+      // 3. Purge local storage billing records
+      storage.set(STORAGE_KEYS.BILLING, []);
+      storage.set('hms_invoice_items', []);
+      storage.set('hms_inventory_transactions', []);
+      
+      return true;
+    } catch (error: any) {
+      console.error('Error in deleteAllInvoices:', error.message);
+      storage.set(STORAGE_KEYS.BILLING, []);
+      storage.set('hms_invoice_items', []);
+      storage.set('hms_inventory_transactions', []);
+      return true;
     }
   },
 
