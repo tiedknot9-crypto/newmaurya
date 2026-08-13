@@ -159,8 +159,20 @@ export default function Billing() {
 
         // Synthesize virtual invoices for any OPD appointments (including Paid, Unpaid, Pending) that do not have a corresponding invoice in the list
         const missingAptInvoices: any[] = [];
+        const clearedVirtuals = storage.get<string[]>('hms_cleared_virtual_invoices', []) || [];
+        const billingClearedAt = storage.get<string | null>('hms_billing_cleared_at', null);
+        const clearedTimestamp = billingClearedAt ? new Date(billingClearedAt).getTime() : 0;
+
         if (appointmentsData) {
           appointmentsData.forEach((apt: any) => {
+            const virtId = `virtual-inv-opd-${apt.id}`;
+            if (clearedVirtuals.includes(virtId)) return;
+
+            if (clearedTimestamp > 0) {
+              const aptTime = new Date(apt.created_at || apt.appointment_date || 0).getTime();
+              if (aptTime <= clearedTimestamp) return;
+            }
+
             const aptPaymentStatus = apt.payment_status || apt.paymentStatus || 'Pending';
             if (aptPaymentStatus === 'Cancelled') return;
 

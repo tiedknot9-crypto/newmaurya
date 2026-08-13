@@ -1821,7 +1821,9 @@ const rawSupabaseService = {
         return !isDummyPatient(pat);
       }) : [];
 
-      const localInvoices = storage.get(STORAGE_KEYS.BILLING, MOCK_BILLING) || [];
+      const billingClearedAt = storage.get<string | null>('hms_billing_cleared_at', null);
+      const defaultVal = billingClearedAt ? [] : MOCK_BILLING;
+      const localInvoices = storage.get(STORAGE_KEYS.BILLING, defaultVal) || [];
       
       // Merge: any local/mock invoice that is not present in DB
       const offlineInvoices = localInvoices.filter((li: any) => {
@@ -1841,7 +1843,9 @@ const rawSupabaseService = {
       return merged;
     } catch (error: any) {
       console.warn('Error fetching invoices, falling back to local storage:', error.message);
-      const cached = storage.get(STORAGE_KEYS.BILLING, MOCK_BILLING) || [];
+      const billingClearedAt = storage.get<string | null>('hms_billing_cleared_at', null);
+      const defaultVal = billingClearedAt ? [] : MOCK_BILLING;
+      const cached = storage.get(STORAGE_KEYS.BILLING, defaultVal) || [];
       return cached.map(mapInvoiceFromPostgres).filter((inv: any) => {
         const pat = inv.patients || { id: inv.patient_id || inv.patientId, name: inv.patient_name || inv.patientName };
         return !isDummyPatient(pat);
@@ -2006,6 +2010,11 @@ const rawSupabaseService = {
         const aptId = id.replace('virtual-inv-opd-', '');
         await supabaseService.updateAppointment(aptId, { payment_status: 'Unpaid', paymentStatus: 'Unpaid' });
       } else {
+        // Delete child invoice items first to prevent FK constraint errors
+        try {
+          await supabase.from('invoice_items').delete().eq('invoice_id', id);
+        } catch (e) {}
+
         const { error } = await supabase
           .from('invoices')
           .delete()
@@ -2013,12 +2022,21 @@ const rawSupabaseService = {
         if (error) console.warn('Supabase invoice delete warning:', error.message);
       }
       
+      const clearedVirtuals = storage.get<string[]>('hms_cleared_virtual_invoices', []) || [];
+      if (!clearedVirtuals.includes(id)) {
+        storage.set('hms_cleared_virtual_invoices', [...clearedVirtuals, id]);
+      }
+
       const localBills = storage.get(STORAGE_KEYS.BILLING, []);
       const updatedLocal = localBills.filter((b: any) => String(b.id) !== String(id));
       storage.set(STORAGE_KEYS.BILLING, updatedLocal);
       return true;
     } catch (error: any) {
       console.error('Error deleting invoice:', error.message);
+      const clearedVirtuals = storage.get<string[]>('hms_cleared_virtual_invoices', []) || [];
+      if (!clearedVirtuals.includes(id)) {
+        storage.set('hms_cleared_virtual_invoices', [...clearedVirtuals, id]);
+      }
       const localBills = storage.get(STORAGE_KEYS.BILLING, []);
       const updatedLocal = localBills.filter((b: any) => String(b.id) !== String(id));
       storage.set(STORAGE_KEYS.BILLING, updatedLocal);
@@ -2028,7 +2046,14 @@ const rawSupabaseService = {
 
   deleteAllInvoices: async () => {
     try {
-      // 1. Delete all invoices in Supabase
+      // 1. Delete invoice_items first to avoid foreign key constraints
+      try {
+        await supabase.from('invoice_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (e) {
+        // Non-blocking
+      }
+
+      // 2. Delete all invoices in Supabase
       const { error: invErr } = await supabase
         .from('invoices')
         .delete()
@@ -2036,14 +2061,9 @@ const rawSupabaseService = {
       
       if (invErr) console.warn('Supabase delete all invoices warning:', invErr.message);
 
-      // 2. Delete invoice_items if exists
-      try {
-        await supabase.from('invoice_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      } catch (e) {
-        // Table may not exist or non-blocking
-      }
-
-      // 3. Purge local storage billing records
+      // 3. Mark clear timestamp and purge local storage billing records
+      const nowIso = new Date().toISOString();
+      storage.set('hms_billing_cleared_at', nowIso);
       storage.set(STORAGE_KEYS.BILLING, []);
       storage.set('hms_invoice_items', []);
       storage.set('hms_inventory_transactions', []);
@@ -2051,6 +2071,8 @@ const rawSupabaseService = {
       return true;
     } catch (error: any) {
       console.error('Error in deleteAllInvoices:', error.message);
+      const nowIso = new Date().toISOString();
+      storage.set('hms_billing_cleared_at', nowIso);
       storage.set(STORAGE_KEYS.BILLING, []);
       storage.set('hms_invoice_items', []);
       storage.set('hms_inventory_transactions', []);
