@@ -3041,6 +3041,7 @@ export default function Lab() {
                           patient_id: selectedPatientId,
                           total_amount: totalBillAmount,
                           discount_amount: totalBillAmount - finalBillAmount,
+                          payable_amount: finalBillAmount,
                           paid_amount: finalBillAmount,
                           payment_status: 'Paid',
                           payment_method: paymentMode,

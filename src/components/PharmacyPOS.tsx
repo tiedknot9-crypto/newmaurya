@@ -694,8 +694,8 @@ export default function PharmacyPOS() {
       patient_name: patientName,
       patient_phone: patientPhone,
       prescribing_doctor: doctorName,
-      total_amount: total,
-      payable_amount: total,
+      total_amount: subtotal,
+      payable_amount: discountedSubtotal,
       paid_amount: total,
       discount_amount: computedDiscountAmount,
       tax_amount: tax,
@@ -787,6 +787,8 @@ export default function PharmacyPOS() {
         items: [...cart],
         total,
         subtotal,
+        discountAmount: computedDiscountAmount,
+        discountPercent: appliedDiscountPercent,
         tax,
         patient: patientName,
         phone: patientPhone,
@@ -940,7 +942,10 @@ export default function PharmacyPOS() {
         hsnCode: item.hsnCode || item.hsn_code || '',
         mrp: item.mrp || item.selling_price || item.price || 0
       })),
-      totalAmount: lastOrder.total
+      totalAmount: lastOrder.subtotal,
+      discountAmount: lastOrder.discountAmount,
+      discountPercent: lastOrder.discountPercent,
+      payableAmount: lastOrder.total
     };
 
     const invoiceHtml = generatePharmacyInvoiceHtml(billAdapter, inventory, patientDetails, pharmacySettings, selectedSize);
