@@ -1341,11 +1341,18 @@ export default function Billing() {
     }
     setEditingBill({ ...bill });
     const rawItems = bill.invoice_items || bill.items || [];
-    const formattedItems = rawItems.map((it: any) => ({
-      description: it.item_name || it.description || 'Service/Medicine',
-      amount: Number(it.unit_price || it.amount || it.total_price || 0),
-      category: it.category || 'OPD'
-    }));
+    const formattedItems = rawItems.map((it: any) => {
+      const q = Number(it.quantity || it.qty || 1);
+      const uRate = Number(it.unit_price || it.unitPrice || it.rate || (it.total_price && q ? it.total_price / q : it.total_price) || 0);
+      const tot = Number(it.total_price || it.amount || (q * uRate) || 0);
+      return {
+        description: it.item_name || it.description || 'Service/Medicine',
+        quantity: q,
+        unitPrice: uRate,
+        amount: tot,
+        category: it.category || 'OPD'
+      };
+    });
     setInvoiceItems(formattedItems);
     setIsEditOpen(true);
   };
@@ -2511,7 +2518,7 @@ export default function Billing() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2 space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-600">Description</Label>
                       <Input 
@@ -2527,7 +2534,17 @@ export default function Billing() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Rate (₹)</Label>
+                      <Label className="text-xs font-semibold text-slate-600">Qty</Label>
+                      <Input 
+                        type="number"
+                        min="1"
+                        className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
+                        value={currentItem.quantity || '1'} 
+                        onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})} 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600">Rate / Unit (₹)</Label>
                       <Input 
                         type="number"
                         className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
@@ -2545,9 +2562,12 @@ export default function Billing() {
                     <div className="space-y-2">
                       {invoiceItems.map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-white border border-slate-100 rounded-lg text-xs shadow-sm pl-3 pr-3">
-                          <div className="flex-1">
+                          <div className="flex-1 flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-slate-850">{item.description}</span>
-                            <Badge variant="secondary" className="ml-2 text-[8px] h-4 uppercase bg-slate-100 text-slate-600 border border-slate-200">{item.category}</Badge>
+                            <Badge variant="secondary" className="text-[8px] h-4 uppercase bg-slate-100 text-slate-600 border border-slate-200">{item.category}</Badge>
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              (Qty: {item.quantity || 1} @ ₹{item.unitPrice || (item.amount && item.quantity ? item.amount / item.quantity : item.amount)})
+                            </span>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="font-bold text-slate-800">₹{item.amount}</span>
