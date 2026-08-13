@@ -288,4 +288,10 @@ export const STORAGE_KEYS = {
   PATIENT_VITALS: 'hms_patient_vitals',
   TAX_SLABS: 'hms_tax_slabs',
   OPD_CHARGES: 'hms_opd_charges',
+  MATERNITY_ANC: 'hms_maternity_anc',
+  MATERNITY_PNC: 'hms_maternity_pnc',
+  MATERNITY_DELIVERIES: 'hms_maternity_deliveries',
+  MATERNITY_HIGH_RISK: 'hms_maternity_high_risk',
+  SPECIALTY_EXAMS: 'hms_specialty_exams',
+  DISCHARGE_SUMMARIES: 'hms_discharge_summaries',
 };

@@ -5739,7 +5739,23 @@ export function getPendingOfflineCount(): number {
       STORAGE_KEYS.NURSING_TASKS,
       'hms_nursing_handovers',
       'hms_ot_schedules',
-      'hms_insurance_claims'
+      'hms_insurance_claims',
+      STORAGE_KEYS.MATERNITY_ANC,
+      STORAGE_KEYS.MATERNITY_PNC,
+      STORAGE_KEYS.MATERNITY_DELIVERIES,
+      STORAGE_KEYS.MATERNITY_HIGH_RISK,
+      STORAGE_KEYS.PRESCRIPTIONS,
+      STORAGE_KEYS.SPECIALTY_EXAMS,
+      STORAGE_KEYS.DISCHARGE_SUMMARIES,
+      STORAGE_KEYS.AUDIT_LOGS,
+      STORAGE_KEYS.BED_RATES,
+      STORAGE_KEYS.OT_RATES,
+      STORAGE_KEYS.LAB_RATES,
+      STORAGE_KEYS.MATERIAL_RATES,
+      STORAGE_KEYS.OPD_CHARGES,
+      STORAGE_KEYS.TAX_SLABS,
+      STORAGE_KEYS.EXTERNAL_REPORTS,
+      STORAGE_KEYS.RADIOLOGY_FILES
     ];
 
     for (const key of keysToCheck) {
@@ -6278,6 +6294,49 @@ export async function syncOfflineDataWithSupabase() {
       } catch (err: any) {
         errors.push(`Inventory Transaction: ${err.message || JSON.stringify(err)}`);
       }
+    }
+
+    // 15. Sync Maternity Registers (ANC, PNC, Deliveries, High Risk)
+    const maternityKeys = [
+      { key: STORAGE_KEYS.MATERNITY_ANC, table: 'maternity_anc', label: 'Maternity ANC' },
+      { key: STORAGE_KEYS.MATERNITY_PNC, table: 'maternity_pnc', label: 'Maternity PNC' },
+      { key: STORAGE_KEYS.MATERNITY_DELIVERIES, table: 'maternity_deliveries', label: 'Maternity Deliveries' },
+      { key: STORAGE_KEYS.MATERNITY_HIGH_RISK, table: 'maternity_high_risk', label: 'Maternity High Risk' },
+      { key: STORAGE_KEYS.PRESCRIPTIONS, table: 'prescriptions', label: 'Prescriptions' },
+      { key: STORAGE_KEYS.SPECIALTY_EXAMS, table: 'specialty_exams', label: 'Specialty Exam' },
+      { key: STORAGE_KEYS.DISCHARGE_SUMMARIES, table: 'discharge_summaries', label: 'Discharge Summary' },
+      { key: STORAGE_KEYS.AUDIT_LOGS, table: 'audit_logs', label: 'Audit Log' }
+    ];
+
+    for (const mat of maternityKeys) {
+      const items = storage.get(mat.key, []);
+      const offlineItems = items.filter((it: any) => it.id && String(it.id).startsWith('off-'));
+      for (const item of offlineItems) {
+        try {
+          const itemData = { ...item };
+          delete itemData.id;
+          if (itemData.patient_id && idMap[itemData.patient_id]) {
+            itemData.patient_id = idMap[itemData.patient_id];
+          }
+          if (itemData.patientId && idMap[itemData.patientId]) {
+            itemData.patientId = idMap[itemData.patientId];
+          }
+
+          const data = await selfHealingQuery('insert', mat.table, itemData);
+          if (data && data[0]) {
+            idMap[item.id] = data[0].id;
+            syncCount++;
+          }
+        } catch (err: any) {
+          // If selfHealingQuery/table is not provisioned yet, keep locally cached safely
+          console.warn(`Silent sync warning for ${mat.label}:`, err?.message || err);
+        }
+      }
+      const updatedItems = items.map((it: any) => {
+        if (idMap[it.id]) return { ...it, id: idMap[it.id] };
+        return it;
+      });
+      storage.set(mat.key, updatedItems);
     }
 
     // Broadcast synchronization updates to any other connected devices
