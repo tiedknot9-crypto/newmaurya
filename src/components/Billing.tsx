@@ -1596,34 +1596,46 @@ export default function Billing() {
                 </tr>
               </thead>
               <tbody>
-                ${bill.items.map((item: any) => {
-                  const desc = item.description || item.item_name || item.name || 'Service Item';
-                  const cat = item.category || 'General';
-                  const qty = item.quantity || item.qty || 1;
-                  const totalAmt = Number(item.total_price || item.amount || 0);
-                  const rate = Number(item.unit_price || item.unitPrice || item.rate || (totalAmt && qty ? totalAmt / qty : totalAmt));
-                  const finalAmt = totalAmt || (rate * qty);
+                ${(() => {
+                  let itemsSum = 0;
+                  const rows = (bill.items || []).map((item: any) => {
+                    const desc = item.description || item.item_name || item.name || 'Service Item';
+                    const cat = item.category || 'General';
+                    const qty = item.quantity || item.qty || 1;
+                    const totalAmt = Number(item.total_price || item.amount || 0);
+                    const rate = Number(item.unit_price || item.unitPrice || item.rate || (totalAmt && qty ? totalAmt / qty : totalAmt));
+                    const finalAmt = totalAmt || (rate * qty);
+                    itemsSum += finalAmt;
+
+                    return `
+                      <tr>
+                        <td>
+                          <div class="service-desc">${desc}</div>
+                          <div class="service-cat">Category: ${cat}</div>
+                        </td>
+                        <td style="text-align: center; font-weight: 700; font-size: 13px;">${qty}</td>
+                        <td style="text-align: right; font-weight: 600;">${formatCurrency(rate)}</td>
+                        <td style="text-align: right; font-weight: 700;">${formatCurrency(finalAmt)}</td>
+                      </tr>
+                    `;
+                  }).join('');
+
+                  const discountVal = Number(bill.discount || bill.discount_amount || 0);
+                  const subTotalVal = itemsSum > 0 ? itemsSum : Number(bill.totalAmount || 0);
+                  const payableVal = Math.max(0, subTotalVal - discountVal);
 
                   return `
-                    <tr>
-                      <td>
-                        <div class="service-desc">${desc}</div>
-                        <div class="service-cat">Category: ${cat}</div>
-                      </td>
-                      <td style="text-align: center; font-weight: 700; font-size: 13px;">${qty}</td>
-                      <td style="text-align: right; font-weight: 600;">${formatCurrency(rate)}</td>
-                      <td style="text-align: right; font-weight: 700;">${formatCurrency(finalAmt)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+                    ${rows}
+                    </tbody>
+                    </table>
 
-            <div class="total-card">
-              <div class="total-row"><span>Sub-Total:</span> <span>${formatCurrency(bill.totalAmount)}</span></div>
-              <div class="total-row"><span>Discount:</span> <span>${formatCurrency(bill.discount || 0)}</span></div>
-              <div class="total-row grand-total"><span>Total Amount:</span> <span>${formatCurrency(bill.paidAmount || (bill.totalAmount - (bill.discount || 0)))}</span></div>
-            </div>
+                    <div class="total-card">
+                      <div class="total-row"><span>Sub-Total:</span> <span>${formatCurrency(subTotalVal)}</span></div>
+                      ${discountVal > 0 ? `<div class="total-row"><span>Discount:</span> <span>${formatCurrency(discountVal)}</span></div>` : ''}
+                      <div class="total-row grand-total"><span>Total Amount:</span> <span>${formatCurrency(payableVal)}</span></div>
+                    </div>
+                  `;
+                })()}
 
             <div style="margin-top: 30px; font-size: 13px; color: #475569;">
               <strong>Payment Mode:</strong> ${bill.paymentMode || 'Cash/UPI'}<br/>
