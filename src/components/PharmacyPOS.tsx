@@ -689,6 +689,7 @@ export default function PharmacyPOS() {
       formattedPaymentMethod = `Multi-mode (Cash: ₹${multiSplit.cash}, UPI: ₹${multiSplit.upi}, Card: ₹${multiSplit.card}${multiSplit.other > 0 ? `, Other: ₹${multiSplit.other}` : ''})`;
     }
 
+    const isCredit = paymentMode === 'Credit';
     const invoice = {
       patient_id: selectedPatientId,
       patient_name: patientName,
@@ -696,12 +697,12 @@ export default function PharmacyPOS() {
       prescribing_doctor: doctorName,
       total_amount: subtotal,
       payable_amount: discountedSubtotal,
-      paid_amount: total,
+      paid_amount: isCredit ? 0 : total,
       discount_amount: computedDiscountAmount,
       tax_amount: tax,
-      payment_status: 'Paid',
+      payment_status: isCredit ? 'Unpaid' : 'Paid',
       payment_method: formattedPaymentMethod,
-      status: 'Settled',
+      status: isCredit ? 'Unpaid' : 'Settled',
       type: 'Pharmacy',
       date: new Date().toISOString()
     };
