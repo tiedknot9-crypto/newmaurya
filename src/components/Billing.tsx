@@ -1054,6 +1054,7 @@ export default function Billing() {
     serviceItem: '',
     description: '',
     amount: '',
+    quantity: '1',
     subType: ''
   });
 
@@ -1062,12 +1063,18 @@ export default function Billing() {
       toast.error('Please select a service and ensure amount is valid');
       return;
     }
+    const qty = parseInt(currentItem.quantity) || 1;
+    const rate = parseFloat(currentItem.amount) || 0;
+    const total = qty * rate;
+
     setInvoiceItems([...invoiceItems, { 
       description: currentItem.description, 
-      amount: parseInt(currentItem.amount), 
+      quantity: qty,
+      unitPrice: rate,
+      amount: total, 
       category: currentItem.category 
     }]);
-    setCurrentItem({ category: '', serviceItem: '', description: '', amount: '', subType: '' });
+    setCurrentItem({ category: '', serviceItem: '', description: '', amount: '', quantity: '1', subType: '' });
   };
 
   const removeItem = (index: number) => {
@@ -1122,13 +1129,17 @@ export default function Billing() {
         created_at: invoiceDateTime ? new Date(invoiceDateTime).toISOString() : new Date().toISOString()
       };
       
-      const itemsToInsert = invoiceItems.map(item => ({
-        item_name: item.description,
-        quantity: 1,
-        unit_price: item.amount,
-        total_price: item.amount,
-        category: item.category
-      }));
+      const itemsToInsert = invoiceItems.map(item => {
+        const qty = item.quantity || item.qty || 1;
+        const rate = item.unitPrice || (item.amount && qty ? item.amount / qty : item.amount) || 0;
+        return {
+          item_name: item.description,
+          quantity: qty,
+          unit_price: rate,
+          total_price: item.amount || rate * qty,
+          category: item.category
+        };
+      });
 
       const result = await supabaseService.createInvoice(billToAdd, itemsToInsert);
       if (result) {
@@ -1383,13 +1394,17 @@ export default function Billing() {
       created_at: editInvoiceDateTime ? new Date(editInvoiceDateTime).toISOString() : (editingBill.created_at || editingBill.date || new Date().toISOString())
     };
 
-    const itemsToInsert = invoiceItems.map(item => ({
-      item_name: item.description,
-      quantity: 1,
-      unit_price: item.amount,
-      total_price: item.amount,
-      category: item.category
-    }));
+    const itemsToInsert = invoiceItems.map(item => {
+      const qty = item.quantity || item.qty || 1;
+      const rate = item.unitPrice || (item.amount && qty ? item.amount / qty : item.amount) || 0;
+      return {
+        item_name: item.description,
+        quantity: qty,
+        unit_price: rate,
+        total_price: item.amount || rate * qty,
+        category: item.category
+      };
+    });
 
     try {
       const result = await supabaseService.updateInvoice(editingBill.id, billToUpdate, itemsToInsert);
@@ -1574,20 +1589,33 @@ export default function Billing() {
             <table class="invoice-table">
               <thead>
                 <tr>
-                  <th style="width: 70%;">Service Description</th>
-                  <th style="text-align: right;">Amount</th>
+                  <th style="width: 45%;">Service Description</th>
+                  <th style="text-align: center; width: 15%;">Qty</th>
+                  <th style="text-align: right; width: 20%;">Unit Rate</th>
+                  <th style="text-align: right; width: 20%;">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                ${bill.items.map((item: any) => `
-                  <tr>
-                    <td>
-                      <div class="service-desc">${item.description}</div>
-                      <div class="service-cat">Category: ${item.category}</div>
-                    </td>
-                    <td style="text-align: right; font-weight: 700;">${formatCurrency(item.amount)}</td>
-                  </tr>
-                `).join('')}
+                ${bill.items.map((item: any) => {
+                  const desc = item.description || item.item_name || item.name || 'Service Item';
+                  const cat = item.category || 'General';
+                  const qty = item.quantity || item.qty || 1;
+                  const totalAmt = Number(item.total_price || item.amount || 0);
+                  const rate = Number(item.unit_price || item.unitPrice || item.rate || (totalAmt && qty ? totalAmt / qty : totalAmt));
+                  const finalAmt = totalAmt || (rate * qty);
+
+                  return `
+                    <tr>
+                      <td>
+                        <div class="service-desc">${desc}</div>
+                        <div class="service-cat">Category: ${cat}</div>
+                      </td>
+                      <td style="text-align: center; font-weight: 700; font-size: 13px;">${qty}</td>
+                      <td style="text-align: right; font-weight: 600;">${formatCurrency(rate)}</td>
+                      <td style="text-align: right; font-weight: 700;">${formatCurrency(finalAmt)}</td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
 
@@ -1639,9 +1667,12 @@ export default function Billing() {
       const billItems = b.invoice_items || b.items || [];
       billItems.forEach((it: any) => {
         const desc = it.item_name || it.description || 'Service/Medicine';
-        const amt = Number(it.unit_price || it.amount || it.total_price || 0);
+        const qty = Number(it.quantity || it.qty || 1);
+        const total = Number(it.total_price || it.amount || 0);
+        const unitPrice = Number(it.unit_price || it.unitPrice || (total && qty ? total / qty : total));
+        const amt = total || (unitPrice * qty);
         const cat = it.category || 'General';
-        itemsByDate[dateKey].push({ description: desc, amount: amt, category: cat, source: b.type || 'Hospital Bill' });
+        itemsByDate[dateKey].push({ description: desc, quantity: qty, unitPrice, amount: amt, category: cat, source: b.type || 'Hospital Bill' });
       });
 
       grandTotal += Number(b.total_amount || b.totalAmount || b.total || 0);
@@ -1790,9 +1821,11 @@ export default function Billing() {
               <table class="invoice-table">
                 <thead>
                   <tr>
-                    <th style="width: 50%;">Service / Item Description</th>
-                    <th style="width: 25%;">Department/Category</th>
-                    <th style="text-align: right; width: 25%;">Amount</th>
+                    <th style="width: 40%;">Service / Item Description</th>
+                    <th style="width: 20%;">Department/Category</th>
+                    <th style="text-align: center; width: 10%;">Qty</th>
+                    <th style="text-align: right; width: 15%;">Unit Rate</th>
+                    <th style="text-align: right; width: 15%;">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1804,6 +1837,8 @@ export default function Billing() {
                       <td>
                         <div class="service-cat">${item.category} (${item.source})</div>
                       </td>
+                      <td style="text-align: center; font-weight: 700;">${item.quantity}</td>
+                      <td style="text-align: right; font-weight: 600;">${formatCurrency(item.unitPrice)}</td>
                       <td style="text-align: right; font-weight: 700;">${formatCurrency(item.amount)}</td>
                     </tr>
                   `).join('')}
@@ -2203,7 +2238,7 @@ export default function Billing() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2 space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-600">Description</Label>
                       <Input 
@@ -2219,7 +2254,17 @@ export default function Billing() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-600">Rate (₹)</Label>
+                      <Label className="text-xs font-semibold text-slate-600">Qty</Label>
+                      <Input 
+                        type="number"
+                        min="1"
+                        className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
+                        value={currentItem.quantity || '1'} 
+                        onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})} 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600">Rate / Unit (₹)</Label>
                       <Input 
                         type="number"
                         className="h-12 bg-white border-slate-200 text-sm font-semibold shadow-sm text-slate-800 rounded-xl px-4" 
@@ -2237,9 +2282,12 @@ export default function Billing() {
                     <div className="space-y-2">
                       {invoiceItems.map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-white border border-slate-100 rounded-lg text-xs shadow-sm pl-3 pr-3">
-                          <div className="flex-1">
+                          <div className="flex-1 flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-slate-850">{item.description}</span>
-                            <Badge variant="secondary" className="ml-2 text-[8px] h-4 uppercase bg-slate-100 text-slate-600 border border-slate-200">{item.category}</Badge>
+                            <Badge variant="secondary" className="text-[8px] h-4 uppercase bg-slate-100 text-slate-600 border border-slate-200">{item.category}</Badge>
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              (Qty: {item.quantity || 1} @ ₹{item.unitPrice || item.amount})
+                            </span>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="font-bold text-slate-800">₹{item.amount}</span>
@@ -3849,17 +3897,26 @@ export default function Billing() {
 
                                             <div className="space-y-2">
                                               {items.length > 0 ? (
-                                                items.map((item: any, idx: number) => (
-                                                  <div key={idx} className="flex justify-between items-center text-xs">
-                                                    <div className="flex flex-col">
-                                                      <span className="font-semibold text-slate-700">{item.item_name || item.name || item.description}</span>
-                                                      <span className="text-[10px] text-slate-400 font-bold uppercase">{item.category || 'General Fee'}</span>
+                                                items.map((item: any, idx: number) => {
+                                                  const qty = item.quantity || item.qty || 1;
+                                                  const totalAmt = Number(item.total_price || item.amount || 0);
+                                                  const unitPrice = Number(item.unit_price || item.unitPrice || (totalAmt && qty ? totalAmt / qty : totalAmt));
+                                                  const finalAmt = totalAmt || (unitPrice * qty);
+
+                                                  return (
+                                                    <div key={idx} className="flex justify-between items-center text-xs">
+                                                      <div className="flex flex-col">
+                                                        <span className="font-semibold text-slate-700">{item.item_name || item.name || item.description}</span>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                                          {item.category || 'General Fee'} • Qty: {qty} {unitPrice > 0 ? `@ ${formatCurrency(unitPrice)}` : ''}
+                                                        </span>
+                                                      </div>
+                                                      <span className="font-bold text-slate-600">
+                                                        {formatCurrency(finalAmt)}
+                                                      </span>
                                                     </div>
-                                                    <span className="font-bold text-slate-600">
-                                                      {formatCurrency(item.unit_price || item.total_price || item.amount || 0)}
-                                                    </span>
-                                                  </div>
-                                                ))
+                                                  );
+                                                })
                                               ) : (
                                                 <p className="text-slate-400 text-xs italic">No invoice items listed</p>
                                               )}
