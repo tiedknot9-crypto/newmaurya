@@ -334,10 +334,10 @@ export function generatePharmacyInvoiceHtml(
   let preTaxableSubtotal = 0;
   const itemsWithTaxable = preItems.map(item => {
     let lineTotal = item.grossAmount;
-    if (effectiveBillDiscPct > 0) {
-      lineTotal = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
-    } else if (item.explicitDiscPct > 0) {
+    if (item.explicitDiscPct > 0) {
       lineTotal = item.grossAmount * (1 - (item.explicitDiscPct / 100));
+    } else if (effectiveBillDiscPct > 0) {
+      lineTotal = item.grossAmount * (1 - (effectiveBillDiscPct / 100));
     }
     preTaxableSubtotal += lineTotal;
 
@@ -392,6 +392,9 @@ export function generatePharmacyInvoiceHtml(
 
   // Final Calculations
   const calculatedTaxableSubtotal = hydratedItems.reduce((sum, item) => sum + item.taxableValue, 0);
+  const totalLinePayableSum = hydratedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const totalDiscountCalculated = Math.max(0, grossSubtotal - totalLinePayableSum);
+  const displayDiscountPct = grossSubtotal > 0 ? ((totalDiscountCalculated / grossSubtotal) * 100) : 0;
   
   // Group by HSN for tax grid
   const hsnMap: Record<string, { hsn: string; taxableValue: number; taxRate: number; taxAmount: number }> = {};
@@ -954,12 +957,12 @@ export function generatePharmacyInvoiceHtml(
                   </tr>
                 `).join('')}
 
-                ${(billDiscountAmount > 0 || effectiveBillDiscPct > 0) ? `
+                ${(totalDiscountCalculated > 0.001) ? `
                   <tr style="font-weight: 600; font-size: 10px; background-color: #fafbfc;">
                     <td colspan="6" class="text-right" style="padding-right: 10px; color: #475569;">Gross Amount: ₹${grossSubtotal.toFixed(2)}</td>
                     <td class="text-center"></td>
-                    <td colspan="3" class="text-right" style="color: #dc2626;">Discount (${effectiveBillDiscPct > 0 ? effectiveBillDiscPct.toFixed(1) + '%' : 'Bill Disc'}):</td>
-                    <td class="text-right" style="color: #dc2626;">-₹${(grossSubtotal - calculatedTaxableSubtotal).toFixed(2)}</td>
+                    <td colspan="3" class="text-right" style="color: #dc2626;">Discount (${displayDiscountPct > 0 ? displayDiscountPct.toFixed(1) + '%' : 'Bill Disc'}):</td>
+                    <td class="text-right" style="color: #dc2626;">-₹${totalDiscountCalculated.toFixed(2)}</td>
                   </tr>
                 ` : ''}
 
