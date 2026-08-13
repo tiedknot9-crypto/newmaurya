@@ -458,7 +458,7 @@ export default function PharmacyPOS() {
         name: item.name, 
         price: item.selling_price || 0, 
         quantity: 1,
-        taxPercentage: item.tax_percentage || 0,
+        taxPercentage: (item.tax_percentage !== undefined && item.tax_percentage !== null && Number(item.tax_percentage) > 0) ? Number(item.tax_percentage) : Number(storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS)?.defaultTaxRate ?? 12),
         batchNumber: item.batch_number || '',
         expiryDate: item.expiry_date || '',
         hsnCode: item.hsn_code || '',
@@ -529,7 +529,7 @@ export default function PharmacyPOS() {
         quantity: qty,
         isLoose: isLoose,
         unitsPerStrip: unitsPerStrip,
-        taxPercentage: billingSetupItem.tax_percentage || 0,
+        taxPercentage: (billingSetupItem.tax_percentage !== undefined && billingSetupItem.tax_percentage !== null && Number(billingSetupItem.tax_percentage) > 0) ? Number(billingSetupItem.tax_percentage) : Number(storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS)?.defaultTaxRate ?? 12),
         batchNumber: billingSetupItem.batch_number || '',
         expiryDate: billingSetupItem.expiry_date || '',
         hsnCode: billingSetupItem.hsn_code || '',
@@ -612,6 +612,7 @@ export default function PharmacyPOS() {
 
   const pharmacySettings = storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS);
   const maxDiscountPercent = Number((pharmacySettings as any)?.maxDiscountPercent) || 20;
+  const defaultGstRate = Number((pharmacySettings as any)?.defaultTaxRate ?? 12);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -637,7 +638,8 @@ export default function PharmacyPOS() {
     const itemGross = item.price * item.quantity;
     const itemDisc = subtotal > 0 ? (itemGross / subtotal) * computedDiscountAmount : 0;
     const itemPayable = Math.max(0, itemGross - itemDisc);
-    const itemTaxRate = Number((item as any).taxPercentage || (item as any).tax_percentage || 0);
+    const itemRawTax = (item as any).taxPercentage ?? (item as any).tax_percentage;
+    const itemTaxRate = (itemRawTax !== undefined && itemRawTax !== null && Number(itemRawTax) > 0) ? Number(itemRawTax) : defaultGstRate;
     if (itemTaxRate <= 0) return sum;
     // Extract inclusive GST
     const itemTaxAmount = itemPayable - (itemPayable / (1 + (itemTaxRate / 100)));

@@ -1525,15 +1525,37 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="pharm-address" className="text-xs font-bold text-slate-700">Retail Location Address</Label>
-                    <Input 
-                      id="pharm-address" 
-                      value={pharmacySettings.address || ''} 
-                      onChange={(e) => setPharmacySettings({ ...pharmacySettings, address: e.target.value })} 
-                      placeholder="13 Health Street, Mumbai, Maharashtra"
-                      className="h-9"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pharm-tax-rate" className="text-xs font-bold text-slate-700">Default Pharmaceutical GST Rate (%)</Label>
+                      <Select 
+                        value={String(pharmacySettings.defaultTaxRate ?? 12)}
+                        onValueChange={(val) => setPharmacySettings({ ...pharmacySettings, defaultTaxRate: Number(val) })}
+                      >
+                        <SelectTrigger id="pharm-tax-rate" className="h-9 bg-white border-slate-200">
+                          <SelectValue placeholder="Select Default Tax Rate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">0% (GST Exempt / Life Saving)</SelectItem>
+                          <SelectItem value="5">5% (Standard Essential Drugs)</SelectItem>
+                          <SelectItem value="12">12% (Standard Pharma / Injectables)</SelectItem>
+                          <SelectItem value="18">18% (Medical Hardware & Devices)</SelectItem>
+                          <SelectItem value="28">28% (Luxury / Cosmetic Treatments)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[10px] text-muted-foreground block">Applies to pharmacy sales & POS tax calculation when item tax is unassigned.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pharm-address" className="text-xs font-bold text-slate-700">Retail Location Address</Label>
+                      <Input 
+                        id="pharm-address" 
+                        value={pharmacySettings.address || ''} 
+                        onChange={(e) => setPharmacySettings({ ...pharmacySettings, address: e.target.value })} 
+                        placeholder="13 Health Street, Mumbai, Maharashtra"
+                        className="h-9"
+                      />
+                    </div>
                   </div>
 
                   {/* Logo Config */}

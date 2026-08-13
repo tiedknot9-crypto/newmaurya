@@ -5,6 +5,7 @@ export interface PharmacySettings {
   phone: string;
   tagline: string;
   gstin: string;
+  defaultTaxRate?: number;
   bankName: string;
   bankBranch: string;
   bankAccNo: string;
@@ -21,6 +22,7 @@ export const DEFAULT_PHARMACY_SETTINGS: PharmacySettings = {
   phone: '+918601561055',
   tagline: 'A single stop for all your Healthcare needs!',
   gstin: '',
+  defaultTaxRate: 12,
   bankName: 'pnb',
   bankBranch: 'BASTI',
   bankAccNo: '11272187888',
@@ -220,7 +222,11 @@ export function generatePharmacyInvoiceHtml(
 
     const price = Number(item.price || item.unit_price || 0);
     const quantity = Number(item.quantity || 1);
-    const taxPercentage = Number(item.taxPercentage ?? item.tax_percentage ?? invItem?.tax_percentage ?? invItem?.taxPercentage ?? 0);
+    const rawTaxVal = item.taxPercentage ?? item.tax_percentage ?? invItem?.tax_percentage ?? invItem?.taxPercentage;
+    const defaultPharmaTaxRate = Number((settings as any)?.defaultTaxRate ?? 12);
+    const taxPercentage = (rawTaxVal !== undefined && rawTaxVal !== null && Number(rawTaxVal) > 0)
+      ? Number(rawTaxVal)
+      : defaultPharmaTaxRate;
     const batchNo = item.batchNumber || item.batch_number || item.batchNo || invItem?.batch_number || invItem?.batchNumber || 'A1';
 
     // 1. Manufacturing Date
@@ -350,16 +356,20 @@ export function generatePharmacyInvoiceHtml(
     };
   });
 
-  // Infer tax rate if bill-level tax was recorded but items defaulted to 0%
+  const defaultPharmaTaxRate = Number((settings as any)?.defaultTaxRate ?? 12);
+
+  // Infer tax rate if bill-level tax was recorded or if items defaulted to 0%
   const totalItemTaxSpecified = itemsWithTaxable.reduce((sum, i) => sum + (i.lineTotal * (i.taxPercentage / 100)), 0);
   let inferredTaxRate = 0;
   if (totalItemTaxSpecified === 0 && billTaxAmount > 0 && preTaxableSubtotal > 0) {
     inferredTaxRate = (billTaxAmount / preTaxableSubtotal) * 100;
+  } else if (totalItemTaxSpecified === 0) {
+    inferredTaxRate = defaultPharmaTaxRate;
   }
 
   // Hydrate items with final discount percentage and net taxable/tax values (tax-inclusive)
   const hydratedItems = itemsWithTaxable.map(item => {
-    const finalTaxRate = item.taxPercentage > 0 ? item.taxPercentage : inferredTaxRate;
+    const finalTaxRate = item.taxPercentage > 0 ? item.taxPercentage : (inferredTaxRate > 0 ? inferredTaxRate : defaultPharmaTaxRate);
     // Medicine rates are tax-inclusive: extract GST taxable value
     const lineTaxable = finalTaxRate > 0 ? (item.lineTotal / (1 + (finalTaxRate / 100))) : item.lineTotal;
     const lineTaxAmount = item.lineTotal - lineTaxable;

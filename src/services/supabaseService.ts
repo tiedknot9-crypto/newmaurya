@@ -989,7 +989,9 @@ function mapPharmacyItemFromPostgres(item: any) {
   const reorder_level = item.reorder_level !== undefined ? item.reorder_level : (item.min_stock_level !== undefined ? item.min_stock_level : 10);
   const expiry_date = item.expiry_date !== undefined ? item.expiry_date : (item.expiryDate !== undefined ? item.expiryDate : '');
   const batch_number = item.batch_number !== undefined ? item.batch_number : (item.batchNumber !== undefined ? item.batchNumber : '');
-  const tax_percentage = item.tax_percentage !== undefined ? item.tax_percentage : (item.taxPercentage !== undefined ? item.taxPercentage : 0);
+  const rawItemTax = item.tax_percentage !== undefined ? item.tax_percentage : (item.taxPercentage !== undefined ? item.taxPercentage : null);
+  const defaultPharmaTax = Number(storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS)?.defaultTaxRate ?? 12);
+  const tax_percentage = (rawItemTax !== null && rawItemTax !== undefined && Number(rawItemTax) > 0) ? Number(rawItemTax) : defaultPharmaTax;
   const hsn_code = item.hsn_code !== undefined ? item.hsn_code : (item.hsnCode !== undefined ? item.hsnCode : '');
   const rack_number = item.rack_number !== undefined ? item.rack_number : (item.rackNumber !== undefined ? item.rackNumber : '');
 
