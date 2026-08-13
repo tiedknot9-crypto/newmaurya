@@ -2780,14 +2780,31 @@ const rawSupabaseService = {
         footer_image: null
       };
     } catch (error: any) {
-      console.error('Error fetching hospital info:', error.message);
-      return null;
+      console.warn('Hospital info remote fetch notice:', error?.message || error);
+      return storage.get(STORAGE_KEYS.HOSPITAL_INFO, {
+        name: 'Medicare Multispeciality Hospital',
+        address: '123 Health Ave, Medical District, New Delhi, India 110001',
+        phone: '+91 11 2345 6789',
+        email: 'info@medicarehospital.com',
+        website: 'www.medicarehospital.com',
+        gst: '27AAAAA0000A1Z5',
+        logo: null,
+        template_image: null,
+        header_image: null,
+        footer_image: null
+      });
     }
   },
 
   updateHospitalInfo: async (info: any) => {
     try {
       if (!info) return null;
+      
+      // Update local storage cache immediately
+      const currentLocal = storage.get(STORAGE_KEYS.HOSPITAL_INFO, {});
+      const mergedLocal = { ...currentLocal, ...info };
+      storage.set(STORAGE_KEYS.HOSPITAL_INFO, mergedLocal);
+
       const { data: existing, error: fetchErr } = await supabase
         .from('hospital_info')
         .select('id, registration_number')
@@ -2870,7 +2887,7 @@ const rawSupabaseService = {
       if (result) {
         const rawResLogo = result.logo_url || result.logo || null;
         const validResLogo = (typeof rawResLogo === 'string' && rawResLogo.trim() !== '' && rawResLogo !== 'null' && rawResLogo !== 'undefined') ? rawResLogo : null;
-        return {
+        const formatted = {
           ...result,
           gst: result.tax_id || result.gst || '',
           logo: validResLogo,
@@ -2878,11 +2895,13 @@ const rawSupabaseService = {
           header_image: finalHeader,
           footer_image: finalFooter
         };
+        storage.set(STORAGE_KEYS.HOSPITAL_INFO, formatted);
+        return formatted;
       }
-      return null;
+      return mergedLocal;
     } catch (error: any) {
-      console.error('Error updating hospital info:', error.message);
-      return null;
+      console.warn('Hospital info remote update fallback to local storage:', error?.message || error);
+      return storage.get(STORAGE_KEYS.HOSPITAL_INFO, info);
     }
   },
 
