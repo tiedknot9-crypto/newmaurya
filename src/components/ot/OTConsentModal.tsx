@@ -24,7 +24,12 @@ import {
   UserCheck, 
   Languages, 
   Trash2,
-  Download
+  Download,
+  Maximize2,
+  Minimize2,
+  User as UserIcon,
+  Calendar,
+  Sparkles
 } from 'lucide-react';
 
 interface OTConsentModalProps {
@@ -50,6 +55,7 @@ export function OTConsentModal({
 }: OTConsentModalProps) {
   const [activeTab, setActiveTab] = useState<'combined' | 'operation' | 'anesthesia'>('combined');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Form State
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -94,56 +100,66 @@ export function OTConsentModal({
   useEffect(() => {
     if (isOpen) {
       if (consentToEdit) {
+        const cEdit = consentToEdit as any;
         // Edit mode
-        setSelectedPatientId(consentToEdit.patientId || consentToEdit.patient_id || '');
-        setActiveTab(consentToEdit.consentType || 'combined');
-        setProcedureName(consentToEdit.procedureName || '');
-        setDiagnosis(consentToEdit.diagnosis || '');
-        setProposedDate(consentToEdit.proposedDate || new Date().toISOString().split('T')[0]);
-        setSurgeonId(consentToEdit.surgeonId || '');
-        setSurgeonName(consentToEdit.surgeonName || '');
-        setDepartment(consentToEdit.department || 'General Surgery');
-        setAnesthesiaType(consentToEdit.anesthesiaType || 'General Anesthesia');
-        setAnesthetistId(consentToEdit.anesthetistId || '');
-        setAnesthetistName(consentToEdit.anesthetistName || '');
-        setAsaGrade(consentToEdit.asaGrade || 'ASA II');
-        setNpoStatus(consentToEdit.npoStatus || 'NPO 6-8 hrs prior to surgery');
-        setRisksExplained(consentToEdit.risksExplained ?? true);
-        setBloodTransfusionConsent(consentToEdit.bloodTransfusionConsent ?? true);
-        setIcuCareConsent(consentToEdit.icuCareConsent ?? true);
-        setConversionConsent(consentToEdit.conversionConsent ?? true);
-        setEmergencyProcedureConsent(consentToEdit.emergencyProcedureConsent ?? true);
-        setSignatoryType(consentToEdit.signatoryType || 'Patient');
-        setSignatoryName(consentToEdit.signatoryName || '');
-        setSignatoryRelationship(consentToEdit.signatoryRelationship || 'Self');
-        setSignatoryPhone(consentToEdit.signatoryPhone || '');
-        setSignatoryAddress(consentToEdit.signatoryAddress || '');
-        setIsSigned(consentToEdit.isSigned ?? true);
-        setSignatureDate(consentToEdit.signatureDate || new Date().toISOString().split('T')[0]);
-        setSignatureTime(consentToEdit.signatureTime || '10:00 AM');
-        setWitnessName(consentToEdit.witnessName || 'Sister Anjali (OT Staff Nurse)');
-        setWitnessRelationship(consentToEdit.witnessRelationship || 'Staff Nurse');
-        setSpecialNotes(consentToEdit.specialNotes || '');
+        setSelectedPatientId(cEdit.patientId || cEdit.patient_id || '');
+        setActiveTab(cEdit.consentType || 'combined');
+        setProcedureName(cEdit.procedureName || '');
+        setDiagnosis(cEdit.diagnosis || '');
+        setProposedDate(cEdit.proposedDate || cEdit.proposed_date || new Date().toISOString().split('T')[0]);
+        setSurgeonId(cEdit.surgeonId || cEdit.surgeon_id || '');
+        setSurgeonName(cEdit.surgeonName || cEdit.surgeon_name || '');
+        setDepartment(cEdit.department || 'General Surgery');
+        
+        setAnesthesiaType((cEdit.anesthesiaType || cEdit.anesthesia_type || 'General Anesthesia') as any);
+        setAnesthetistId(cEdit.anesthetistId || cEdit.anesthetist_id || '');
+        setAnesthetistName(cEdit.anesthetistName || cEdit.anesthetist_name || '');
+        setAsaGrade((cEdit.asaGrade || cEdit.asa_grade || 'ASA II') as any);
+        setNpoStatus(cEdit.npoStatus || cEdit.npo_status || 'NPO 6-8 hrs prior to surgery');
+
+        setRisksExplained(cEdit.risksExplained ?? true);
+        setBloodTransfusionConsent(cEdit.bloodTransfusionConsent ?? true);
+        setIcuCareConsent(cEdit.icuCareConsent ?? true);
+        setConversionConsent(cEdit.conversionConsent ?? true);
+        setEmergencyProcedureConsent(cEdit.emergencyProcedureConsent ?? true);
+
+        setSignatoryType((cEdit.signatoryType || cEdit.signatory_type || 'Patient') as any);
+        setSignatoryName(cEdit.signatoryName || cEdit.signatory_name || '');
+        setSignatoryRelationship(cEdit.signatoryRelationship || cEdit.signatory_relationship || 'Self');
+        setSignatoryPhone(cEdit.signatoryPhone || cEdit.signatory_phone || '');
+        setSignatoryAddress(cEdit.signatoryAddress || cEdit.signatory_address || '');
+        setIsSigned(cEdit.isSigned ?? true);
+        setSignatureDate(cEdit.signatureDate || cEdit.signature_date || new Date().toISOString().split('T')[0]);
+        setSignatureTime(cEdit.signatureTime || cEdit.signature_time || '10:00 AM');
+
+        setWitnessName(cEdit.witnessName || cEdit.witness_name || 'Sister Anjali (OT Staff Nurse)');
+        setWitnessRelationship(cEdit.witnessRelationship || cEdit.witness_relationship || 'Staff Nurse');
+        setSpecialNotes(cEdit.specialNotes || cEdit.special_notes || '');
       } else {
-        // New mode
-        const pId = patient?.id || otSchedule?.patientId || otSchedule?.patient_id || (patientsList[0]?.id || '');
+        // New consent mode
+        const otSched = otSchedule as any;
+        const pId = patient?.id || otSched?.patientId || otSched?.patient_id || (patientsList[0]?.id || '');
         setSelectedPatientId(pId);
         const activePat = patient || patientsList.find(p => p.id === pId);
 
-        setProcedureName(otSchedule?.operationName || otSchedule?.operation_name || otSchedule?.procedure_name || 'Laparoscopic Appendectomy');
+        setProcedureName(otSched?.operationName || otSched?.operation_name || otSched?.procedure_name || 'Laparoscopic Appendectomy');
         setDiagnosis((activePat as any)?.diagnosis || 'Acute Condition / Pre-Op Indication');
-        setProposedDate(otSchedule?.date || otSchedule?.scheduled_date || otSchedule?.surgery_date || new Date().toISOString().split('T')[0]);
+        setProposedDate(otSched?.date || otSched?.scheduled_date || otSched?.surgery_date || new Date().toISOString().split('T')[0]);
         
-        const defaultSurgeon = surgeonsList.find(s => s.id === (otSchedule?.surgeonId || otSchedule?.surgeon_id)) || surgeonsList[0];
-        setSurgeonId(defaultSurgeon?.id || '');
-        setSurgeonName(defaultSurgeon?.name || 'Dr. Rajesh Sharma');
-        setDepartment(defaultSurgeon?.department || 'General Surgery');
+        const defaultSurgeon = surgeonsList.find(s => s.id === (otSched?.surgeonId || otSched?.surgeon_id)) || surgeonsList[0];
+        if (defaultSurgeon) {
+          setSurgeonId(defaultSurgeon.id);
+          setSurgeonName(defaultSurgeon.name);
+          setDepartment(defaultSurgeon.department || 'General Surgery');
+        } else {
+          setSurgeonName(otSched?.surgeonName || otSched?.surgeon_name || 'Dr. Operating Surgeon, MS');
+          setDepartment(otSched?.department || 'General Surgery');
+        }
 
-        setAnesthesiaType('General Anesthesia');
-        setAnesthetistId('');
-        setAnesthetistName('Dr. Suresh Verma');
+        setAnesthesiaType((otSched?.anesthesiaType || otSched?.anesthesia_type || 'General Anesthesia') as any);
+        setAnesthetistName(otSched?.anesthetistName || otSched?.anesthetist_name || 'Dr. Duty Anesthesiologist, MD');
         setAsaGrade('ASA II');
-        setNpoStatus('NPO 6-8 hrs prior to surgery');
+        setNpoStatus('NPO 6 hours for solids, 2 hours for clear fluids');
 
         setRisksExplained(true);
         setBloodTransfusionConsent(true);
@@ -158,7 +174,11 @@ export function OTConsentModal({
         setSignatoryAddress(activePat?.address || '');
         setIsSigned(true);
         setSignatureDate(new Date().toISOString().split('T')[0]);
-        setSignatureTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
+        
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setSignatureTime(timeStr);
+
         setWitnessName('Sister Anjali (OT Staff Nurse)');
         setWitnessRelationship('Staff Nurse');
         setSpecialNotes('');
@@ -166,14 +186,18 @@ export function OTConsentModal({
     }
   }, [isOpen, consentToEdit, patient, otSchedule, patientsList, surgeonsList]);
 
-  // Handle patient change
-  const handlePatientSelect = (pId: string) => {
-    setSelectedPatientId(pId);
-    const p = patientsList.find(item => item.id === pId);
-    if (p && signatoryType === 'Patient') {
-      setSignatoryName(p.name);
-      setSignatoryPhone(p.phone || '');
-      setSignatoryAddress(p.address || '');
+  const handlePatientSelect = (patId: string) => {
+    setSelectedPatientId(patId);
+    const pat = patientsList.find(p => p.id === patId);
+    if (pat) {
+      if (signatoryType === 'Patient') {
+        setSignatoryName(pat.name);
+        setSignatoryPhone(pat.phone || '');
+        setSignatoryAddress(pat.address || '');
+      }
+      if ((pat as any).diagnosis && !diagnosis) {
+        setDiagnosis((pat as any).diagnosis);
+      }
     }
   };
 
@@ -186,20 +210,22 @@ export function OTConsentModal({
     }
   };
 
-  const buildConsentData = (): Partial<OTConsentRecord> => {
+  const buildConsentData = () => {
     return {
-      patientId: selectedPatientId || currentPatient?.id || 'p-default-1',
-      otScheduleId: otSchedule?.id || undefined,
+      id: consentToEdit?.id || `ot-consent-${Date.now()}`,
+      patientId: selectedPatientId || currentPatient?.id || '',
+      patient_id: selectedPatientId || currentPatient?.id || '',
+      otScheduleId: otSchedule?.id,
       consentType: activeTab,
-      procedureName: procedureName || 'Surgical Procedure',
-      diagnosis: diagnosis || 'Clinical Diagnosis',
+      procedureName: procedureName.trim(),
+      diagnosis: diagnosis.trim(),
       proposedDate,
       surgeonId,
-      surgeonName: surgeonName || 'Dr. Assigned Surgeon',
+      surgeonName,
       department,
       anesthesiaType,
       anesthetistId,
-      anesthetistName: anesthetistName || 'Dr. Assigned Anesthesiologist',
+      anesthetistName,
       asaGrade,
       npoStatus,
       risksExplained,
@@ -208,28 +234,29 @@ export function OTConsentModal({
       conversionConsent,
       emergencyProcedureConsent,
       signatoryType,
-      signatoryName: signatoryName || currentPatient?.name || 'Patient',
+      signatoryName: signatoryName.trim(),
       signatoryRelationship,
-      signatoryPhone,
-      signatoryAddress,
+      signatoryPhone: signatoryPhone.trim(),
+      signatoryAddress: signatoryAddress.trim(),
       isSigned,
       signatureDate,
       signatureTime,
-      witnessName,
-      witnessRelationship,
-      language: 'Bilingual (Hindi/English)',
-      specialNotes,
-      status: isSigned ? 'Signed' : 'Pending Signature'
+      witnessName: witnessName.trim(),
+      witnessRelationship: witnessRelationship.trim(),
+      specialNotes: specialNotes.trim(),
+      status: isSigned ? ('Signed' as const) : ('Pending' as const),
+      createdAt: consentToEdit?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
   };
 
   const handleSave = async (andPrint: boolean = false) => {
     if (!procedureName.trim()) {
-      toast.error('Please enter the procedure name');
+      toast.error('Please specify the Procedure / Operation Name.');
       return;
     }
     if (!signatoryName.trim()) {
-      toast.error('Please enter the signatory name');
+      toast.error('Please specify the Signatory Name.');
       return;
     }
 
@@ -294,94 +321,129 @@ export function OTConsentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[96vw] max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-slate-900 text-slate-100 border-slate-700 shadow-2xl">
-        {/* Header */}
-        <DialogHeader className="px-6 py-4 bg-slate-800/90 border-b border-slate-700 flex-shrink-0">
-          <div className="flex items-center justify-between">
+      <DialogContent 
+        className={`transition-all duration-200 flex flex-col p-0 overflow-hidden shadow-2xl border border-[#F4B2AF] ${
+          isFullscreen 
+            ? '!w-[100vw] !max-w-none !sm:max-w-none !h-[100vh] !max-h-none !rounded-none !top-0 !left-0 !translate-x-0 !translate-y-0 fixed'
+            : '!w-[98vw] !max-w-7xl !sm:max-w-7xl !h-[95vh] !max-h-[96vh] rounded-2xl'
+        }`}
+        style={{ backgroundColor: '#F8C8C6' }}
+      >
+        {/* Header with Warm Blush Tone matching Image 2 */}
+        <DialogHeader className="px-6 py-4 bg-[#F5B5B1] border-b border-[#EFA39E] flex-shrink-0">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <HeartHandshake className="w-5 h-5" />
+              <div className="w-11 h-11 rounded-2xl bg-[#E88C88] border border-[#DC7A75] flex items-center justify-center text-white shadow-sm">
+                <HeartHandshake className="w-6 h-6 text-white drop-shadow" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+                <DialogTitle className="text-xl font-bold text-[#4A1518] flex items-center gap-2 flex-wrap">
                   <span>{consentToEdit ? 'Edit OT Consent Form' : 'OT Consent Recording & Verification'}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium flex items-center gap-1">
-                    <Languages className="w-3 h-3" /> Bilingual (हिंदी / English)
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#E57373]/20 text-[#8B1E24] border border-[#E57373]/40 font-semibold flex items-center gap-1">
+                    <Languages className="w-3.5 h-3.5 text-[#B93844]" /> Bilingual (हिंदी / English)
                   </span>
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400 mt-0.5">
-                  Standard Informed Consent for Surgical Procedure & Anesthesia with Medico-Legal Compliance
+                <DialogDescription className="text-xs text-[#6E2C30] font-medium mt-0.5">
+                  Standard Informed Consent for Surgical Procedure & Anesthesia with Medico-Legal NABH Compliance
                 </DialogDescription>
               </div>
             </div>
 
-            {/* Print Blank Quick Action */}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handlePrintBlank}
-              className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600 text-xs"
-              title="Print blank form for physical signature"
-            >
-              <Download className="w-3.5 h-3.5 text-blue-400" />
-              Print Blank Form
-            </Button>
+            {/* Quick Actions & Full Dimension Controls */}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handlePrintBlank}
+                className="hidden sm:flex items-center gap-1.5 bg-white/90 hover:bg-white text-[#782024] border-[#E89C98] font-semibold text-xs h-9 shadow-sm"
+                title="Print blank form for physical signature"
+              >
+                <Download className="w-3.5 h-3.5 text-[#B93844]" />
+                Print Blank Form
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="items-center gap-1 bg-white/80 hover:bg-white text-[#782024] border-[#E89C98] text-xs h-9 px-2.5 shadow-sm"
+                title={isFullscreen ? "Restore standard view" : "Expand to Full Screen"}
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="w-4 h-4 text-[#8B1E24]" />
+                    <span className="hidden md:inline font-medium">Standard View</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-4 h-4 text-[#8B1E24]" />
+                    <span className="hidden md:inline font-medium">Full Dimension</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
-          {/* Consent Type Tabs */}
-          <div className="flex gap-2 mt-3 pt-2 border-t border-slate-700/60">
+          {/* Consent Type Tabs styled with soft rose & crisp active state */}
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 mt-3 pt-2.5 border-t border-[#EFA39E]/80">
             <button
               type="button"
               onClick={() => setActiveTab('combined')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm ${
                 activeTab === 'combined'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                  ? 'bg-[#B93844] text-white shadow-md shadow-[#B93844]/30 ring-2 ring-[#B93844]/20'
+                  : 'bg-white/80 text-[#6E2C30] hover:bg-white hover:text-[#4A1518]'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
+              <ShieldCheck className="w-4 h-4" />
               Combined Surgery & Anesthesia Consent
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('operation')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm ${
                 activeTab === 'operation'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                  ? 'bg-[#B93844] text-white shadow-md shadow-[#B93844]/30 ring-2 ring-[#B93844]/20'
+                  : 'bg-white/80 text-[#6E2C30] hover:bg-white hover:text-[#4A1518]'
               }`}
             >
-              <Scissors className="w-3.5 h-3.5" />
+              <Scissors className="w-4 h-4" />
               Operation Consent Only (शल्यक्रिया)
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('anesthesia')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm ${
                 activeTab === 'anesthesia'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
+                  ? 'bg-[#B93844] text-white shadow-md shadow-[#B93844]/30 ring-2 ring-[#B93844]/20'
+                  : 'bg-white/80 text-[#6E2C30] hover:bg-white hover:text-[#4A1518]'
               }`}
             >
-              <Syringe className="w-3.5 h-3.5" />
+              <Syringe className="w-4 h-4" />
               Anesthesia Consent Only (निश्चेतना)
             </button>
           </div>
         </DialogHeader>
 
-        {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Patient Selection & Summary */}
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/80 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Scrollable Form Body in Expansive Full Dimension Layout */}
+        <div 
+          className="flex-1 overflow-y-auto p-5 md:p-7 space-y-6"
+          style={{ backgroundColor: '#F8C8C6' }}
+        >
+          {/* Top Patient Summary & Encounter Card across 4 spacious columns */}
+          <div className="p-4 rounded-2xl bg-white/90 border border-[#F0B4B0] shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <Label className="text-xs text-slate-300 font-medium">Select Patient / मरीज</Label>
+              <Label className="text-xs font-bold text-[#6E2C30] flex items-center gap-1.5">
+                <UserIcon className="w-3.5 h-3.5 text-[#B93844]" /> Select Patient / मरीज *
+              </Label>
               {patientsList.length > 0 && !patient ? (
                 <Select value={selectedPatientId} onValueChange={handlePatientSelect}>
-                  <SelectTrigger className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9">
+                  <SelectTrigger className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]">
                     <SelectValue placeholder="Select patient..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
                     {patientsList.map(p => (
                       <SelectItem key={p.id} value={p.id} className="text-xs">
                         {p.name} ({p.mrn || 'N/A'}) - {p.age}y/{p.gender}
@@ -390,383 +452,429 @@ export function OTConsentModal({
                   </SelectContent>
                 </Select>
               ) : (
-                <div className="mt-1 p-2 bg-slate-900 rounded-lg border border-slate-700 text-xs font-medium text-white">
+                <div className="mt-1.5 p-2 bg-[#FFF4F3] rounded-lg border border-[#F4BDBA] text-xs font-bold text-[#4A1518]">
                   {currentPatient?.name || 'Selected Patient'} ({currentPatient?.mrn || 'MRN'})
                 </div>
               )}
             </div>
 
             <div>
-              <Label className="text-xs text-slate-300 font-medium">Age / Gender / Contact</Label>
-              <div className="mt-1 p-2 bg-slate-900 rounded-lg border border-slate-700 text-xs text-slate-300 flex justify-between items-center h-9">
+              <Label className="text-xs font-bold text-[#6E2C30]">Age / Gender / Contact</Label>
+              <div className="mt-1.5 p-2 bg-[#FFF4F3] rounded-lg border border-[#F4BDBA] text-xs text-slate-800 flex justify-between items-center h-9 font-medium">
                 <span>{currentPatient?.age ? `${currentPatient.age} Yrs` : 'N/A'} / {currentPatient?.gender || 'N/A'}</span>
-                <span className="text-blue-400 font-mono text-[11px]">{currentPatient?.phone || 'No phone'}</span>
+                <span className="text-[#8B1E24] font-semibold text-[11px]">{currentPatient?.phone || 'No phone'}</span>
               </div>
             </div>
 
             <div>
-              <Label className="text-xs text-slate-300 font-medium">Ward / Bed / IPD</Label>
-              <div className="mt-1 p-2 bg-slate-900 rounded-lg border border-slate-700 text-xs text-slate-300 flex justify-between items-center h-9">
+              <Label className="text-xs font-bold text-[#6E2C30]">Ward / Bed / IPD Location</Label>
+              <div className="mt-1.5 p-2 bg-[#FFF4F3] rounded-lg border border-[#F4BDBA] text-xs text-slate-800 flex justify-between items-center h-9 font-medium">
                 <span>Bed: {(currentPatient as any)?.bedNumber || (currentPatient as any)?.bed_number || (currentPatient as any)?.ward || 'General / OT'}</span>
-                <span className="text-emerald-400 text-[11px] font-semibold">{(currentPatient as any)?.status || 'Admitted'}</span>
+                <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[11px] font-bold">{(currentPatient as any)?.status || 'Admitted'}</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold text-[#6E2C30]">Consent Status & Type</Label>
+              <div className="mt-1.5 p-2 bg-[#FFF4F3] rounded-lg border border-[#F4BDBA] text-xs text-slate-800 flex justify-between items-center h-9 font-medium">
+                <span className="text-[#8B1E24] font-bold capitalize">{activeTab} Consent</span>
+                <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded text-[11px] font-bold">
+                  {isSigned ? 'Signed & Verified' : 'Pending Signature'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Section 1: Surgical Operation Details (if Combined or Operation) */}
-          {(activeTab === 'combined' || activeTab === 'operation') && (
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/70 space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
-                <Scissors className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-semibold text-white">
-                  1. Surgical Procedure & Surgeon Details (शल्यक्रिया विवरण)
-                </h3>
-              </div>
+          {/* 2-Column Responsive Grid Layout for Clear Full-Dimension Visibility */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Left Column: Surgical & Anesthesia Details */}
+            <div className="space-y-6">
+              {/* Section 1: Surgical Operation Details (if Combined or Operation) */}
+              {(activeTab === 'combined' || activeTab === 'operation') && (
+                <div className="p-5 rounded-2xl bg-white/90 border border-[#F0B4B0] shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 pb-2.5 border-b border-[#F4BDBA]">
+                    <div className="w-7 h-7 rounded-lg bg-[#F8C8C6] flex items-center justify-center text-[#8B1E24]">
+                      <Scissors className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#4A1518]">
+                        1. Surgical Procedure & Surgeon Details
+                      </h3>
+                      <p className="text-[11px] text-[#7A2B30] font-medium">शल्यक्रिया एवं मुख्य सर्जन का विवरण</p>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-300">Procedure / Operation Name (ऑपरेशन का नाम) *</Label>
-                  <Input
-                    value={procedureName}
-                    onChange={e => setProcedureName(e.target.value)}
-                    placeholder="e.g., Laparoscopic Cholecystectomy, Total Knee Replacement"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold text-[#4A1518]">
+                        Procedure / Operation Name (ऑपरेशन का नाम) *
+                      </Label>
+                      <Input
+                        value={procedureName}
+                        onChange={e => setProcedureName(e.target.value)}
+                        placeholder="e.g., Laparoscopic Cholecystectomy, Total Knee Replacement"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold text-[#4A1518]">
+                        Pre-Op Diagnosis / Indication (रोग निदान)
+                      </Label>
+                      <Input
+                        value={diagnosis}
+                        onChange={e => setDiagnosis(e.target.value)}
+                        placeholder="e.g., Symptomatic Cholelithiasis with Chronic Cholecystitis"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">
+                        Operating Surgeon (मुख्य सर्जन)
+                      </Label>
+                      {surgeonsList.length > 0 ? (
+                        <Select value={surgeonId} onValueChange={handleSurgeonChange}>
+                          <SelectTrigger className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]">
+                            <SelectValue placeholder="Select surgeon..." />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
+                            {surgeonsList.map(s => (
+                              <SelectItem key={s.id} value={s.id} className="text-xs">
+                                {s.name} ({s.department || s.role})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={surgeonName}
+                          onChange={e => setSurgeonName(e.target.value)}
+                          placeholder="Dr. Operating Surgeon"
+                          className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Department (विभाग)</Label>
+                      <Input
+                        value={department}
+                        onChange={e => setDepartment(e.target.value)}
+                        placeholder="General Surgery / Orthopaedics"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Proposed Surgery Date</Label>
+                      <Input
+                        type="date"
+                        value={proposedDate}
+                        onChange={e => setProposedDate(e.target.value)}
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <Label className="text-xs text-slate-300">Pre-Op Diagnosis / Indication (रोग निदान)</Label>
-                  <Input
-                    value={diagnosis}
-                    onChange={e => setDiagnosis(e.target.value)}
-                    placeholder="e.g., Symptomatic Cholelithiasis"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
+              {/* Section 2: Anesthesia Details (if Combined or Anesthesia) */}
+              {(activeTab === 'combined' || activeTab === 'anesthesia') && (
+                <div className="p-5 rounded-2xl bg-white/90 border border-[#F0B4B0] shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 pb-2.5 border-b border-[#F4BDBA]">
+                    <div className="w-7 h-7 rounded-lg bg-[#F8C8C6] flex items-center justify-center text-[#8B1E24]">
+                      <Syringe className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#4A1518]">
+                        2. Anesthesia Details & Pre-Anesthetic PAC (निश्चेतना विवरण)
+                      </h3>
+                      <p className="text-[11px] text-[#7A2B30] font-medium">निश्चेतना तकनीक, ASA ग्रेड एवं उपवास स्थिति</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Anesthesia Technique (प्रकार)</Label>
+                      <Select value={anesthesiaType} onValueChange={(val: any) => setAnesthesiaType(val)}>
+                        <SelectTrigger className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
+                          <SelectItem value="General Anesthesia" className="text-xs">General Anesthesia (सामान्य निश्चेतना)</SelectItem>
+                          <SelectItem value="Spinal Anesthesia" className="text-xs">Spinal Anesthesia (स्पाइनल निश्चेतना)</SelectItem>
+                          <SelectItem value="Epidural Anesthesia" className="text-xs">Epidural Anesthesia (एपिड्यूरल)</SelectItem>
+                          <SelectItem value="Regional Nerve Block" className="text-xs">Regional Nerve Block (नर्व ब्लॉक)</SelectItem>
+                          <SelectItem value="Local Anesthesia with Sedation" className="text-xs">Local with MAC / Sedation (लोकल व सेडेशन)</SelectItem>
+                          <SelectItem value="Local Anesthesia" className="text-xs">Local Anesthesia (स्थानीय सुन्निकरण)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">ASA Physical Status Grade</Label>
+                      <Select value={asaGrade} onValueChange={(val: any) => setAsaGrade(val)}>
+                        <SelectTrigger className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
+                          <SelectItem value="ASA I" className="text-xs">ASA I - Normal Healthy Patient</SelectItem>
+                          <SelectItem value="ASA II" className="text-xs">ASA II - Mild Systemic Disease</SelectItem>
+                          <SelectItem value="ASA III" className="text-xs">ASA III - Severe Systemic Disease</SelectItem>
+                          <SelectItem value="ASA IV" className="text-xs">ASA IV - Life Threatening Disease</SelectItem>
+                          <SelectItem value="ASA-E (Emergency)" className="text-xs">ASA-E - Emergency Surgery</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold text-[#4A1518]">Anesthesiologist (एनेस्थीसियोलॉजिस्ट)</Label>
+                      <Input
+                        value={anesthetistName}
+                        onChange={e => setAnesthetistName(e.target.value)}
+                        placeholder="Dr. Anesthesiologist Name, MD"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-bold text-[#4A1518]">Fasting / NPO Status (उपवास स्थिति)</Label>
+                      <Input
+                        value={npoStatus}
+                        onChange={e => setNpoStatus(e.target.value)}
+                        placeholder="e.g., NPO 6 hours for solids, 2 hours for clear fluids"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+                  </div>
                 </div>
+              )}
+            </div>
 
-                <div>
-                  <Label className="text-xs text-slate-300">Operating Surgeon (मुख्य सर्जन)</Label>
-                  {surgeonsList.length > 0 ? (
-                    <Select value={surgeonId} onValueChange={handleSurgeonChange}>
-                      <SelectTrigger className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9">
-                        <SelectValue placeholder="Select surgeon..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                        {surgeonsList.map(s => (
-                          <SelectItem key={s.id} value={s.id} className="text-xs">
-                            {s.name} ({s.department || s.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      value={surgeonName}
-                      onChange={e => setSurgeonName(e.target.value)}
-                      placeholder="Dr. Operating Surgeon"
-                      className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                    />
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+            {/* Right Column: Declarations, Signatory & Witness Information */}
+            <div className="space-y-6">
+              {/* Section 3: Legal Clauses & Informed Consent Checkboxes */}
+              <div className="p-5 rounded-2xl bg-white/90 border border-[#F0B4B0] shadow-sm space-y-3.5">
+                <div className="flex items-center gap-2 pb-2.5 border-b border-[#F4BDBA]">
+                  <div className="w-7 h-7 rounded-lg bg-[#F8C8C6] flex items-center justify-center text-[#8B1E24]">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
                   <div>
-                    <Label className="text-xs text-slate-300">Department</Label>
-                    <Input
-                      value={department}
-                      onChange={e => setDepartment(e.target.value)}
-                      placeholder="General Surgery / Ortho"
-                      className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
+                    <h3 className="text-sm font-bold text-[#4A1518]">
+                      3. Informed Declarations & Medico-Legal Approvals
+                    </h3>
+                    <p className="text-[11px] text-[#7A2B30] font-medium">सहमति घोषणाएं एवं आपातकालीन अधिकार</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-[#FFF5F4] border border-[#F4BDBA] hover:bg-white cursor-pointer transition-all">
+                    <Checkbox
+                      checked={risksExplained}
+                      onCheckedChange={(c) => setRisksExplained(!!c)}
+                      className="mt-0.5 data-[state=checked]:bg-[#B93844] data-[state=checked]:border-[#B93844]"
                     />
+                    <div className="text-xs text-slate-900">
+                      <div className="font-bold text-[#4A1518]">Risks, Benefits & Alternatives Explained in Native Tongue</div>
+                      <div className="text-[11px] text-[#7A2B30] mt-0.5 font-medium leading-relaxed">
+                        मरीज/अभिभावक को ऑपरेशन एवं निश्चेतना के जोखिम, लाभ एवं विकल्पों की जानकारी उनकी समझ में आने वाली भाषा में दी गई है।
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-[#FFF5F4] border border-[#F4BDBA] hover:bg-white cursor-pointer transition-all">
+                    <Checkbox
+                      checked={bloodTransfusionConsent}
+                      onCheckedChange={(c) => setBloodTransfusionConsent(!!c)}
+                      className="mt-0.5 data-[state=checked]:bg-[#B93844] data-[state=checked]:border-[#B93844]"
+                    />
+                    <div className="text-xs text-slate-900">
+                      <div className="font-bold text-[#4A1518]">Consent for Blood & Blood Component Transfusion (रक्त आधान)</div>
+                      <div className="text-[11px] text-[#7A2B30] mt-0.5 font-medium leading-relaxed">
+                        ऑपरेशन के दौरान या पश्चात आवश्यकता पड़ने पर रक्त या रक्त घटक चढ़ाने हेतु सहमति प्रदान की गई है।
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-[#FFF5F4] border border-[#F4BDBA] hover:bg-white cursor-pointer transition-all">
+                    <Checkbox
+                      checked={icuCareConsent}
+                      onCheckedChange={(c) => setIcuCareConsent(!!c)}
+                      className="mt-0.5 data-[state=checked]:bg-[#B93844] data-[state=checked]:border-[#B93844]"
+                    />
+                    <div className="text-xs text-slate-900">
+                      <div className="font-bold text-[#4A1518]">Post-Op ICU / Critical Care & Ventilator Support (आईसीयू वेंटिलेटर सहायता)</div>
+                      <div className="text-[11px] text-[#7A2B30] mt-0.5 font-medium leading-relaxed">
+                        गंभीर स्थिति में गहन चिकित्सा कक्ष (ICU) में भर्ती एवं वेंटिलेटर सहायता हेतु सहमति।
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-[#FFF5F4] border border-[#F4BDBA] hover:bg-white cursor-pointer transition-all">
+                    <Checkbox
+                      checked={conversionConsent}
+                      onCheckedChange={(c) => setConversionConsent(!!c)}
+                      className="mt-0.5 data-[state=checked]:bg-[#B93844] data-[state=checked]:border-[#B93844]"
+                    />
+                    <div className="text-xs text-slate-900">
+                      <div className="font-bold text-[#4A1518]">Emergency Extension & Laparoscopic-to-Open Conversion Authorization</div>
+                      <div className="text-[11px] text-[#7A2B30] mt-0.5 font-medium leading-relaxed">
+                        जीवन रक्षा हेतु ऑपरेशन के दौरान आवश्यक आकस्मिक प्रक्रिया अथवा दूरबीन से खुले ऑपरेशन में परिवर्तन की स्वीकृति।
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Section 4: Signatory & Witness Details */}
+              <div className="p-5 rounded-2xl bg-white/90 border border-[#F0B4B0] shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2.5 border-b border-[#F4BDBA]">
+                  <div className="w-7 h-7 rounded-lg bg-[#F8C8C6] flex items-center justify-center text-[#8B1E24]">
+                    <UserCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-300">Proposed Date</Label>
-                    <Input
-                      type="date"
-                      value={proposedDate}
-                      onChange={e => setProposedDate(e.target.value)}
-                      className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
+                    <h3 className="text-sm font-bold text-[#4A1518]">
+                      4. Signatory & Witness Information (हस्ताक्षरकर्ता एवं गवाह)
+                    </h3>
+                    <p className="text-[11px] text-[#7A2B30] font-medium">सहमति देने वाले व्यक्ति एवं गवाह का सत्यापन</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-3 bg-[#FFF5F4] rounded-xl border border-[#F4BDBA] flex items-center gap-4 flex-wrap">
+                    <Label className="text-xs font-bold text-[#4A1518]">Signatory Is (सहमति कर्ता):</Label>
+                    <RadioGroup 
+                      value={signatoryType} 
+                      onValueChange={(val: any) => {
+                        setSignatoryType(val);
+                        if (val === 'Patient' && currentPatient) {
+                          setSignatoryName(currentPatient.name);
+                          setSignatoryRelationship('Self');
+                          setSignatoryPhone(currentPatient.phone || '');
+                        }
+                      }}
+                      className="flex items-center gap-5"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Patient" id="sig-patient" className="text-[#B93844] border-[#B93844]" />
+                        <Label htmlFor="sig-patient" className="text-xs font-bold text-[#4A1518] cursor-pointer">Patient (स्वयं मरीज)</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Guardian / Relative" id="sig-guardian" className="text-[#B93844] border-[#B93844]" />
+                        <Label htmlFor="sig-guardian" className="text-xs font-bold text-[#4A1518] cursor-pointer">Guardian / Relative (अभिभावक / रिश्तेदार)</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Signatory Name (हस्ताक्षरकर्ता का नाम) *</Label>
+                      <Input
+                        value={signatoryName}
+                        onChange={e => setSignatoryName(e.target.value)}
+                        placeholder="Full Name"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Relationship with Patient (संबंध)</Label>
+                      <Select value={signatoryRelationship} onValueChange={setSignatoryRelationship}>
+                        <SelectTrigger className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
+                          <SelectItem value="Self" className="text-xs">Self (स्वयं)</SelectItem>
+                          <SelectItem value="Spouse (Husband/Wife)" className="text-xs">Spouse (पति / पत्नी)</SelectItem>
+                          <SelectItem value="Father" className="text-xs">Father (पिता)</SelectItem>
+                          <SelectItem value="Mother" className="text-xs">Mother (माता)</SelectItem>
+                          <SelectItem value="Son" className="text-xs">Son (पुत्र)</SelectItem>
+                          <SelectItem value="Daughter" className="text-xs">Daughter (पुत्री)</SelectItem>
+                          <SelectItem value="Brother/Sister" className="text-xs">Brother / Sister (भाई / बहन)</SelectItem>
+                          <SelectItem value="Legal Guardian" className="text-xs">Legal Guardian (कानूनी अभिभावक)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Contact Number (फोन नं.)</Label>
+                      <Input
+                        value={signatoryPhone}
+                        onChange={e => setSignatoryPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Witness Name (गवाह का नाम)</Label>
+                      <Input
+                        value={witnessName}
+                        onChange={e => setWitnessName(e.target.value)}
+                        placeholder="Sister Anjali (OT Staff Nurse)"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Signature Date</Label>
+                      <Input
+                        type="date"
+                        value={signatureDate}
+                        onChange={e => setSignatureDate(e.target.value)}
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-[#4A1518]">Signature Time</Label>
+                      <Input
+                        value={signatureTime}
+                        onChange={e => setSignatureTime(e.target.value)}
+                        placeholder="10:00 AM"
+                        className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs h-9 font-medium focus:ring-[#B93844]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Verified Electronic Lock */}
+                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                      <span className="text-xs text-emerald-900 font-bold">
+                        Electronic Verification & Medical Record Lock (इलेक्ट्रॉनिक सत्यापन)
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-emerald-900 cursor-pointer font-bold">
+                      <Checkbox
+                        checked={isSigned}
+                        onCheckedChange={(c) => setIsSigned(!!c)}
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                      />
+                      Mark as Signed & Approved
+                    </label>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-bold text-[#4A1518]">Special Clinical / High-Risk Notes (विशेष टिप्पणी)</Label>
+                    <Textarea
+                      value={specialNotes}
+                      onChange={e => setSpecialNotes(e.target.value)}
+                      placeholder="e.g. Known hypertensive, PAC clearance obtained, High risk explained to patient's son..."
+                      rows={2}
+                      className="mt-1.5 bg-white border-[#EAAFA9] text-slate-900 text-xs font-medium focus:ring-[#B93844]"
                     />
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section 2: Anesthesia Details (if Combined or Anesthesia) */}
-          {(activeTab === 'combined' || activeTab === 'anesthesia') && (
-            <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/70 space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
-                <Syringe className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-white">
-                  2. Anesthesia Details & Assessment (निश्चेतना विवरण)
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-300">Anesthesia Technique (प्रकार)</Label>
-                  <Select value={anesthesiaType} onValueChange={(val: any) => setAnesthesiaType(val)}>
-                    <SelectTrigger className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                      <SelectItem value="General Anesthesia" className="text-xs">General Anesthesia (सामान्य निश्चेतना)</SelectItem>
-                      <SelectItem value="Spinal Anesthesia" className="text-xs">Spinal Anesthesia (स्पाइनल निश्चेतना)</SelectItem>
-                      <SelectItem value="Epidural Anesthesia" className="text-xs">Epidural Anesthesia (एपिड्यूरल)</SelectItem>
-                      <SelectItem value="Regional Nerve Block" className="text-xs">Regional Nerve Block (नर्व ब्लॉक)</SelectItem>
-                      <SelectItem value="Local Anesthesia with Sedation" className="text-xs">Local with MAC / Sedation (लोकल व सेडेशन)</SelectItem>
-                      <SelectItem value="Local Anesthesia" className="text-xs">Local Anesthesia (स्थानीय सुन्निकरण)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">ASA Physical Status Grade</Label>
-                  <Select value={asaGrade} onValueChange={(val: any) => setAsaGrade(val)}>
-                    <SelectTrigger className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                      <SelectItem value="ASA I" className="text-xs">ASA I - Normal Healthy Patient</SelectItem>
-                      <SelectItem value="ASA II" className="text-xs">ASA II - Mild Systemic Disease</SelectItem>
-                      <SelectItem value="ASA III" className="text-xs">ASA III - Severe Systemic Disease</SelectItem>
-                      <SelectItem value="ASA IV" className="text-xs">ASA IV - Life Threatening Disease</SelectItem>
-                      <SelectItem value="ASA-E (Emergency)" className="text-xs">ASA-E - Emergency Surgery</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Anesthesiologist (एनेस्थीसियोलॉजिस्ट)</Label>
-                  <Input
-                    value={anesthetistName}
-                    onChange={e => setAnesthetistName(e.target.value)}
-                    placeholder="Dr. Anesthesiologist Name"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-
-                <div className="md:col-span-3">
-                  <Label className="text-xs text-slate-300">Fasting / NPO Status (उपवास स्थिति)</Label>
-                  <Input
-                    value={npoStatus}
-                    onChange={e => setNpoStatus(e.target.value)}
-                    placeholder="e.g., NPO 6 hours for solids, 2 hours for clear fluids"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Legal Clauses & Informed Consent Checkboxes */}
-          <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/70 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-semibold text-white">
-                3. Informed Declarations & Medico-Legal Approvals (सहमति घोषणाएं)
-              </h3>
-            </div>
-
-            <div className="space-y-2.5 pt-1">
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/50 hover:bg-slate-900 cursor-pointer">
-                <Checkbox
-                  checked={risksExplained}
-                  onCheckedChange={(c) => setRisksExplained(!!c)}
-                  className="mt-0.5"
-                />
-                <div className="text-xs text-slate-300">
-                  <div className="font-medium text-white">Risks, Benefits & Alternatives Explained in Native Tongue</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    मरीज/अभिभावक को ऑपरेशन एवं निश्चेतना के जोखिम, लाभ एवं विकल्पों की जानकारी उनकी समझ में आने वाली भाषा में दी गई है।
-                  </div>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/50 hover:bg-slate-900 cursor-pointer">
-                <Checkbox
-                  checked={bloodTransfusionConsent}
-                  onCheckedChange={(c) => setBloodTransfusionConsent(!!c)}
-                  className="mt-0.5"
-                />
-                <div className="text-xs text-slate-300">
-                  <div className="font-medium text-white">Consent for Blood & Blood Component Transfusion (रक्त आधान)</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    ऑपरेशन के दौरान या पश्चात आवश्यकता पड़ने पर रक्त या रक्त घटक चढ़ाने हेतु सहमति प्रदान की गई है।
-                  </div>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/50 hover:bg-slate-900 cursor-pointer">
-                <Checkbox
-                  checked={icuCareConsent}
-                  onCheckedChange={(c) => setIcuCareConsent(!!c)}
-                  className="mt-0.5"
-                />
-                <div className="text-xs text-slate-300">
-                  <div className="font-medium text-white">Post-Op ICU / Critical Care & Ventilator Support (आईसीयू वेंटिलेटर सहायता)</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    गंभीर स्थिति में गहन चिकित्सा कक्ष (ICU) में भर्ती एवं वेंटिलेटर सहायता हेतु सहमति।
-                  </div>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/50 hover:bg-slate-900 cursor-pointer">
-                <Checkbox
-                  checked={conversionConsent}
-                  onCheckedChange={(c) => setConversionConsent(!!c)}
-                  className="mt-0.5"
-                />
-                <div className="text-xs text-slate-300">
-                  <div className="font-medium text-white">Emergency Extension & Laparoscopic-to-Open Conversion Authorization</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    जीवन रक्षा हेतु ऑपरेशन के दौरान आवश्यक आकस्मिक प्रक्रिया अथवा दूरबीन से खुले ऑपरेशन में परिवर्तन की स्वीकृति।
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Section 4: Signatory & Witness Details */}
-          <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/70 space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
-              <UserCheck className="w-4 h-4 text-purple-400" />
-              <h3 className="text-sm font-semibold text-white">
-                4. Signatory & Witness Information (हस्ताक्षरकर्ता एवं गवाह)
-              </h3>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-6">
-                <Label className="text-xs text-slate-300 font-medium">Signatory Is:</Label>
-                <RadioGroup 
-                  value={signatoryType} 
-                  onValueChange={(val: any) => {
-                    setSignatoryType(val);
-                    if (val === 'Patient' && currentPatient) {
-                      setSignatoryName(currentPatient.name);
-                      setSignatoryRelationship('Self');
-                      setSignatoryPhone(currentPatient.phone || '');
-                    }
-                  }}
-                  className="flex items-center gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Patient" id="sig-patient" />
-                    <Label htmlFor="sig-patient" className="text-xs text-slate-200 cursor-pointer">Patient (स्वयं मरीज)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="Guardian / Relative" id="sig-guardian" />
-                    <Label htmlFor="sig-guardian" className="text-xs text-slate-200 cursor-pointer">Guardian / Relative (अभिभावक / रिश्तेदार)</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label className="text-xs text-slate-300">Signatory Name (हस्ताक्षरकर्ता का नाम) *</Label>
-                  <Input
-                    value={signatoryName}
-                    onChange={e => setSignatoryName(e.target.value)}
-                    placeholder="Full Name"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Relationship with Patient (संबंध)</Label>
-                  <Select value={signatoryRelationship} onValueChange={setSignatoryRelationship}>
-                    <SelectTrigger className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                      <SelectItem value="Self" className="text-xs">Self (स्वयं)</SelectItem>
-                      <SelectItem value="Spouse (Husband/Wife)" className="text-xs">Spouse (पति / पत्नी)</SelectItem>
-                      <SelectItem value="Father" className="text-xs">Father (पिता)</SelectItem>
-                      <SelectItem value="Mother" className="text-xs">Mother (माता)</SelectItem>
-                      <SelectItem value="Son" className="text-xs">Son (पुत्र)</SelectItem>
-                      <SelectItem value="Daughter" className="text-xs">Daughter (पुत्री)</SelectItem>
-                      <SelectItem value="Brother/Sister" className="text-xs">Brother / Sister (भाई / बहन)</SelectItem>
-                      <SelectItem value="Legal Guardian" className="text-xs">Legal Guardian (कानूनी अभिभावक)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Contact Number (फोन नं.)</Label>
-                  <Input
-                    value={signatoryPhone}
-                    onChange={e => setSignatoryPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Witness Name (गवाह का नाम)</Label>
-                  <Input
-                    value={witnessName}
-                    onChange={e => setWitnessName(e.target.value)}
-                    placeholder="Sister Anjali (OT Staff Nurse)"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Signature Date</Label>
-                  <Input
-                    type="date"
-                    value={signatureDate}
-                    onChange={e => setSignatureDate(e.target.value)}
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-300">Signature Time</Label>
-                  <Input
-                    value={signatureTime}
-                    onChange={e => setSignatureTime(e.target.value)}
-                    placeholder="10:00 AM"
-                    className="mt-1 bg-slate-900 border-slate-700 text-white text-xs h-9"
-                  />
-                </div>
-              </div>
-
-              {/* Verified Badge Checkbox */}
-              <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                  <span className="text-xs text-emerald-200 font-medium">
-                    Electronic Verification & Medical Record Lock (इलेक्ट्रॉनिक सत्यापन)
-                  </span>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-emerald-300 cursor-pointer font-semibold">
-                  <Checkbox
-                    checked={isSigned}
-                    onCheckedChange={(c) => setIsSigned(!!c)}
-                  />
-                  Mark as Signed & Approved
-                </label>
-              </div>
-
-              <div>
-                <Label className="text-xs text-slate-300">Special Clinical / High-Risk Notes (विशेष टिप्पणी)</Label>
-                <Textarea
-                  value={specialNotes}
-                  onChange={e => setSpecialNotes(e.target.value)}
-                  placeholder="e.g. Known hypertensive, PAC clearance obtained, High risk explained to patient's son..."
-                  rows={2}
-                  className="mt-1 bg-slate-900 border-slate-700 text-white text-xs"
-                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <DialogFooter className="px-6 py-3.5 bg-slate-800/95 border-t border-slate-700 flex items-center justify-between gap-3 flex-shrink-0">
+        {/* Footer Actions with Warm Blush Palette */}
+        <DialogFooter className="px-6 py-3.5 bg-[#F5B5B1] border-t border-[#EFA39E] flex items-center justify-between gap-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             {consentToEdit?.id && (
               <Button
@@ -775,7 +883,7 @@ export function OTConsentModal({
                 size="sm"
                 onClick={handleDelete}
                 disabled={isSubmitting}
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 text-xs gap-1.5"
+                className="text-[#8B1E24] hover:text-white hover:bg-[#B93844] text-xs gap-1.5 font-semibold"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete
@@ -787,20 +895,20 @@ export function OTConsentModal({
               variant="outline"
               size="sm"
               onClick={() => handlePrintBilingual()}
-              className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600 text-xs flex items-center gap-1.5"
+              className="bg-white/90 hover:bg-white text-[#4A1518] border-[#E89C98] text-xs font-bold flex items-center gap-1.5 shadow-sm"
             >
-              <Printer className="w-3.5 h-3.5 text-blue-400" />
+              <Printer className="w-3.5 h-3.5 text-[#B93844]" />
               Preview & Print Bilingual (हिंदी / Eng)
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="text-slate-400 hover:text-white text-xs"
+              className="text-[#6E2C30] hover:text-[#4A1518] hover:bg-white/50 text-xs font-semibold"
             >
               Cancel
             </Button>
@@ -810,7 +918,7 @@ export function OTConsentModal({
               size="sm"
               onClick={() => handleSave(true)}
               disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-md px-4"
             >
               <Printer className="w-3.5 h-3.5" />
               Save & Print (Hindi/Eng)
@@ -821,7 +929,7 @@ export function OTConsentModal({
               size="sm"
               onClick={() => handleSave(false)}
               disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md"
+              className="bg-[#B93844] hover:bg-[#A32B36] text-white text-xs font-bold flex items-center gap-1.5 shadow-md px-4"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               Save Consent
