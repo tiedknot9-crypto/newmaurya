@@ -1342,10 +1342,21 @@ export default function Billing() {
 
   const handleExportBilling = () => {
     const headers = ['Invoice ID', 'Patient MRN', 'Date', 'Amount', 'Status', 'Mode'];
-    const rows = bills.map(b => [
-      b.id,
+    const sortedBills = [...bills].sort((a, b) => {
+      const idAStr = getSequentialInvoiceId(a);
+      const idBStr = getSequentialInvoiceId(b);
+      const numA = parseInt(idAStr.replace(/\D/g, ''), 10);
+      const numB = parseInt(idBStr.replace(/\D/g, ''), 10);
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        return numB - numA;
+      }
+      return new Date(b.created_at || b.date || 0).getTime() - new Date(a.created_at || a.date || 0).getTime();
+    });
+
+    const rows = sortedBills.map(b => [
+      getSequentialInvoiceId(b),
       b.patients?.mrn || 'N/A',
-      b.created_at,
+      b.created_at || b.date,
       b.total_amount,
       b.status,
       b.payment_method || 'N/A'
@@ -2099,7 +2110,16 @@ export default function Billing() {
                               </span>
                             </div>
                             <div className="space-y-2">
-                              {typedDayBills.map((bill) => {
+                              {[...typedDayBills]
+                                .sort((a, b) => {
+                                  const idAStr = getSequentialInvoiceId(a);
+                                  const idBStr = getSequentialInvoiceId(b);
+                                  const numA = parseInt(idAStr.replace(/\D/g, ''), 10);
+                                  const numB = parseInt(idBStr.replace(/\D/g, ''), 10);
+                                  if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numB - numA;
+                                  return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                                })
+                                .map((bill) => {
                                 const patient = patients.find(p => p.id === bill.patient_id);
                                 return (
                                   <div key={bill.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
@@ -3458,6 +3478,22 @@ export default function Billing() {
           if (filterPaymentMethod === 'insurance') return method === 'insurance';
           if (filterPaymentMethod === 'na') return method === 'n/a' || method === 'na' || !method;
           return false;
+        }).sort((a, b) => {
+          const idAStr = getSequentialInvoiceId(a);
+          const idBStr = getSequentialInvoiceId(b);
+          
+          const numA = parseInt(idAStr.replace(/\D/g, ''), 10);
+          const numB = parseInt(idBStr.replace(/\D/g, ''), 10);
+
+          if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+            return numB - numA; // Latest bill / highest Invoice ID at the top
+          }
+
+          const timeA = new Date(a.created_at || a.date || a.invoice_date || 0).getTime();
+          const timeB = new Date(b.created_at || b.date || b.invoice_date || 0).getTime();
+          if (timeA !== timeB) return timeB - timeA;
+
+          return String(b.id || '').localeCompare(String(a.id || ''));
         });
 
         const totalFilteredValue = displayedBills.reduce((acc, b) => {
