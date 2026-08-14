@@ -26,7 +26,10 @@ import {
   Loader2,
   Download,
   Eye,
-  Baby
+  Baby,
+  HeartHandshake,
+  Languages,
+  FileCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +45,9 @@ import { supabaseService, toDeterministicUuid } from '@/services/supabaseService
 import { useDataSync } from '@/hooks/useDataSync';
 import { getPrescriptionPrintHtml } from '@/lib/prescriptionPrint';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
+import { OTConsentModal } from './ot/OTConsentModal';
+import { getOTConsentPrintHtml } from '@/lib/otConsentPrint';
+import { OTConsentRecord } from '@/types';
 
 const isPatientIdMatch = (id1: any, id2: any): boolean => {
   if (!id1 || !id2) return false;
@@ -187,6 +193,10 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
   const [newNote, setNewNote] = useState({ content: '', note_type: 'DOCTOR' as 'DOCTOR' | 'NURSE' });
   const [historyFilter, setHistoryFilter] = useState<'all' | 'doctor' | 'nurse'>('all');
   
+  const [otConsents, setOtConsents] = useState<OTConsentRecord[]>([]);
+  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
+  const [selectedConsentToEdit, setSelectedConsentToEdit] = useState<OTConsentRecord | null>(null);
+
   const [appointments, setAppointments] = useState<any[]>([]);
   const [billing, setBilling] = useState<any[]>([]);
 
@@ -333,7 +343,7 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
   }, [patientIdFromUrl, patients, isDoctor, assignedPatientIds]);
 
   const fetchPatientDetails = async (id: string) => {
-    const [appts, bills, rx, vts, labs, claims, rads, dels, babies, notes] = await Promise.all([
+    const [appts, bills, rx, vts, labs, claims, rads, dels, babies, notes, consents] = await Promise.all([
       supabaseService.getAppointments(), // Ideally should be getAppointments(id)
       supabaseService.getInvoices(),      // Ideally should be getInvoices(id)
       supabaseService.getPrescriptions(id),
@@ -343,7 +353,8 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
       supabaseService.getRadiologyRecords ? supabaseService.getRadiologyRecords() : Promise.resolve([]),
       supabaseService.getDeliveries ? supabaseService.getDeliveries() : Promise.resolve([]),
       supabaseService.getNewborns ? supabaseService.getNewborns() : Promise.resolve([]),
-      supabaseService.getClinicalNotes ? supabaseService.getClinicalNotes(id) : Promise.resolve([])
+      supabaseService.getClinicalNotes ? supabaseService.getClinicalNotes(id) : Promise.resolve([]),
+      supabaseService.getOTConsents ? supabaseService.getOTConsents(id) : Promise.resolve([])
     ]);
 
     if (appts) setAppointments(appts.filter((a: any) => a.patient_id === id || a.patientId === id));
@@ -383,6 +394,69 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
     if (notes) {
       setClinicalNotes(notes);
     }
+    if (consents) {
+      setOtConsents(consents.filter((c: any) => isPatientIdMatch(c.patientId || c.patient_id, id)));
+    }
+  };
+
+  const handlePrintOTConsent = (consent: OTConsentRecord) => {
+    if (!selectedPatient) return;
+    const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
+      name: 'GLOBAL HOSPITAL & RESEARCH CENTRE',
+      address: '123 Healthcare Way, Medical City',
+      phone: '+91 98765 43210'
+    });
+
+    const html = getOTConsentPrintHtml(
+      consent,
+      selectedPatient,
+      hospitalInfo,
+      {
+        blankForm: false,
+        printMode: (consent.consentType?.toLowerCase() as any) || 'combined'
+      }
+    );
+
+    printHtmlWithPreview(html, `OT Consent - ${selectedPatient.name} (${consent.consentType})`);
+  };
+
+  const handlePrintBlankOTConsent = () => {
+    const hospitalInfo = storage.get<{ name: string; address: string; phone: string }>(STORAGE_KEYS.HOSPITAL_INFO, {
+      name: 'GLOBAL HOSPITAL & RESEARCH CENTRE',
+      address: '123 Healthcare Way, Medical City',
+      phone: '+91 98765 43210'
+    });
+
+    const html = getOTConsentPrintHtml(
+      null,
+      selectedPatient || { name: '', mrn: '', age: '', gender: '' },
+      hospitalInfo,
+      {
+        blankForm: true,
+        printMode: 'combined'
+      }
+    );
+
+    printHtmlWithPreview(html, `Blank OT Consent Form - Bilingual`);
+  };
+
+  const handleDeleteOTConsent = (id: string) => {
+    setDeleteConfirm({
+      isOpen: true,
+      title: 'Delete OT Consent Record',
+      description: 'Are you sure you want to delete this surgical & anesthesia consent form? This will remove the recorded pre-op legal authorization.',
+      onConfirm: async () => {
+        const res = await supabaseService.deleteOTConsent(id);
+        if (res) {
+          toast.success('OT Consent record deleted successfully');
+          if (selectedPatient) {
+            fetchPatientDetails(selectedPatient.id);
+          }
+        } else {
+          toast.error('Failed to delete consent record');
+        }
+      }
+    });
   };
 
   const handlePrintPathologyReport = (order: any) => {
@@ -1960,6 +2034,205 @@ View full details at: ${shareUrl}
               </Card>
             )}
 
+            {/* OT Consents & Pre-Op Clearances (सहमति पत्र) */}
+            <Card className="border-none shadow-sm md:col-span-2 border-l-4 border-emerald-500 bg-emerald-50/15">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center shadow-xs">
+                      <HeartHandshake className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg font-bold text-slate-900">
+                          OT Consents & Pre-Op Clearances
+                        </CardTitle>
+                        <Badge className="bg-emerald-100 text-emerald-800 border-none text-[10px] font-bold py-0.5 px-2">
+                          सहमति पत्र
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] font-semibold text-slate-500 border-slate-200">
+                          <Languages className="w-3 h-3 mr-1 text-slate-400" />
+                          Hindi & English (द्विभाषी)
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-xs text-slate-500 mt-0.5">
+                        Informed surgical & anesthesia legal consents with patient/guardian signatures & risk disclosures.
+                      </CardDescription>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-50 gap-1.5"
+                      onClick={handlePrintBlankOTConsent}
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-500" />
+                      Print Blank Form (खाली फॉर्म)
+                    </Button>
+                    <Button 
+                      size="sm"
+                      className="h-8 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold gap-1.5 shadow-xs"
+                      onClick={() => {
+                        setSelectedConsentToEdit(null);
+                        setIsConsentModalOpen(true);
+                      }}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Take OT Consent
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                {otConsents.length === 0 ? (
+                  <div className="py-8 text-center bg-white rounded-xl border border-slate-100">
+                    <HeartHandshake className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">No OT Consent Forms Recorded</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 max-w-md mx-auto">
+                      No pre-operative informed surgical or anesthesia consent has been filed for {selectedPatient.name}. You can record a signed digital consent or print a bilingual physical form.
+                    </p>
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                      <Button 
+                        size="sm" 
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-7"
+                        onClick={() => {
+                          setSelectedConsentToEdit(null);
+                          setIsConsentModalOpen(true);
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        + Take Consent Now
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {otConsents.map((consent) => (
+                      <div 
+                        key={consent.id} 
+                        className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all flex flex-col justify-between"
+                      >
+                        <div>
+                          {/* Card Top Badges */}
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Badge className={`text-[10px] font-bold border-none ${
+                                consent.consentType === 'COMBINED' 
+                                  ? 'bg-purple-100 text-purple-700' 
+                                  : consent.consentType === 'OPERATION'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-teal-100 text-teal-700'
+                              }`}>
+                                {consent.consentType === 'COMBINED' ? 'Operation & Anesthesia' : consent.consentType}
+                              </Badge>
+                              <Badge className="bg-slate-100 text-slate-600 text-[9px] font-bold border-none">
+                                {consent.anesthesiaType || 'General'}
+                              </Badge>
+                              {consent.asaGrade && (
+                                <Badge variant="outline" className="text-[9px] font-bold text-slate-500">
+                                  {consent.asaGrade}
+                                </Badge>
+                              )}
+                            </div>
+                            <Badge className={`text-[9px] font-bold border-none uppercase ${
+                              consent.status === 'SIGNED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {consent.status === 'SIGNED' ? '✓ Consent Signed' : 'Pending Signature'}
+                            </Badge>
+                          </div>
+
+                          {/* Surgery / Procedure Title */}
+                          <h4 className="text-sm font-black text-slate-800 leading-snug">
+                            {consent.procedureName || 'Scheduled Surgical Procedure'}
+                          </h4>
+                          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                            DATE: {formatDate(consent.consentDate || consent.createdAt)} • FORM: #{consent.id.substring(0, 8).toUpperCase()}
+                          </p>
+
+                          {/* Surgeon & Team */}
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Surgeon</span>
+                              <span className="font-semibold text-slate-700">{consent.surgeonName || 'Operating Surgeon'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase block">Anesthesiologist</span>
+                              <span className="font-semibold text-slate-700">{consent.anesthesiologistName || 'Duty Specialist'}</span>
+                            </div>
+                          </div>
+
+                          {/* Signatory Info */}
+                          <div className="mt-2 p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px] space-y-1">
+                            <div className="flex justify-between items-center text-slate-600">
+                              <span><strong>Signatory:</strong> {consent.signatoryName || selectedPatient.name} ({consent.signatoryRelation || 'Self'})</span>
+                              {consent.signatoryPhone && <span className="text-[10px] text-slate-400">{consent.signatoryPhone}</span>}
+                            </div>
+                            {consent.witnessName && (
+                              <div className="text-[10px] text-slate-500">
+                                <strong>Witness:</strong> {consent.witnessName}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {consent.highRiskInformed && (
+                                <span className="text-[9px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded">
+                                  High Risk Disclosed
+                                </span>
+                              )}
+                              {consent.bloodTransfusionConsent && (
+                                <span className="text-[9px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+                                  Blood Transfusion OK
+                                </span>
+                              )}
+                              {consent.icuVentilatorConsent && (
+                                <span className="text-[9px] text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded">
+                                  ICU / Ventilator OK
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold h-7 gap-1 px-3 shadow-xs"
+                            onClick={() => handlePrintOTConsent(consent)}
+                          >
+                            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                            Print Bilingual (हिंदी/Eng)
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs font-semibold text-slate-600 hover:bg-slate-100 px-2"
+                              onClick={() => {
+                                setSelectedConsentToEdit(consent);
+                                setIsConsentModalOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs font-semibold text-rose-600 hover:bg-rose-50 px-2"
+                              onClick={() => handleDeleteOTConsent(consent.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Billing & Payments */}
             {isFinancialVisible && (
               <Card className="border-none shadow-sm md:col-span-2">
@@ -2405,6 +2678,23 @@ View full details at: ${shareUrl}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <OTConsentModal
+        isOpen={isConsentModalOpen}
+        onClose={() => {
+          setIsConsentModalOpen(false);
+          setSelectedConsentToEdit(null);
+        }}
+        consentToEdit={selectedConsentToEdit}
+        patient={selectedPatient}
+        patientsList={patients}
+        surgeonsList={doctorsList}
+        onSuccess={() => {
+          if (selectedPatient) {
+            fetchPatientDetails(selectedPatient.id);
+          }
+        }}
+      />
+
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm(prev => ({ ...prev, isOpen: false }))}

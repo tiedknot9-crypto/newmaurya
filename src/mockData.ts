@@ -1,4 +1,4 @@
-import { Patient, Appointment, User, Bed, BillingRecord, LabTest, InventoryItem, OperationTheatre, OperationRecord, NursingTask, NurseShift, PatientVitals, Prescription } from './types';
+import { Patient, Appointment, User, Bed, BillingRecord, LabTest, InventoryItem, OperationTheatre, OperationRecord, OTConsentRecord, NursingTask, NurseShift, PatientVitals, Prescription } from './types';
 
 export const MOCK_USERS: User[] = [
   { id: 'u2', name: 'Admin', email: 'admin@hospital.com', role: 'SUPER_ADMIN', department: 'Cardiology', specialization: 'Interventional Cardiology', degree: 'MD, DM (Cardiology)', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anjali' }
@@ -99,6 +99,43 @@ export const MOCK_THEATRES: OperationTheatre[] = [
 ];
 
 export const MOCK_OPERATION_RECORDS: OperationRecord[] = [];
+
+export const MOCK_OT_CONSENTS: OTConsentRecord[] = [
+  {
+    id: 'ot-consent-demo-1',
+    patientId: 'p-default-1',
+    procedureName: 'Laparoscopic Appendectomy',
+    diagnosis: 'Acute Appendicitis',
+    proposedDate: new Date().toISOString().split('T')[0],
+    consentType: 'combined',
+    surgeonId: 'u2',
+    surgeonName: 'Dr. Rajesh Sharma',
+    department: 'General Surgery',
+    anesthesiaType: 'General Anesthesia',
+    anesthetistId: 'u-ane-1',
+    anesthetistName: 'Dr. Suresh Verma',
+    asaGrade: 'ASA II',
+    npoStatus: 'NPO 8 hours prior',
+    risksExplained: true,
+    bloodTransfusionConsent: true,
+    icuCareConsent: true,
+    conversionConsent: true,
+    emergencyProcedureConsent: true,
+    signatoryType: 'Patient',
+    signatoryName: 'Patient / Representative',
+    signatoryRelationship: 'Self',
+    signatoryPhone: '+91 98765 43210',
+    isSigned: true,
+    signatureDate: new Date().toISOString().split('T')[0],
+    signatureTime: '09:30 AM',
+    witnessName: 'Sister Anjali Sharma (OT Incharge)',
+    witnessRelationship: 'Staff Nurse',
+    language: 'Bilingual (Hindi/English)',
+    specialNotes: 'Pre-anesthesia PAC clear. Consent verified in Hindi & English.',
+    status: 'Signed',
+    createdAt: new Date().toISOString()
+  }
+];
 
 export const MOCK_NURSING_TASKS: NursingTask[] = [];
 

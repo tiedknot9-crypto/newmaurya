@@ -294,4 +294,5 @@ export const STORAGE_KEYS = {
   MATERNITY_HIGH_RISK: 'hms_maternity_high_risk',
   SPECIALTY_EXAMS: 'hms_specialty_exams',
   DISCHARGE_SUMMARIES: 'hms_discharge_summaries',
+  OT_CONSENTS: 'hms_ot_consents',
 };

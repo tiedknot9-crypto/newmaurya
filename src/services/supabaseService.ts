@@ -12,6 +12,7 @@ import {
   MOCK_BILLING,
   MOCK_INVENTORY,
   MOCK_OPERATION_RECORDS,
+  MOCK_OT_CONSENTS,
   MOCK_NURSING_TASKS,
   MOCK_PATIENT_VITALS,
   MOCK_LAB_TESTS,
@@ -1084,6 +1085,105 @@ function cleanOTScheduleForPostgres(sch: any) {
     surgery_time: timeVal,
     status: sch.status || 'Scheduled',
     notes: sch.notes || null
+  });
+}
+
+function mapOTConsentFromPostgres(row: any) {
+  if (!row) return row;
+  const patientId = row.patientId || row.patient_id;
+  const otScheduleId = row.otScheduleId || row.ot_schedule_id || row.schedule_id;
+  const procedureName = row.procedureName || row.procedure_name || row.operation_name || row.operationName || '';
+  const proposedDate = row.proposedDate || row.proposed_date || row.surgery_date || row.scheduled_date || new Date().toISOString().split('T')[0];
+  const consentType = row.consentType || row.consent_type || 'combined';
+  
+  return {
+    ...row,
+    id: row.id,
+    patientId,
+    patient_id: patientId,
+    otScheduleId,
+    ot_schedule_id: otScheduleId,
+    procedureName,
+    procedure_name: procedureName,
+    diagnosis: row.diagnosis || '',
+    proposedDate,
+    proposed_date: proposedDate,
+    consentType,
+    consent_type: consentType,
+    surgeonId: row.surgeonId || row.surgeon_id,
+    surgeon_id: row.surgeonId || row.surgeon_id,
+    surgeonName: row.surgeonName || row.surgeon_name || 'Dr. Assigned Surgeon',
+    surgeon_name: row.surgeonName || row.surgeon_name || 'Dr. Assigned Surgeon',
+    department: row.department || 'General Surgery',
+    anesthesiaType: row.anesthesiaType || row.anesthesia_type || 'General Anesthesia',
+    anesthesia_type: row.anesthesiaType || row.anesthesia_type || 'General Anesthesia',
+    anesthetistId: row.anesthetistId || row.anesthetist_id,
+    anesthetist_id: row.anesthetistId || row.anesthetist_id,
+    anesthetistName: row.anesthetistName || row.anesthetist_name || 'Dr. Assigned Anesthesiologist',
+    anesthetist_name: row.anesthetistName || row.anesthetist_name || 'Dr. Assigned Anesthesiologist',
+    asaGrade: row.asaGrade || row.asa_grade || 'ASA II',
+    asa_grade: row.asaGrade || row.asa_grade || 'ASA II',
+    npoStatus: row.npoStatus || row.npo_status || 'NPO 6-8 hrs',
+    risksExplained: row.risksExplained ?? row.risks_explained ?? true,
+    bloodTransfusionConsent: row.bloodTransfusionConsent ?? row.blood_transfusion_consent ?? true,
+    icuCareConsent: row.icuCareConsent ?? row.icu_care_consent ?? true,
+    conversionConsent: row.conversionConsent ?? row.conversion_consent ?? true,
+    emergencyProcedureConsent: row.emergencyProcedureConsent ?? row.emergency_procedure_consent ?? true,
+    signatoryType: row.signatoryType || row.signatory_type || 'Patient',
+    signatoryName: row.signatoryName || row.signatory_name || 'Patient',
+    signatoryRelationship: row.signatoryRelationship || row.signatory_relationship || 'Self',
+    signatoryPhone: row.signatoryPhone || row.signatory_phone || '',
+    signatoryAddress: row.signatoryAddress || row.signatory_address || '',
+    isSigned: row.isSigned ?? row.is_signed ?? true,
+    signatureDate: row.signatureDate || row.signature_date || new Date().toISOString().split('T')[0],
+    signatureTime: row.signatureTime || row.signature_time || '10:00 AM',
+    witnessName: row.witnessName || row.witness_name || 'Staff Nurse / OT Incharge',
+    witnessPhone: row.witnessPhone || row.witness_phone || '',
+    witnessRelationship: row.witnessRelationship || row.witness_relationship || 'Staff Nurse',
+    language: row.language || 'Bilingual (Hindi/English)',
+    specialNotes: row.specialNotes || row.special_notes || '',
+    status: row.status || 'Signed',
+    createdAt: row.createdAt || row.created_at || new Date().toISOString(),
+    updatedAt: row.updatedAt || row.updated_at || new Date().toISOString()
+  };
+}
+
+function cleanOTConsentForPostgres(consent: any) {
+  if (!consent) return consent;
+  return cleanUuidFields({
+    patient_id: consent.patientId || consent.patient_id,
+    ot_schedule_id: consent.otScheduleId || consent.ot_schedule_id || null,
+    procedure_name: consent.procedureName || consent.procedure_name || null,
+    diagnosis: consent.diagnosis || null,
+    proposed_date: consent.proposedDate || consent.proposed_date || null,
+    consent_type: consent.consentType || consent.consent_type || 'combined',
+    surgeon_id: consent.surgeonId || consent.surgeon_id || null,
+    surgeon_name: consent.surgeonName || consent.surgeon_name || null,
+    department: consent.department || null,
+    anesthesia_type: consent.anesthesiaType || consent.anesthesia_type || null,
+    anesthetist_id: consent.anesthetistId || consent.anesthetist_id || null,
+    anesthetist_name: consent.anesthetistName || consent.anesthetist_name || null,
+    asa_grade: consent.asaGrade || consent.asa_grade || null,
+    npo_status: consent.npoStatus || consent.npo_status || null,
+    risks_explained: consent.risksExplained ?? consent.risks_explained ?? true,
+    blood_transfusion_consent: consent.bloodTransfusionConsent ?? consent.blood_transfusion_consent ?? true,
+    icu_care_consent: consent.icuCareConsent ?? consent.icu_care_consent ?? true,
+    conversion_consent: consent.conversionConsent ?? consent.conversion_consent ?? true,
+    emergency_procedure_consent: consent.emergencyProcedureConsent ?? consent.emergency_procedure_consent ?? true,
+    signatory_type: consent.signatoryType || consent.signatory_type || 'Patient',
+    signatory_name: consent.signatoryName || consent.signatory_name || null,
+    signatory_relationship: consent.signatoryRelationship || consent.signatory_relationship || null,
+    signatory_phone: consent.signatoryPhone || consent.signatory_phone || null,
+    signatory_address: consent.signatoryAddress || consent.signatory_address || null,
+    is_signed: consent.isSigned ?? consent.is_signed ?? true,
+    signature_date: consent.signatureDate || consent.signature_date || null,
+    signature_time: consent.signatureTime || consent.signature_time || null,
+    witness_name: consent.witnessName || consent.witness_name || null,
+    witness_phone: consent.witnessPhone || consent.witness_phone || null,
+    witness_relationship: consent.witnessRelationship || consent.witness_relationship || null,
+    language: consent.language || 'Bilingual (Hindi/English)',
+    special_notes: consent.specialNotes || consent.special_notes || null,
+    status: consent.status || 'Signed'
   });
 }
 
@@ -3762,6 +3862,120 @@ const rawSupabaseService = {
     }
   },
 
+  // OT Consents (Operation & Anesthesia)
+  getOTConsents: async (patientId?: string) => {
+    try {
+      let query = supabase
+        .from('ot_consents')
+        .select('*');
+      if (patientId) {
+        query = query.eq('patient_id', patientId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return (data || []).map(mapOTConsentFromPostgres);
+    } catch (error: any) {
+      console.warn('Handling local fallback for OT consents:', error.message);
+      const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+      const filtered = patientId ? list.filter((c: any) => (c.patientId || c.patient_id) === patientId) : list;
+      return filtered.map(mapOTConsentFromPostgres);
+    }
+  },
+
+  getOTConsentsByPatientId: async (patientId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('ot_consents')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return (data || []).map(mapOTConsentFromPostgres);
+    } catch (error: any) {
+      console.warn('Handling local fallback for patient OT consents:', error.message);
+      const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+      const filtered = list.filter((c: any) => (c.patientId || c.patient_id) === patientId);
+      return filtered.map(mapOTConsentFromPostgres);
+    }
+  },
+
+  createOTConsent: async (consent: any) => {
+    try {
+      const dbConsent = cleanOTConsentForPostgres(consent);
+      const { data, error } = await supabase
+        .from('ot_consents')
+        .insert([dbConsent])
+        .select();
+      
+      if (error) throw error;
+      broadcastDataMutation('ot_consents', 'insert');
+      return mapOTConsentFromPostgres(data[0]);
+    } catch (error: any) {
+      console.warn('Handling local fallback for create OT consent:', error.message);
+      const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+      const newConsent = {
+        ...consent,
+        id: consent.id || 'ot-consent-' + Math.random().toString(36).substring(2, 9),
+        createdAt: consent.createdAt || new Date().toISOString(),
+        created_at: consent.createdAt || new Date().toISOString()
+      };
+      const filtered = list.filter((c: any) => c.id !== newConsent.id);
+      filtered.unshift(newConsent);
+      storage.set(STORAGE_KEYS.OT_CONSENTS, filtered);
+      broadcastDataMutation('ot_consents', 'insert');
+      return mapOTConsentFromPostgres(newConsent);
+    }
+  },
+
+  updateOTConsent: async (id: string, updates: any) => {
+    try {
+      const dbConsent = cleanOTConsentForPostgres(updates);
+      const { data, error } = await supabase
+        .from('ot_consents')
+        .update(dbConsent)
+        .eq('id', id)
+        .select();
+      
+      if (error) throw error;
+      broadcastDataMutation('ot_consents', 'update');
+      return mapOTConsentFromPostgres(data[0]);
+    } catch (error: any) {
+      console.warn('Handling local fallback for update OT consent:', error.message);
+      const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+      const updated = list.map((c: any) => {
+        if (c.id === id) {
+          return { ...c, ...updates, updatedAt: new Date().toISOString() };
+        }
+        return c;
+      });
+      storage.set(STORAGE_KEYS.OT_CONSENTS, updated);
+      broadcastDataMutation('ot_consents', 'update');
+      return mapOTConsentFromPostgres({ ...updates, id });
+    }
+  },
+
+  deleteOTConsent: async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('ot_consents')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      broadcastDataMutation('ot_consents', 'delete');
+      return true;
+    } catch (error: any) {
+      console.warn('Handling local fallback for delete OT consent:', error.message);
+      const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+      const filtered = list.filter((c: any) => c.id !== id);
+      storage.set(STORAGE_KEYS.OT_CONSENTS, filtered);
+      broadcastDataMutation('ot_consents', 'delete');
+      return true;
+    }
+  },
+
   // Insurance
   getInsuranceClaims: async () => {
     try {
@@ -4679,6 +4893,7 @@ const cacheConfig: Record<string, { storageKey: string; defaultVal: any }> = {
   getNewborns: { storageKey: 'hms_maternity_newborns', defaultVal: [] },
   getOTRooms: { storageKey: 'hms_ot_rooms', defaultVal: MOCK_THEATRES },
   getOTSchedules: { storageKey: 'hms_ot_schedules', defaultVal: MOCK_OPERATION_RECORDS },
+  getOTConsents: { storageKey: STORAGE_KEYS.OT_CONSENTS, defaultVal: MOCK_OT_CONSENTS },
   getInsuranceClaims: { storageKey: STORAGE_KEYS.INSURANCE, defaultVal: [] },
   getNursingTasks: { storageKey: STORAGE_KEYS.NURSING_TASKS, defaultVal: MOCK_NURSING_TASKS },
   getNurseShifts: { storageKey: 'hms_nurse_shifts', defaultVal: MOCK_NURSE_SHIFTS },
@@ -4812,6 +5027,11 @@ function updateLocalCacheOnMutation(key: string, args: any[], result: any) {
         const filtered = list.filter((q: any) => q.id !== result.id);
         filtered.unshift(result);
         storage.set('hms_live_queue', filtered);
+      } else if (k.includes('consent') || k.includes('ot_consent')) {
+        const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+        const filtered = list.filter((c: any) => c.id !== result.id);
+        filtered.unshift(result);
+        storage.set(STORAGE_KEYS.OT_CONSENTS, filtered);
       }
     } else if (key.startsWith('update')) {
       const id = args[0];
@@ -4877,10 +5097,18 @@ function updateLocalCacheOnMutation(key: string, args: any[], result: any) {
         const list = storage.get(STORAGE_KEYS.EXPENSES, []);
         const updated = list.map((e: any) => e.id === id ? { ...e, ...result } : e);
         storage.set(STORAGE_KEYS.EXPENSES, updated);
+      } else if (k.includes('consent') || k.includes('ot_consent')) {
+        const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+        const updated = list.map((c: any) => c.id === id ? { ...c, ...result } : c);
+        storage.set(STORAGE_KEYS.OT_CONSENTS, updated);
       }
     } else if (key.startsWith('delete')) {
       const id = args[0];
-      if (k.includes('invoice')) {
+      if (k.includes('consent') || k.includes('ot_consent')) {
+        const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
+        const filtered = list.filter((c: any) => c.id !== id);
+        storage.set(STORAGE_KEYS.OT_CONSENTS, filtered);
+      } else if (k.includes('invoice')) {
         const list = storage.get(STORAGE_KEYS.BILLING, MOCK_BILLING);
         const filtered = list.filter((i: any) => i.id !== id);
         storage.set(STORAGE_KEYS.BILLING, filtered);

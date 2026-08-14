@@ -218,17 +218,29 @@ export interface OperationTheatre {
 export interface OperationRecord {
   id: string;
   patientId: string;
+  patient_id?: string;
   theatreId: string;
+  room_id?: string;
   surgeonId: string;
+  surgeon_id?: string;
   assistantSurgeons?: string[];
   anesthetistId?: string;
   nurses?: string[];
   operationName: string;
+  operation_name?: string;
+  procedure_name?: string;
   date: string;
+  scheduled_date?: string;
+  surgery_date?: string;
   startTime: string;
+  start_time?: string;
+  scheduled_time?: string;
+  surgery_time?: string;
   endTime?: string;
   status: 'Scheduled' | 'In-Progress' | 'Completed' | 'Cancelled';
   notes?: string;
+  consentId?: string;
+  consentStatus?: 'Signed' | 'Pending' | 'None';
   documents: {
     id: string;
     name: string;
@@ -237,6 +249,66 @@ export interface OperationRecord {
     uploadedAt: string;
     uploadedBy: string;
   }[];
+}
+
+export interface OTConsentRecord {
+  id: string;
+  patientId: string;
+  patient_id?: string;
+  otScheduleId?: string;
+  ot_schedule_id?: string;
+  consentType: 'operation' | 'anesthesia' | 'combined' | 'OPERATION' | 'ANESTHESIA' | 'COMBINED';
+  
+  // Operation details
+  procedureName: string;
+  diagnosis?: string;
+  proposedDate?: string;
+  consentDate?: string;
+  surgeonId?: string;
+  surgeonName?: string;
+  department?: string;
+  
+  // Anesthesia details
+  anesthesiaType?: string;
+  anesthetistId?: string;
+  anesthetistName?: string;
+  anesthesiologistName?: string;
+  asaGrade?: string;
+  npoStatus?: string; // Fasting status
+  
+  // Risks acknowledged & clauses
+  risksExplained?: boolean;
+  highRiskInformed?: boolean;
+  bloodTransfusionConsent?: boolean;
+  icuCareConsent?: boolean;
+  icuVentilatorConsent?: boolean;
+  conversionConsent?: boolean; // Laparoscopic to open surgery if needed
+  emergencyProcedureConsent?: boolean; // Authorization for emergency extension
+  
+  // Signer details
+  signatoryType?: string;
+  signatoryName: string;
+  signatoryRelation?: string;
+  signatoryRelationship?: string; // Self, Spouse, Father, Mother, Son, Daughter, Guardian
+  signatoryPhone?: string;
+  signatoryAddress?: string;
+  isSigned?: boolean;
+  signatureDate?: string;
+  signatureTime?: string;
+  
+  // Witness & Doctors
+  witnessName?: string;
+  witnessPhone?: string;
+  witnessRelationship?: string;
+  
+  // Language & Notes
+  language?: string;
+  specialNotes?: string;
+  status?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
 }
 
 export interface NursingTask {
