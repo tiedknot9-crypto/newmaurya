@@ -60,6 +60,16 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Link, useSearchParams } from 'react-router-dom';
 import { generatePharmacyInvoiceHtml, generatePharmacyReturnReceiptHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
 
+export const PHARMACY_CATEGORIES = [
+  { id: 'Medicine', name: 'Medicine (Tablets, Syrups, Standard Pharma)', defaultTax: 12, defaultHsn: '3004', badge: 'GST 12%' },
+  { id: 'Injectables & Critical Care', name: 'Injectables & Critical Care (Insulin, Vaccines, ICU)', defaultTax: 5, defaultHsn: '3002', badge: 'GST 5%' },
+  { id: 'Surgical', name: 'Surgical & Medical Devices (Dressings, Sutures, Catheters)', defaultTax: 12, defaultHsn: '9018', badge: 'GST 12%' },
+  { id: 'Consumable', name: 'Consumables & Disposables (Gloves, Syringes, Cotton)', defaultTax: 18, defaultHsn: '3005', badge: 'GST 18%' },
+  { id: 'Supplements & Nutrition', name: 'Supplements & Nutrition (Proteins, Health Drinks)', defaultTax: 18, defaultHsn: '2106', badge: 'GST 18%' },
+  { id: 'Sanitizers & Disinfectants', name: 'Sanitizers & Disinfectants (Antiseptics, Rubs)', defaultTax: 18, defaultHsn: '3808', badge: 'GST 18%' },
+  { id: 'Life-Saving (Exempt)', name: 'Life-Saving Formulations (Exempted 0% GST)', defaultTax: 0, defaultHsn: '3004', badge: 'GST 0%' },
+];
+
 export default function Pharmacy() {
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   const isAccountant = normalizeRole(currentUser?.role) === 'ACCOUNTANT';
@@ -584,7 +594,7 @@ export default function Pharmacy() {
     selling_price: 0,
     purchase_price: 0,
     tax_percentage: 12,
-    hsn_code: '',
+    hsn_code: '3004',
     rack_number: '',
     batch_number: '',
     expiry_date: '',
@@ -599,6 +609,30 @@ export default function Pharmacy() {
     loose_selling_price: 0,
     loose_stock: 0,
   });
+
+  const handleCategorySelection = (categoryVal: string) => {
+    const matchedCategory = PHARMACY_CATEGORIES.find(c => c.id === categoryVal);
+    const configuredSlabs = storage.get(STORAGE_KEYS.TAX_SLABS, [
+      { id: 'tax-ex', name: 'GST Zero (Exempt)', rate: 0, type: 'GST', isActive: true },
+      { id: 'tax-5', name: 'GST 5%', rate: 5, type: 'GST', isActive: true },
+      { id: 'tax-12', name: 'GST 12%', rate: 12, type: 'GST', isActive: true },
+      { id: 'tax-18', name: 'GST 18%', rate: 18, type: 'GST', isActive: true },
+      { id: 'tax-28', name: 'GST 28%', rate: 28, type: 'GST', isActive: true }
+    ]).filter((s: any) => s.isActive);
+
+    const statutoryTax = matchedCategory ? matchedCategory.defaultTax : 12;
+    const statutoryHsn = matchedCategory ? matchedCategory.defaultHsn : '3004';
+
+    // Verify if slab exists in active system slabs
+    const activeRate = configuredSlabs.find((s: any) => Number(s.rate) === Number(statutoryTax))?.rate ?? statutoryTax;
+
+    setNewItem(prev => ({
+      ...prev,
+      category: categoryVal,
+      tax_percentage: Number(activeRate),
+      hsn_code: (!prev.hsn_code || ['3004', '3002', '9018', '3005', '2106', '3808'].includes(prev.hsn_code)) ? statutoryHsn : prev.hsn_code
+    }));
+  };
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -1026,18 +1060,25 @@ export default function Pharmacy() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Category</Label>
+                    <Label className="flex items-center justify-between">
+                      <span>Category</span>
+                      <span className="text-[10px] text-emerald-600 font-medium">Auto-fetches GST</span>
+                    </Label>
                     <Select 
                       value={newItem.category}
-                      onValueChange={(v) => setNewItem({...newItem, category: v as any})}
+                      onValueChange={(v) => handleCategorySelection(v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Medicine">Medicine</SelectItem>
-                        <SelectItem value="Surgical">Surgical</SelectItem>
-                        <SelectItem value="Consumable">Consumable</SelectItem>
+                        {PHARMACY_CATEGORIES.map(cat => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>{cat.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1110,7 +1151,12 @@ export default function Pharmacy() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Tax Percentage (%)</Label>
+                    <Label className="flex items-center justify-between">
+                      <span>Tax Percentage (%)</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        Auto: GST {newItem.tax_percentage}%
+                      </span>
+                    </Label>
                     <Select 
                       value={newItem.tax_percentage.toString()}
                       onValueChange={(v) => setNewItem({...newItem, tax_percentage: Number(v)})}
