@@ -146,3 +146,106 @@ export const MOCK_MATERIAL_RATES = [
   { name: 'Disinfectant Solution', price: 350, category: 'Material' },
   { name: 'Catheter Set', price: 850, category: 'Disposable' },
 ];
+
+export const MOCK_LAB_TEST_REQUESTS = [
+  {
+    id: 'req-lab-01',
+    patient_id: 'p-default-1',
+    test_id: 'lt1',
+    test_name: 'Complete Blood Count (CBC)',
+    status: 'Received',
+    sample_id: 'SMP-54201',
+    urgency: 'routine',
+    reference_range: '12.0 - 17.0 g/dL',
+    unit: 'g/dL',
+    requested_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+    clinical_notes: 'Fever with weakness, routine hemogram check',
+    patients: {
+      name: 'Anupama Verma',
+      mrn: 'MRN35976',
+      age: 32,
+      gender: 'Female',
+      phone: '8601816951'
+    }
+  },
+  {
+    id: 'req-lab-02',
+    patient_id: 'p-default-2',
+    test_id: 'lt2',
+    test_name: 'Liver Function Test (LFT)',
+    status: 'Processing',
+    sample_id: 'SMP-89104',
+    urgency: 'urgent',
+    reference_range: '5 - 40 IU/L',
+    unit: 'IU/L',
+    requested_at: new Date(Date.now() - 5 * 3600000).toISOString(),
+    clinical_notes: 'Jaundice evaluation, elevated bilirubin suspicion',
+    patients: {
+      name: 'Punam Kumari',
+      mrn: 'MRN82401',
+      age: 45,
+      gender: 'Female',
+      phone: '9621364505'
+    }
+  },
+  {
+    id: 'req-lab-03',
+    patient_id: 'p-default-3',
+    test_id: 'lt1',
+    test_name: 'Complete Blood Count (CBC)',
+    status: 'Completed',
+    sample_id: 'SMP-10928',
+    urgency: 'routine',
+    result_value: '13.8',
+    unit: 'g/dL',
+    reference_range: '12.0 - 17.0 g/dL',
+    findings: 'All hematology cell counts within normal physiological baseline ranges.',
+    verified_by: 'Dr. Ramesh Chandra (MD, Pathology) - Reg No: 8192A',
+    verified_at: new Date(Date.now() - 24 * 3600000).toISOString(),
+    completed_at: new Date(Date.now() - 24 * 3600000).toISOString(),
+    requested_at: new Date(Date.now() - 26 * 3600000).toISOString(),
+    results: JSON.stringify({
+      'P-HB': { parameterId: 'P-HB', parameterName: 'Hemoglobin', value: '13.8', unit: 'g/dL', referenceRangeStr: '12.0 - 17.0 g/dL', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-RBC': { parameterId: 'P-RBC', parameterName: 'Total RBC Count', value: '4.75', unit: 'million/cumm', referenceRangeStr: '4.00 - 5.90 million/cumm', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-WBC': { parameterId: 'P-WBC', parameterName: 'Total Leukocyte Count (TLC)', value: '7200', unit: 'cells/cumm', referenceRangeStr: '4000 - 11000 cells/cumm', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-PLT': { parameterId: 'P-PLT', parameterName: 'Platelet Count', value: '2.80', unit: 'lakh/cumm', referenceRangeStr: '1.50 - 4.50 lakh/cumm', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-MCV': { parameterId: 'P-MCV', parameterName: 'Mean Corpuscular Volume (MCV)', value: '88.5', unit: 'fL', referenceRangeStr: '80.0 - 100.0 fL', status: 'Normal', interpretation: 'Normal Baseline', isFormulaBased: true }
+    }),
+    patients: {
+      name: 'Brijesh Sharma',
+      mrn: 'MRN30041',
+      age: 41,
+      gender: 'Male',
+      phone: '8052655852'
+    }
+  },
+  {
+    id: 'req-lab-04',
+    patient_id: 'p-default-4',
+    test_id: 'lt6',
+    test_name: 'Thyroid Profile (T3, T4, TSH)',
+    status: 'Completed',
+    sample_id: 'SMP-39210',
+    urgency: 'routine',
+    result_value: '2.14',
+    unit: 'mIU/L',
+    reference_range: '0.4 - 4.5 mIU/L',
+    findings: 'Euthyroid status. TSH, Free T3, and Free T4 in target clinical range.',
+    verified_by: 'Dr. Pradeep Mishra (MD, Pathology)',
+    verified_at: new Date(Date.now() - 48 * 3600000).toISOString(),
+    completed_at: new Date(Date.now() - 48 * 3600000).toISOString(),
+    requested_at: new Date(Date.now() - 50 * 3600000).toISOString(),
+    results: JSON.stringify({
+      'P-TSH': { parameterId: 'P-TSH', parameterName: 'Thyroid Stimulating Hormone (TSH)', value: '2.14', unit: 'mIU/L', referenceRangeStr: '0.4 - 4.5 mIU/L', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-T3': { parameterId: 'P-T3', parameterName: 'Free Triiodothyronine (FT3)', value: '3.10', unit: 'pg/mL', referenceRangeStr: '2.0 - 4.4 pg/mL', status: 'Normal', interpretation: 'Normal Baseline' },
+      'P-T4': { parameterId: 'P-T4', parameterName: 'Free Thyroxine (FT4)', value: '1.25', unit: 'ng/dL', referenceRangeStr: '0.8 - 2.0 ng/dL', status: 'Normal', interpretation: 'Normal Baseline' }
+    }),
+    patients: {
+      name: 'Ankita Singh',
+      mrn: 'MRN67711',
+      age: 29,
+      gender: 'Female',
+      phone: '8874598584'
+    }
+  }
+];

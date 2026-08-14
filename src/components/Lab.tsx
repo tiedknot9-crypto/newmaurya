@@ -474,14 +474,14 @@ export default function Lab() {
     if (admissionsData) setAdmissions(admissionsData);
     
      // Combine and normalize orders
-     const pathOrders = (ordersData || []).map(o => ({ 
+     const pathOrders = ((ordersData as any[]) || []).map((o: any) => ({ 
        ...o, 
        category: 'pathology',
        result: o.result_value || o.result || '',
        clinicalNotes: o.clinical_notes || o.clinicalNotes || '',
        findings: o.findings || ''
      }));
-     const radioOrders = (radiologyData || []).map(o => ({ 
+     const radioOrders = ((radiologyData as any[]) || []).map((o: any) => ({ 
        ...o, 
        category: 'radiology',
        result_value: o.result_notes || o.result_value, // Alias result_notes to result_value for shared UI

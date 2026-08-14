@@ -152,27 +152,37 @@ export default function LISResultEntry({ onRelease, readOnly }: { onRelease?: ()
 
           // Look up parameters for this investigation
           const resultsObj: Record<string, any> = {};
+          if (o.results) {
+            try {
+              const parsed = typeof o.results === 'string' ? JSON.parse(o.results) : o.results;
+              if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                Object.assign(resultsObj, parsed);
+              }
+            } catch (e) {}
+          }
           
-          if (testCode === 'HEM01') {
-            resultsObj['P-HB'] = { parameterId: 'P-HB', parameterName: 'Hemoglobin', value: o.result_value || '', unit: 'g/dL', referenceRangeStr: '12.0 - 17.0 g/dL', status: 'Normal', interpretation: '' };
-            resultsObj['P-RBC'] = { parameterId: 'P-RBC', parameterName: 'Total RBC Count', value: '', unit: 'million/cumm', referenceRangeStr: '4.00 - 5.90 million/cumm', status: 'Normal', interpretation: '' };
-            resultsObj['P-WBC'] = { parameterId: 'P-WBC', parameterName: 'Total Leukocyte Count (TLC)', value: '', unit: 'cells/cumm', referenceRangeStr: '4000 - 11000 cells/cumm', status: 'Normal', interpretation: '' };
-            resultsObj['P-PLT'] = { parameterId: 'P-PLT', parameterName: 'Platelet Count', value: '', unit: 'lakh/cumm', referenceRangeStr: '1.50 - 4.50 lakh/cumm', status: 'Normal', interpretation: '' };
-            resultsObj['P-MCV'] = { parameterId: 'P-MCV', parameterName: 'Mean Corpuscular Volume (MCV)', value: '', unit: 'fL', referenceRangeStr: '80.0 - 100.0 fL', status: 'Normal', interpretation: '', isFormulaBased: true };
-          } else if (testCode === 'BIO01') {
-            resultsObj['P-SGOT'] = { parameterId: 'P-SGOT', parameterName: 'SGOT (AST)', value: o.result_value || '', unit: 'IU/L', referenceRangeStr: '5 - 40 IU/L', status: 'Normal', interpretation: '' };
-            resultsObj['P-SGPT'] = { parameterId: 'P-SGPT', parameterName: 'SGPT (ALT)', value: '', unit: 'IU/L', referenceRangeStr: '5 - 40 IU/L', status: 'Normal', interpretation: '' };
-            resultsObj['P-BIL-T'] = { parameterId: 'P-BIL-T', parameterName: 'Total Bilirubin', value: '', unit: 'mg/dL', referenceRangeStr: '0.2 - 1.2 mg/dL', status: 'Normal', interpretation: '' };
-            resultsObj['P-BIL-D'] = { parameterId: 'P-BIL-D', parameterName: 'Direct Bilirubin', value: '', unit: 'mg/dL', referenceRangeStr: '0.0 - 0.3 mg/dL', status: 'Normal', interpretation: '' };
-          } else if (testCode === 'BIO02') {
-            resultsObj['P-UREA'] = { parameterId: 'P-UREA', parameterName: 'Blood Urea', value: o.result_value || '', unit: 'mg/dL', referenceRangeStr: '15 - 45 mg/dL', status: 'Normal', interpretation: '' };
-            resultsObj['P-CREAT'] = { parameterId: 'P-CREAT', parameterName: 'Serum Creatinine', value: '', unit: 'mg/dL', referenceRangeStr: '0.6 - 1.3 mg/dL', status: 'Normal', interpretation: '' };
-          } else if (testCode === 'IMM01') {
-            resultsObj['P-TSH'] = { parameterId: 'P-TSH', parameterName: 'Thyroid Stimulating Hormone (TSH)', value: o.result_value || '', unit: 'mIU/L', referenceRangeStr: '0.4 - 4.5 mIU/L', status: 'Normal', interpretation: '' };
-            resultsObj['P-T3'] = { parameterId: 'P-T3', parameterName: 'Free Triiodothyronine (FT3)', value: '', unit: 'pg/mL', referenceRangeStr: '2.0 - 4.4 pg/mL', status: 'Normal', interpretation: '' };
-            resultsObj['P-T4'] = { parameterId: 'P-T4', parameterName: 'Free Thyroxine (FT4)', value: '', unit: 'ng/dL', referenceRangeStr: '0.8 - 2.0 ng/dL', status: 'Normal', interpretation: '' };
-          } else {
-            resultsObj['GEN-RES'] = { parameterId: 'GEN-RES', parameterName: 'Result Observation', value: o.result_value || '', unit: o.unit || '', referenceRangeStr: o.reference_range || 'Direct Obs', status: 'Normal', interpretation: '' };
+          if (Object.keys(resultsObj).length === 0) {
+            if (testCode === 'HEM01') {
+              resultsObj['P-HB'] = { parameterId: 'P-HB', parameterName: 'Hemoglobin', value: o.result_value || '', unit: 'g/dL', referenceRangeStr: '12.0 - 17.0 g/dL', status: 'Normal', interpretation: '' };
+              resultsObj['P-RBC'] = { parameterId: 'P-RBC', parameterName: 'Total RBC Count', value: '', unit: 'million/cumm', referenceRangeStr: '4.00 - 5.90 million/cumm', status: 'Normal', interpretation: '' };
+              resultsObj['P-WBC'] = { parameterId: 'P-WBC', parameterName: 'Total Leukocyte Count (TLC)', value: '', unit: 'cells/cumm', referenceRangeStr: '4000 - 11000 cells/cumm', status: 'Normal', interpretation: '' };
+              resultsObj['P-PLT'] = { parameterId: 'P-PLT', parameterName: 'Platelet Count', value: '', unit: 'lakh/cumm', referenceRangeStr: '1.50 - 4.50 lakh/cumm', status: 'Normal', interpretation: '' };
+              resultsObj['P-MCV'] = { parameterId: 'P-MCV', parameterName: 'Mean Corpuscular Volume (MCV)', value: '', unit: 'fL', referenceRangeStr: '80.0 - 100.0 fL', status: 'Normal', interpretation: '', isFormulaBased: true };
+            } else if (testCode === 'BIO01') {
+              resultsObj['P-SGOT'] = { parameterId: 'P-SGOT', parameterName: 'SGOT (AST)', value: o.result_value || '', unit: 'IU/L', referenceRangeStr: '5 - 40 IU/L', status: 'Normal', interpretation: '' };
+              resultsObj['P-SGPT'] = { parameterId: 'P-SGPT', parameterName: 'SGPT (ALT)', value: '', unit: 'IU/L', referenceRangeStr: '5 - 40 IU/L', status: 'Normal', interpretation: '' };
+              resultsObj['P-BIL-T'] = { parameterId: 'P-BIL-T', parameterName: 'Total Bilirubin', value: '', unit: 'mg/dL', referenceRangeStr: '0.2 - 1.2 mg/dL', status: 'Normal', interpretation: '' };
+              resultsObj['P-BIL-D'] = { parameterId: 'P-BIL-D', parameterName: 'Direct Bilirubin', value: '', unit: 'mg/dL', referenceRangeStr: '0.0 - 0.3 mg/dL', status: 'Normal', interpretation: '' };
+            } else if (testCode === 'BIO02') {
+              resultsObj['P-UREA'] = { parameterId: 'P-UREA', parameterName: 'Blood Urea', value: o.result_value || '', unit: 'mg/dL', referenceRangeStr: '15 - 45 mg/dL', status: 'Normal', interpretation: '' };
+              resultsObj['P-CREAT'] = { parameterId: 'P-CREAT', parameterName: 'Serum Creatinine', value: '', unit: 'mg/dL', referenceRangeStr: '0.6 - 1.3 mg/dL', status: 'Normal', interpretation: '' };
+            } else if (testCode === 'IMM01') {
+              resultsObj['P-TSH'] = { parameterId: 'P-TSH', parameterName: 'Thyroid Stimulating Hormone (TSH)', value: o.result_value || '', unit: 'mIU/L', referenceRangeStr: '0.4 - 4.5 mIU/L', status: 'Normal', interpretation: '' };
+              resultsObj['P-T3'] = { parameterId: 'P-T3', parameterName: 'Free Triiodothyronine (FT3)', value: '', unit: 'pg/mL', referenceRangeStr: '2.0 - 4.4 pg/mL', status: 'Normal', interpretation: '' };
+              resultsObj['P-T4'] = { parameterId: 'P-T4', parameterName: 'Free Thyroxine (FT4)', value: '', unit: 'ng/dL', referenceRangeStr: '0.8 - 2.0 ng/dL', status: 'Normal', interpretation: '' };
+            } else {
+              resultsObj['GEN-RES'] = { parameterId: 'GEN-RES', parameterName: 'Result Observation', value: o.result_value || '', unit: o.unit || '', referenceRangeStr: o.reference_range || 'Direct Obs', status: 'Normal', interpretation: '' };
+            }
           }
 
           return {
@@ -601,6 +611,10 @@ export default function LISResultEntry({ onRelease, readOnly }: { onRelease?: ()
         result_value: primaryValue,
         findings: opinionText,
         status: 'Completed',
+        results: JSON.stringify(releasedResults),
+        completed_at: new Date().toISOString(),
+        verified_by: 'Dr. Ramesh Chandra (MD, Pathology) - Reg No: 8192A',
+        verified_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }).then((res) => {
         if (res) {

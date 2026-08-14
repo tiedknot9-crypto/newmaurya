@@ -15,6 +15,7 @@ import {
   MOCK_NURSING_TASKS,
   MOCK_PATIENT_VITALS,
   MOCK_LAB_TESTS,
+  MOCK_LAB_TEST_REQUESTS,
   MOCK_USERS,
   MOCK_BED_RATES,
   MOCK_OT_RATES,
@@ -2573,10 +2574,20 @@ const rawSupabaseService = {
         .order('requested_at', { ascending: false });
       
       if (error) throw error;
-      return data;
+      
+      const dbRequests = (data || []);
+      const localRequests = storage.get(STORAGE_KEYS.LAB_TEST_ORDERS, MOCK_LAB_TEST_REQUESTS) || [];
+      
+      // If DB has requests, merge any local-only requests that aren't in DB yet
+      if (dbRequests.length > 0) {
+        const missingLocal = localRequests.filter((lr: any) => lr && !dbRequests.some((dr: any) => dr.id === lr.id));
+        return [...missingLocal, ...dbRequests];
+      }
+      
+      return localRequests.length > 0 ? localRequests : dbRequests;
     } catch (error: any) {
-      console.error('Error fetching lab test requests:', error.message);
-      return null;
+      console.warn('Fallback fetching lab test requests from storage:', error.message);
+      return storage.get(STORAGE_KEYS.LAB_TEST_ORDERS, MOCK_LAB_TEST_REQUESTS);
     }
   },
 
@@ -2586,7 +2597,8 @@ const rawSupabaseService = {
       const validKeys = [
         'id', 'patient_id', 'test_id', 'requested_by', 'status', 'results',
         'report_url', 'requested_at', 'completed_at', 'test_name',
-        'reference_range', 'unit', 'urgency', 'result_value', 'clinical_notes', 'findings'
+        'reference_range', 'unit', 'urgency', 'result_value', 'clinical_notes', 'findings',
+        'sample_id', 'verified_by', 'verified_at'
       ];
       for (const key of validKeys) {
         if (request[key] !== undefined) {
@@ -2603,7 +2615,7 @@ const rawSupabaseService = {
       return data[0];
     } catch (error: any) {
       console.warn('Handling local fallback for create lab test request:', error.message);
-      const list = storage.get(STORAGE_KEYS.LAB_TEST_ORDERS, []);
+      const list = storage.get(STORAGE_KEYS.LAB_TEST_ORDERS, MOCK_LAB_TEST_REQUESTS);
       const newRecord = {
         ...request,
         id: request.id || 'off-lab-' + Math.random().toString(36).substring(2, 9),
@@ -2627,7 +2639,8 @@ const rawSupabaseService = {
       const validKeys = [
         'patient_id', 'test_id', 'requested_by', 'status', 'results',
         'report_url', 'requested_at', 'completed_at', 'test_name',
-        'reference_range', 'unit', 'urgency', 'result_value', 'clinical_notes', 'findings'
+        'reference_range', 'unit', 'urgency', 'result_value', 'clinical_notes', 'findings',
+        'sample_id', 'verified_by', 'verified_at'
       ];
       for (const key of validKeys) {
         if (cleanUpdates[key] !== undefined) {
@@ -2644,7 +2657,15 @@ const rawSupabaseService = {
       if (error) throw error;
       return data[0];
     } catch (error: any) {
-      console.error('Error updating lab test request:', error.message);
+      console.warn('Handling local fallback for update lab test request:', error.message);
+      const list = storage.get(STORAGE_KEYS.LAB_TEST_ORDERS, MOCK_LAB_TEST_REQUESTS);
+      const index = list.findIndex((r: any) => r.id === id);
+      if (index !== -1) {
+        list[index] = { ...list[index], ...updates };
+        storage.set(STORAGE_KEYS.LAB_TEST_ORDERS, list);
+        broadcastDataMutation('test_requests', 'update');
+        return list[index];
+      }
       return null;
     }
   },
@@ -4650,7 +4671,7 @@ const cacheConfig: Record<string, { storageKey: string; defaultVal: any }> = {
   getOtRates: { storageKey: STORAGE_KEYS.OT_RATES, defaultVal: MOCK_OT_RATES },
   getMaterialRates: { storageKey: STORAGE_KEYS.MATERIAL_RATES, defaultVal: MOCK_MATERIAL_RATES },
   getOpdCharges: { storageKey: STORAGE_KEYS.OPD_CHARGES, defaultVal: { reg: 200, appt: 200, consult: 500 } },
-  getLabTestRequests: { storageKey: STORAGE_KEYS.LAB_TEST_ORDERS, defaultVal: [] },
+  getLabTestRequests: { storageKey: STORAGE_KEYS.LAB_TEST_ORDERS, defaultVal: MOCK_LAB_TEST_REQUESTS },
   getRadiologyRecords: { storageKey: STORAGE_KEYS.RADIOLOGY_FILES, defaultVal: [] },
   getHospitalInfo: { storageKey: STORAGE_KEYS.HOSPITAL_INFO, defaultVal: { name: 'CureLine Medical Center', address: '456 Healthcare Blvd, Central City', phone: '+1 (555) 987-6543', email: 'contact@cureline.com', tax_no: 'TX-99887766', registration_no: 'REG-55443322' } },
   getStaff: { storageKey: STORAGE_KEYS.USERS, defaultVal: MOCK_USERS },

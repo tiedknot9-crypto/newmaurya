@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useDataSync } from '@/hooks/useDataSync';
 import { 
   Printer, 
   CheckCircle, 
@@ -51,31 +52,40 @@ export default function LISReportDesigner() {
   const [isVerifyOpen, setIsVerifyOpen] = useState(false);
 
   // Dynamic Completed Orders Loading from Supabase
-  useEffect(() => {
-    const fetchRealCompletedOrders = async () => {
-      try {
-        const realOrders = await supabaseService.getLabTestRequests();
-        if (realOrders) {
-          // Map completed DB test requests to LISResultRecords
-          const completedOrders = realOrders.filter((o: any) => o.status === 'Completed');
-          const mappedRealRecords: LISResultRecord[] = completedOrders.map((o: any) => {
-            // Determine test code
-            let testCode = 'GEN01';
-            const name = (o.test_name || '').toLowerCase();
-            if (name.includes('cbc') || name.includes('blood count')) {
-              testCode = 'HEM01';
-            } else if (name.includes('lft') || name.includes('liver')) {
-              testCode = 'BIO01';
-            } else if (name.includes('kft') || name.includes('kidney') || name.includes('renal')) {
-              testCode = 'BIO02';
-            } else if (name.includes('lipid') || name.includes('cholesterol')) {
-              testCode = 'BIO03';
-            } else if (name.includes('thyroid') || name.includes('tsh') || name.includes('t3')) {
-              testCode = 'IMM01';
-            }
+  const fetchRealCompletedOrders = async () => {
+    try {
+      const realOrders = await supabaseService.getLabTestRequests();
+      if (realOrders) {
+        // Map completed DB test requests to LISResultRecords
+        const completedOrders = realOrders.filter((o: any) => o.status === 'Completed');
+        const mappedRealRecords: LISResultRecord[] = completedOrders.map((o: any) => {
+          // Determine test code
+          let testCode = 'GEN01';
+          const name = (o.test_name || '').toLowerCase();
+          if (name.includes('cbc') || name.includes('blood count')) {
+            testCode = 'HEM01';
+          } else if (name.includes('lft') || name.includes('liver')) {
+            testCode = 'BIO01';
+          } else if (name.includes('kft') || name.includes('kidney') || name.includes('renal')) {
+            testCode = 'BIO02';
+          } else if (name.includes('lipid') || name.includes('cholesterol')) {
+            testCode = 'BIO03';
+          } else if (name.includes('thyroid') || name.includes('tsh') || name.includes('t3')) {
+            testCode = 'IMM01';
+          }
 
-            // Create parameters structure with values
-            const resultsObj: Record<string, any> = {};
+          // Create parameters structure with values
+          const resultsObj: Record<string, any> = {};
+          if (o.results) {
+            try {
+              const parsed = typeof o.results === 'string' ? JSON.parse(o.results) : o.results;
+              if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                Object.assign(resultsObj, parsed);
+              }
+            } catch (e) {}
+          }
+
+          if (Object.keys(resultsObj).length === 0) {
             if (testCode === 'HEM01') {
               resultsObj['P-HB'] = { parameterId: 'P-HB', parameterName: 'Hemoglobin', value: o.result_value || '14.5', unit: 'g/dL', referenceRangeStr: '12.0 - 17.0 g/dL', status: 'Normal', interpretation: '' };
               resultsObj['P-RBC'] = { parameterId: 'P-RBC', parameterName: 'Total RBC Count', value: '4.8', unit: 'million/cumm', referenceRangeStr: '4.00 - 5.90 million/cumm', status: 'Normal', interpretation: '' };
@@ -87,53 +97,67 @@ export default function LISReportDesigner() {
             } else if (testCode === 'BIO02') {
               resultsObj['P-UREA'] = { parameterId: 'P-UREA', parameterName: 'Blood Urea', value: o.result_value || '24', unit: 'mg/dL', referenceRangeStr: '15 - 45 mg/dL', status: 'Normal', interpretation: '' };
               resultsObj['P-CREAT'] = { parameterId: 'P-CREAT', parameterName: 'Serum Creatinine', value: '0.9', unit: 'mg/dL', referenceRangeStr: '0.6 - 1.3 mg/dL', status: 'Normal', interpretation: '' };
+            } else if (testCode === 'IMM01') {
+              resultsObj['P-TSH'] = { parameterId: 'P-TSH', parameterName: 'Thyroid Stimulating Hormone (TSH)', value: o.result_value || '2.14', unit: 'mIU/L', referenceRangeStr: '0.4 - 4.5 mIU/L', status: 'Normal', interpretation: '' };
+              resultsObj['P-T3'] = { parameterId: 'P-T3', parameterName: 'Free Triiodothyronine (FT3)', value: '3.10', unit: 'pg/mL', referenceRangeStr: '2.0 - 4.4 pg/mL', status: 'Normal', interpretation: '' };
+              resultsObj['P-T4'] = { parameterId: 'P-T4', parameterName: 'Free Thyroxine (FT4)', value: '1.25', unit: 'ng/dL', referenceRangeStr: '0.8 - 2.0 ng/dL', status: 'Normal', interpretation: '' };
             } else {
               resultsObj['GEN-RES'] = { parameterId: 'GEN-RES', parameterName: 'Result Observation', value: o.result_value || '', unit: o.unit || '', referenceRangeStr: o.reference_range || 'Direct Obs', status: 'Normal', interpretation: '' };
             }
-
-            const patientAgeNum = o.patients?.age || 38;
-            const patientGenderObj = o.patients?.gender || 'Male';
-            const patientGenderFormatted = patientGenderObj.charAt(0).toUpperCase() + patientGenderObj.slice(1).toLowerCase();
-
-            return {
-              id: o.id,
-              patientId: o.patient_id,
-              patientName: o.patients?.name || 'Unknown Patient',
-              patientAge: patientAgeNum,
-              patientGender: patientGenderFormatted,
-              patientMRN: o.patients?.mrn || 'MRN-NEW',
-              testCode,
-              testName: o.test_name,
-              sampleId: o.sample_id || `SMP-${o.id.substring(0, 5).toUpperCase()}`,
-              orderedDate: o.requested_at || new Date().toISOString(),
-              collectionDate: o.requested_at || new Date().toISOString(),
-              collectionStatus: 'Completed',
-              deltaCheckStatus: 'No History',
-              deltaCheckMessage: '',
-              qrVerified: true,
-              verifiedBy: 'Dr. Pradeep Mishra (MD, Pathology)',
-              verifiedAt: o.updated_at || new Date().toISOString(),
-              pathologistOpinion: o.findings || 'All values in normal ranges.',
-              results: resultsObj,
-              phone: o.patients?.phone || '+91 98112 34567',
-              isDbRecord: true
-            };
-          });
-
-          setRecords(mappedRealRecords);
-          if (mappedRealRecords.length > 0) {
-            setSelectedReport(mappedRealRecords[0]);
-          } else {
-            setSelectedReport(null);
           }
-        }
-      } catch (err) {
-        console.error('Error fetching real completed orders in report designer:', err);
-      }
-    };
 
+          const patientAgeNum = o.patients?.age || 38;
+          const patientGenderObj = o.patients?.gender || 'Male';
+          const patientGenderFormatted = patientGenderObj.charAt(0).toUpperCase() + patientGenderObj.slice(1).toLowerCase();
+
+          return {
+            id: o.id,
+            patientId: o.patient_id,
+            patientName: o.patients?.name || 'Unknown Patient',
+            patientAge: patientAgeNum,
+            patientGender: patientGenderFormatted,
+            patientMRN: o.patients?.mrn || 'MRN-NEW',
+            testCode,
+            testName: o.test_name,
+            sampleId: o.sample_id || `SMP-${String(o.id || '').substring(0, 5).toUpperCase()}`,
+            orderedDate: o.requested_at || new Date().toISOString(),
+            collectionDate: o.requested_at || new Date().toISOString(),
+            collectionStatus: 'Completed',
+            deltaCheckStatus: 'No History',
+            deltaCheckMessage: '',
+            qrVerified: true,
+            verifiedBy: o.verified_by || 'Dr. Pradeep Mishra (MD, Pathology)',
+            verifiedAt: o.completed_at || o.verified_at || o.updated_at || new Date().toISOString(),
+            pathologistOpinion: o.findings || 'All values in normal ranges.',
+            results: resultsObj,
+            phone: o.patients?.phone || '+91 98112 34567',
+            isDbRecord: true
+          };
+        });
+
+        setRecords(mappedRealRecords);
+        if (mappedRealRecords.length > 0) {
+          setSelectedReport(prev => {
+            if (prev) {
+              const matched = mappedRealRecords.find(m => m.id === prev.id);
+              if (matched) return matched;
+            }
+            return mappedRealRecords[0];
+          });
+        } else {
+          setSelectedReport(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching real completed orders in report designer:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchRealCompletedOrders();
   }, []);
+
+  useDataSync(fetchRealCompletedOrders);
 
   // Filter records by search filters
   const filteredRecords = records.filter(r => {
@@ -534,15 +558,6 @@ export default function LISReportDesigner() {
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">Pathology Quality Guard</h3>
             
             <div className="space-y-4 text-xs font-medium text-slate-600">
-              <div className="p-3 bg-indigo-50/35 border border-indigo-100 rounded-xl space-y-2">
-                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1">
-                  <Award className="w-4 h-4 text-indigo-600" /> NABL Quality compliance
-                </span>
-                <p className="leading-relaxed">
-                  This report is compiled in accordance with standard ISO 15189 regulations. Daily calibrations run on Sysmex XN-1000 hematology counters and Beckman AU chemistry platforms are logged inside the NABL workbook.
-                </p>
-              </div>
-
               <div className="p-3 bg-emerald-50/35 border border-emerald-100 rounded-xl space-y-2">
                 <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1">
                   <CheckCircle className="w-4 h-4 text-emerald-600" /> Digital Integrity stamp

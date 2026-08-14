@@ -122,7 +122,7 @@ export interface LabTest {
 export interface InventoryItem {
   id: string;
   name: string;
-  category: 'Medicine' | 'Surgical' | 'General';
+  category: 'Medicine' | 'Surgical' | 'Consumable' | 'General' | 'Injectables & Critical Care' | 'Supplements & Nutrition' | 'Sanitizers & Disinfectants' | 'Life-Saving (Exempt)' | string;
   stock: number;
   unit: string;
   expiryDate?: string;
