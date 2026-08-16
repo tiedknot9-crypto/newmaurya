@@ -2,12 +2,52 @@
 -- Run this in your Supabase SQL Editor
 --
 -- === MIGRATION/UPDATE FOR INSTALLED DATABASES ===
--- If you already ran this schema previously, please execute the following statements to update patients, invoices, profiles and staff tables:
+-- If you already ran this schema previously, please execute the following statements to update patients, invoices, profiles, staff, hospital_info, prescriptions, ot_schedules and ot_consents tables:
 -- ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS attending_doctor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_remarks TEXT;
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
 -- ALTER TABLE public.staff ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS header_image TEXT;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS footer_image TEXT;
+-- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS template_image TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS patient_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS doctor_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS prescription_date TIMESTAMPTZ DEFAULT NOW();
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS diagnosis TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS symptoms TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS advice TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS notes TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS vitals JSONB DEFAULT '{}'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medications JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS lab_tests JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+-- ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pre_op_diagnosis TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS post_op_diagnosis TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS anesthesia_type TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS asa_grade TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_status TEXT DEFAULT 'Pending';
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_notes TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared BOOLEAN DEFAULT FALSE;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared_by TEXT;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared_at TIMESTAMPTZ;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS consent_id UUID;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS consent_status TEXT DEFAULT 'Pending';
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS assistant_surgeons JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS nurses JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS start_time TIME;
+-- ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS end_time TIME;
+-- CREATE TABLE IF NOT EXISTS public.ot_consents (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE, ot_schedule_id UUID REFERENCES public.ot_schedules(id) ON DELETE SET NULL, consent_type TEXT DEFAULT 'combined', procedure_name TEXT, diagnosis TEXT, proposed_date DATE, surgeon_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL, surgeon_name TEXT, department TEXT, anesthesia_type TEXT, anesthetist_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL, anesthetist_name TEXT, asa_grade TEXT, npo_status TEXT, risks_explained BOOLEAN DEFAULT TRUE, high_risk_informed BOOLEAN DEFAULT FALSE, blood_transfusion_consent BOOLEAN DEFAULT TRUE, icu_care_consent BOOLEAN DEFAULT TRUE, icu_ventilator_consent BOOLEAN DEFAULT FALSE, conversion_consent BOOLEAN DEFAULT TRUE, emergency_procedure_consent BOOLEAN DEFAULT TRUE, signatory_type TEXT DEFAULT 'Patient', signatory_name TEXT, signatory_relationship TEXT, signatory_phone TEXT, signatory_address TEXT, is_signed BOOLEAN DEFAULT TRUE, signature_date DATE DEFAULT CURRENT_DATE, signature_time TEXT, witness_name TEXT, witness_phone TEXT, witness_relationship TEXT, language TEXT DEFAULT 'Bilingual (Hindi/English)', special_notes TEXT, status TEXT DEFAULT 'Signed', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_name TEXT;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_date DATE;
+-- ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_bill_no TEXT;
+-- CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), return_no TEXT UNIQUE NOT NULL, return_number TEXT, date TIMESTAMPTZ DEFAULT NOW(), vendor_name TEXT NOT NULL, vendor_phone TEXT, purchase_bill_no TEXT, item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL, item_name TEXT NOT NULL, batch_number TEXT, quantity INTEGER NOT NULL DEFAULT 1, unit_type TEXT DEFAULT 'unit', purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00, total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, reason TEXT NOT NULL DEFAULT 'Near Expiry', debit_note_no TEXT, performed_by TEXT, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+-- CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), return_no TEXT UNIQUE NOT NULL, date TIMESTAMPTZ DEFAULT NOW(), patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL, patient_name TEXT NOT NULL, patient_phone TEXT, mrn TEXT, patient_type TEXT DEFAULT 'OPD', ipd_no TEXT, bed_no TEXT, original_bill_no TEXT, prescribing_doctor TEXT, items JSONB DEFAULT '[]'::jsonb, total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, refund_mode TEXT DEFAULT 'Cash Refund', notes TEXT, restocked BOOLEAN DEFAULT TRUE, performed_by TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 -- ===============================================
 
 -- 1. Profiles / Users (Optional reference to auth.users handled manually without FK block constraint)
@@ -169,6 +209,9 @@ CREATE TABLE IF NOT EXISTS public.hospital_info (
   tagline TEXT,
   registration_number TEXT,
   tax_id TEXT,
+  header_image TEXT,
+  footer_image TEXT,
+  template_image TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -427,15 +470,21 @@ CREATE TABLE IF NOT EXISTS public.clinical_notes (
 CREATE TABLE IF NOT EXISTS public.prescriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+  patient_name TEXT,
   doctor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   doctor_name TEXT,
   prescription_date TIMESTAMPTZ DEFAULT NOW(),
   diagnosis TEXT,
+  symptoms TEXT,
   advice TEXT,
+  notes TEXT,
+  vitals JSONB DEFAULT '{}'::jsonb,
   medicines JSONB DEFAULT '[]'::jsonb,
   medications JSONB DEFAULT '[]'::jsonb,
+  lab_tests JSONB DEFAULT '[]'::jsonb,
   attachment_url TEXT,
   attachment_name TEXT,
+  status TEXT DEFAULT 'Active',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -481,6 +530,10 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_items (
   rack_number TEXT,
   manufacturer TEXT,
   composition TEXT, -- e.g., 'Amoxicillin + Clavulanic Acid'
+  vendor_name TEXT,
+  vendor_phone TEXT,
+  purchase_date DATE,
+  purchase_bill_no TEXT,
   is_loose_sale_enabled BOOLEAN DEFAULT FALSE,
   units_per_strip INTEGER DEFAULT 10,
   loose_selling_price DECIMAL(10, 2) DEFAULT 0.00,
@@ -500,6 +553,54 @@ CREATE TABLE IF NOT EXISTS public.pharmacy_purchases (
   invoice_number TEXT,
   recorded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10.2 Pharmacy Purchase Returns (Tracking Vendor Returns & Debit Notes)
+CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  return_number TEXT,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  vendor_name TEXT NOT NULL,
+  vendor_phone TEXT,
+  purchase_bill_no TEXT,
+  item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  batch_number TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_type TEXT DEFAULT 'unit',
+  purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  reason TEXT NOT NULL DEFAULT 'Near Expiry',
+  debit_note_no TEXT,
+  performed_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10.3 Pharmacy Patient Returns (Tracking OPD/IPD Patient Medicine Returns & Refunds)
+CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+  patient_name TEXT NOT NULL,
+  patient_phone TEXT,
+  mrn TEXT,
+  patient_type TEXT DEFAULT 'OPD',
+  ipd_no TEXT,
+  bed_no TEXT,
+  original_bill_no TEXT,
+  prescribing_doctor TEXT,
+  items JSONB DEFAULT '[]'::jsonb,
+  total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  refund_mode TEXT DEFAULT 'Cash Refund',
+  notes TEXT,
+  restocked BOOLEAN DEFAULT TRUE,
+  performed_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.inventory_transactions (
@@ -619,20 +720,107 @@ CREATE TABLE IF NOT EXISTS public.ot_schedules (
   patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
   room_id UUID REFERENCES public.ot_rooms(id) ON DELETE SET NULL,
   ot_rooms_id UUID REFERENCES public.ot_rooms(id) ON DELETE SET NULL,
+  theatre_id UUID REFERENCES public.ot_rooms(id) ON DELETE SET NULL,
   surgeon_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  surgeon_name TEXT,
+  assistant_surgeons JSONB DEFAULT '[]'::jsonb,
   anesthetist_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  anesthetist_name TEXT,
+  nurses JSONB DEFAULT '[]'::jsonb,
   procedure_name TEXT,
   operation_name TEXT,
   surgery_date DATE,
   scheduled_date DATE,
+  date DATE,
   surgery_time TIME,
   scheduled_time TIME,
+  start_time TIME,
+  end_time TIME,
   ot_number TEXT,
   status TEXT DEFAULT 'Scheduled', -- Scheduled, In-Progress, Completed, Cancelled
   notes TEXT,
+  pre_op_diagnosis TEXT,
+  post_op_diagnosis TEXT,
+  anesthesia_type TEXT,
+  asa_grade TEXT,
+  pac_status TEXT DEFAULT 'Pending', -- Pending, Cleared, High Risk, Rejected
+  pac_notes TEXT,
+  pac_cleared BOOLEAN DEFAULT FALSE,
+  pac_cleared_by TEXT,
+  pac_cleared_at TIMESTAMPTZ,
+  consent_id UUID,
+  consent_status TEXT DEFAULT 'Pending', -- Pending, Signed, None
+  documents JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure all columns exist for existing deployments
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pre_op_diagnosis TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS post_op_diagnosis TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS anesthesia_type TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS asa_grade TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_status TEXT DEFAULT 'Pending';
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_notes TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared_by TEXT;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS pac_cleared_at TIMESTAMPTZ;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS consent_id UUID;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS consent_status TEXT DEFAULT 'Pending';
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS assistant_surgeons JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS nurses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS start_time TIME;
+ALTER TABLE public.ot_schedules ADD COLUMN IF NOT EXISTS end_time TIME;
+
+-- 14.1 OT Consents (Operation, Anesthesia, Combined & High Risk Consent Forms)
+CREATE TABLE IF NOT EXISTS public.ot_consents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+  ot_schedule_id UUID REFERENCES public.ot_schedules(id) ON DELETE SET NULL,
+  consent_type TEXT DEFAULT 'combined', -- 'operation', 'anesthesia', 'combined', 'blood_transfusion'
+  procedure_name TEXT,
+  diagnosis TEXT,
+  proposed_date DATE,
+  surgeon_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  surgeon_name TEXT,
+  department TEXT,
+  anesthesia_type TEXT,
+  anesthetist_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  anesthetist_name TEXT,
+  asa_grade TEXT,
+  npo_status TEXT,
+  risks_explained BOOLEAN DEFAULT TRUE,
+  high_risk_informed BOOLEAN DEFAULT FALSE,
+  blood_transfusion_consent BOOLEAN DEFAULT TRUE,
+  icu_care_consent BOOLEAN DEFAULT TRUE,
+  icu_ventilator_consent BOOLEAN DEFAULT FALSE,
+  conversion_consent BOOLEAN DEFAULT TRUE,
+  emergency_procedure_consent BOOLEAN DEFAULT TRUE,
+  signatory_type TEXT DEFAULT 'Patient',
+  signatory_name TEXT,
+  signatory_relationship TEXT,
+  signatory_phone TEXT,
+  signatory_address TEXT,
+  is_signed BOOLEAN DEFAULT TRUE,
+  signature_date DATE DEFAULT CURRENT_DATE,
+  signature_time TEXT,
+  witness_name TEXT,
+  witness_phone TEXT,
+  witness_relationship TEXT,
+  language TEXT DEFAULT 'Bilingual (Hindi/English)',
+  special_notes TEXT,
+  status TEXT DEFAULT 'Signed', -- 'Draft', 'Pending', 'Signed', 'Revoked'
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Performance Indexes for OT Consents & OT Schedules
+CREATE INDEX IF NOT EXISTS idx_ot_consents_patient_id ON public.ot_consents(patient_id);
+CREATE INDEX IF NOT EXISTS idx_ot_consents_schedule_id ON public.ot_consents(ot_schedule_id);
+CREATE INDEX IF NOT EXISTS idx_ot_consents_created_at ON public.ot_consents(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ot_schedules_patient_id ON public.ot_schedules(patient_id);
+CREATE INDEX IF NOT EXISTS idx_ot_schedules_surgery_date ON public.ot_schedules(surgery_date);
 
 -- 15. Nursing Observations (Specifically for Nursing Station)
 CREATE TABLE IF NOT EXISTS public.nursing_notes (
@@ -801,12 +989,15 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.insurance_claims ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ot_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ot_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ot_consents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nursing_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nurse_shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_test_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_package_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pharmacy_purchases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_purchase_returns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_patient_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.birth_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.external_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.radiology_records ENABLE ROW LEVEL SECURITY;
@@ -1037,6 +1228,16 @@ CREATE POLICY "Enable update for authenticated users" ON public.ot_schedules FOR
 DROP POLICY IF EXISTS "Enable delete for authenticated users" ON public.ot_schedules;
 CREATE POLICY "Enable delete for authenticated users" ON public.ot_schedules FOR DELETE TO authenticated, anon USING (auth.role() IS NOT NULL);
 
+-- OT Consents Policies (Operation, Anesthesia, High-Risk Forms)
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON public.ot_consents;
+CREATE POLICY "Enable read access for authenticated users" ON public.ot_consents FOR SELECT TO authenticated, anon USING (true);
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.ot_consents;
+CREATE POLICY "Enable insert for authenticated users" ON public.ot_consents FOR INSERT TO authenticated, anon WITH CHECK (auth.role() IS NOT NULL);
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON public.ot_consents;
+CREATE POLICY "Enable update for authenticated users" ON public.ot_consents FOR UPDATE TO authenticated, anon USING (auth.role() IS NOT NULL);
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON public.ot_consents;
+CREATE POLICY "Enable delete for authenticated users" ON public.ot_consents FOR DELETE TO authenticated, anon USING (auth.role() IS NOT NULL);
+
 -- Nursing Notes Policies
 DROP POLICY IF EXISTS "Enable read access for authenticated users" ON public.nursing_notes;
 CREATE POLICY "Enable read access for authenticated users" ON public.nursing_notes FOR SELECT TO authenticated, anon USING (true);
@@ -1122,6 +1323,9 @@ CREATE TRIGGER update_profiles_modtime BEFORE UPDATE ON public.profiles FOR EACH
 DROP TRIGGER IF EXISTS update_patients_modtime ON public.patients;
 CREATE TRIGGER update_patients_modtime BEFORE UPDATE ON public.patients FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_prescriptions_modtime ON public.prescriptions;
+CREATE TRIGGER update_prescriptions_modtime BEFORE UPDATE ON public.prescriptions FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
 DROP TRIGGER IF EXISTS update_pharmacy_items_modtime ON public.pharmacy_items;
 CREATE TRIGGER update_pharmacy_items_modtime BEFORE UPDATE ON public.pharmacy_items FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
@@ -1163,6 +1367,9 @@ CREATE TRIGGER update_nursing_handovers_modtime BEFORE UPDATE ON public.nursing_
 
 DROP TRIGGER IF EXISTS update_discharge_summaries_modtime ON public.discharge_summaries;
 CREATE TRIGGER update_discharge_summaries_modtime BEFORE UPDATE ON public.discharge_summaries FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_ot_consents_modtime ON public.ot_consents;
+CREATE TRIGGER update_ot_consents_modtime BEFORE UPDATE ON public.ot_consents FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- 15.2 Automated Maternity Sync: Inserts a newborn automatically when a delivery is recorded
 CREATE OR REPLACE FUNCTION public.sync_delivery_to_newborn()
@@ -1314,7 +1521,9 @@ SELECT patient_id, 'INVOICE', 'Bill generated: ' || invoice_number, created_at, 
 UNION ALL
 SELECT patient_id, 'ADMISSION', 'Patient admitted', admission_date, (SELECT name FROM profiles WHERE id = doctor_id) FROM public.admissions
 UNION ALL
-SELECT patient_id, 'SURGERY', 'OT Procedure: ' || procedure_name, created_at, (SELECT name FROM profiles WHERE id = surgeon_id) FROM public.ot_schedules;
+SELECT patient_id, 'SURGERY', 'OT Procedure: ' || procedure_name, created_at, (SELECT name FROM profiles WHERE id = surgeon_id) FROM public.ot_schedules
+UNION ALL
+SELECT patient_id, 'OT_CONSENT', 'Consent Signed: ' || procedure_name || ' (' || consent_type || ')', created_at, (SELECT name FROM profiles WHERE id = surgeon_id) FROM public.ot_consents;
 
 
 -- 1. Update pharmacy_items table
@@ -1338,6 +1547,58 @@ ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS is_loose_sale_enabled
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS units_per_strip INTEGER DEFAULT 10;
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS loose_selling_price DECIMAL(10, 2) DEFAULT 0.00;
 ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS loose_stock INTEGER DEFAULT 0;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_name TEXT;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS vendor_phone TEXT;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_date DATE;
+ALTER TABLE public.pharmacy_items ADD COLUMN IF NOT EXISTS purchase_bill_no TEXT;
+
+-- 2. Update pharmacy_purchase_returns table
+CREATE TABLE IF NOT EXISTS public.pharmacy_purchase_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  return_number TEXT,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  vendor_name TEXT NOT NULL,
+  vendor_phone TEXT,
+  purchase_bill_no TEXT,
+  item_id UUID REFERENCES public.pharmacy_items(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  batch_number TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit_type TEXT DEFAULT 'unit',
+  purchase_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  reason TEXT NOT NULL DEFAULT 'Near Expiry',
+  debit_note_no TEXT,
+  performed_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Update pharmacy_patient_returns table
+CREATE TABLE IF NOT EXISTS public.pharmacy_patient_returns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_no TEXT UNIQUE NOT NULL,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+  patient_name TEXT NOT NULL,
+  patient_phone TEXT,
+  mrn TEXT,
+  patient_type TEXT DEFAULT 'OPD',
+  ipd_no TEXT,
+  bed_no TEXT,
+  original_bill_no TEXT,
+  prescribing_doctor TEXT,
+  items JSONB DEFAULT '[]'::jsonb,
+  total_refund_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  refund_mode TEXT DEFAULT 'Cash Refund',
+  notes TEXT,
+  restocked BOOLEAN DEFAULT TRUE,
+  performed_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- 2. Update invoice_items table to track tax per item
 ALTER TABLE public.invoice_items ADD COLUMN IF NOT EXISTS tax_percentage DECIMAL(5, 2) DEFAULT 0.00;
@@ -1504,6 +1765,22 @@ ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS urgency TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS result_value TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS clinical_notes TEXT;
 ALTER TABLE public.test_requests ADD COLUMN IF NOT EXISTS findings TEXT;
+
+-- Ensure prescriptions table contains all fields for OPD/IPD prescription management
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS patient_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS doctor_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS prescription_date TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS diagnosis TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS symptoms TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS advice TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS vitals JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS medications JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS lab_tests JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
 
 -- 19. Pathology LIMS Relational Schema
 -- Category Master Table
