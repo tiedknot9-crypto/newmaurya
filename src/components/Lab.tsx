@@ -46,7 +46,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
-import { supabaseService } from '@/services/supabaseService';
+import { MOCK_PATIENTS } from '@/mockData';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { canUserModifyRecord } from '@/utils/rbac';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -364,7 +365,7 @@ export default function Lab() {
   const [pathologyMode, setPathologyMode] = useState<'standard' | 'masters' | 'workbench' | 'reports' | 'advanced'>('standard');
   const [mainTab, setMainTab] = useState<'orders' | 'billing' | 'appointments' | 'setup'>('orders');
   const [loading, setLoading] = useState(true);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [patientCategoryFilter, setPatientCategoryFilter] = useState<'ALL' | 'OPD' | 'IPD'>('ALL');
 
@@ -1377,28 +1378,43 @@ export default function Lab() {
                       onFocus={() => setShowPatientResults(true)}
                     />
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
-                    {showPatientResults && patientSearchTerm.length > 0 && (
+                    {showPatientResults && patientSearchTerm.trim().length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[220px] overflow-y-auto custom-scrollbar">
                         {patientSearchTerm.toLowerCase().includes('walk') ? (
                           <div className="p-3 text-center text-xs font-bold text-rose-600 bg-rose-50">
                             Walk-in customers are not eligible for Lab & Radiology services.
                           </div>
-                        ) : patients.filter(p => {
-                            if (isWalkInPatient(p)) return false;
+                        ) : (() => {
+                          const term = patientSearchTerm.toLowerCase().trim();
+                          const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                          const pool = [...(patients || []), ...storedPats];
+                          const seen = new Set<string>();
+                          const matched = pool.filter(p => {
+                            if (!p || isDummyPatient(p) || isWalkInPatient(p)) return false;
+                            const key = p.id || p.mrn || p.name;
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+
                             const cat = getPatientCategory(p);
                             if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
-                            return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
-                                   (p.phone || '').includes(patientSearchTerm) ||
-                                   (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
-                          }).length > 0 ? (
-                          patients.filter(p => {
-                            if (isWalkInPatient(p)) return false;
-                            const cat = getPatientCategory(p);
-                            if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
-                            return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
-                                   (p.phone || '').includes(patientSearchTerm) ||
-                                   (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
-                          }).map(p => {
+
+                            const name = (p.name || '').toLowerCase();
+                            const phone = (p.phone || p.mobile || '');
+                            const mrn = (p.mrn || '').toLowerCase();
+                            const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+
+                            return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
+                          });
+
+                          if (matched.length === 0) {
+                            return (
+                              <div className="p-3 text-center text-xs text-slate-500">
+                                No eligible OPD/IPD patients found.
+                              </div>
+                            );
+                          }
+
+                          return matched.map(p => {
                             const cat = getPatientCategory(p);
                             return (
                               <div 
@@ -1413,21 +1429,17 @@ export default function Lab() {
                                 <div>
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-xs font-bold text-slate-800">{p.name}</p>
-                                    <Badge className={cat === 'IPD' ? 'bg-purple-100 text-purple-800 border-purple-200 text-[9px] font-extrabold' : 'bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] font-extrabold'}>
-                                      {cat} Patient
+                                    <Badge variant="outline" className={`text-[9px] font-bold ${cat === 'IPD' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                      {cat}
                                     </Badge>
                                   </div>
-                                  <p className="text-[10px] text-slate-500">MRN: {p.mrn} • Ph: {p.phone || 'N/A'}</p>
+                                  <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
                                 </div>
-                                {newBooking.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
+                                {newBooking.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
                               </div>
                             );
-                          })
-                        ) : (
-                          <div className="p-3 text-center text-xs text-slate-400 italic">
-                            No matching OPD/IPD patient found.
-                          </div>
-                        )}
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1571,28 +1583,43 @@ export default function Lab() {
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
                   
-                  {showPatientResults && patientSearchTerm.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {showPatientResults && patientSearchTerm.trim().length > 0 && (
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
                       {patientSearchTerm.toLowerCase().includes('walk') ? (
                         <div className="p-3 text-center text-xs font-bold text-rose-600 bg-rose-50">
                           Walk-in customers are not eligible for Lab & Radiology services. Please select a registered OPD or IPD patient.
                         </div>
-                      ) : patients.filter(p => {
-                          if (isWalkInPatient(p)) return false;
+                      ) : (() => {
+                        const term = patientSearchTerm.toLowerCase().trim();
+                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                        const pool = [...(patients || []), ...storedPats];
+                        const seen = new Set<string>();
+                        const matched = pool.filter(p => {
+                          if (!p || isDummyPatient(p) || isWalkInPatient(p)) return false;
+                          const key = p.id || p.mrn || p.name;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+
                           const cat = getPatientCategory(p);
                           if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
-                          return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                                 (p.phone || '').includes(patientSearchTerm) ||
-                                 (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
-                        }).length > 0 ? (
-                        patients.filter(p => {
-                          if (isWalkInPatient(p)) return false;
-                          const cat = getPatientCategory(p);
-                          if (patientCategoryFilter !== 'ALL' && cat !== patientCategoryFilter) return false;
-                          return p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                                 (p.phone || '').includes(patientSearchTerm) ||
-                                 (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase());
-                        }).map(p => {
+
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+
+                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
+                        });
+
+                        if (matched.length === 0) {
+                          return (
+                            <div className="px-4 py-4 text-center text-sm text-muted-foreground italic">
+                              No matching registered OPD/IPD patients found.
+                            </div>
+                          );
+                        }
+
+                        return matched.map(p => {
                           const cat = getPatientCategory(p);
                           return (
                             <div 
@@ -1616,12 +1643,8 @@ export default function Lab() {
                               {newTestOrder.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="px-4 py-4 text-center text-sm text-muted-foreground italic">
-                          No matching registered OPD/IPD patients found.
-                        </div>
-                      )}
+                        });
+                      })()}
                     </div>
                   )}
  

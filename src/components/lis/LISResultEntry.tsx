@@ -45,9 +45,9 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { supabaseService } from '@/services/supabaseService';
-import { storage } from '@/lib/storage';
-import { STORAGE_KEYS } from '@/lib/storage';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
+import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { MOCK_PATIENTS } from '@/mockData';
 
 import { 
   LISResultRecord, 
@@ -108,7 +108,7 @@ export default function LISResultEntry({ onRelease, readOnly }: { onRelease?: ()
   const [lisRecords, setLisRecords] = useState<LISResultRecord[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<LISResultRecord | null>(null);
 
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [showPatientResults, setShowPatientResults] = useState(false);
@@ -1015,18 +1015,36 @@ export default function LISResultEntry({ onRelease, readOnly }: { onRelease?: ()
                 <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
               </div>
 
-              {showPatientResults && patientSearchTerm.length > 0 && (
+              {showPatientResults && patientSearchTerm.trim().length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[180px] overflow-y-auto custom-scrollbar">
-                  {patients.filter(p => 
-                    p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                    (p.phone || '').includes(patientSearchTerm) ||
-                    (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                  ).length > 0 ? (
-                    patients.filter(p => 
-                      p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                      (p.phone || '').includes(patientSearchTerm) ||
-                      (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                    ).map(p => (
+                  {(() => {
+                    const term = patientSearchTerm.toLowerCase().trim();
+                    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                    const pool = [...(patients || []), ...storedPats];
+                    const seen = new Set<string>();
+                    const matched = pool.filter(p => {
+                      if (!p || isDummyPatient(p)) return false;
+                      const key = p.id || p.mrn || p.name;
+                      if (seen.has(key)) return false;
+                      seen.add(key);
+
+                      const name = (p.name || '').toLowerCase();
+                      const phone = (p.phone || p.mobile || '');
+                      const mrn = (p.mrn || '').toLowerCase();
+                      const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+
+                      return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
+                    });
+
+                    if (matched.length === 0) {
+                      return (
+                        <div className="px-4 py-4 text-center text-slate-500 italic">
+                          No matching integrated patients found.
+                        </div>
+                      );
+                    }
+
+                    return matched.map(p => (
                       <div 
                         key={p.id} 
                         className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 text-xs"
@@ -1038,16 +1056,12 @@ export default function LISResultEntry({ onRelease, readOnly }: { onRelease?: ()
                       >
                         <div>
                           <p className="font-semibold text-slate-700">{p.name}</p>
-                          <p className="text-[10px] text-muted-foreground">Ph: {p.phone || 'N/A'} • MRN: {p.mrn}</p>
+                          <p className="text-[10px] text-muted-foreground">Ph: {p.phone || 'N/A'} • MRN: {p.mrn || 'N/A'}</p>
                         </div>
                         {newOrder.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />}
                       </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-4 text-center text-slate-500 italic">
-                      No matching integrated patients found.
-                    </div>
-                  )}
+                    ));
+                  })()}
                 </div>
               )}
 

@@ -55,7 +55,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { MOCK_USERS } from '@/mockData';
+import { MOCK_USERS, MOCK_PATIENTS, MOCK_APPOINTMENTS } from '@/mockData';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
@@ -212,8 +212,8 @@ export default function OPD() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [patients, setPatients] = useState<any[]>([]);
-  const [appointments, setAppointments] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []);
+  const [appointments, setAppointments] = useState<any[]>(() => storage.get(STORAGE_KEYS.APPOINTMENTS, MOCK_APPOINTMENTS) || []);
   const [appointmentsPage, setAppointmentsPage] = useState(1);
   const [patientsPage, setPatientsPage] = useState(1);
   const itemsPerPage = 20;
@@ -2166,8 +2166,15 @@ export default function OPD() {
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
                         {(() => {
                           const term = patientSearchTerm.toLowerCase().trim();
-                          const matched = patients.filter(p => {
+                          const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                          const pool = [...(patients || []), ...storedPats];
+                          const seen = new Set<string>();
+                          const matched = pool.filter(p => {
                             if (!p) return false;
+                            const key = p.id || p.mrn || p.name;
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+
                             const name = (p.name || '').toLowerCase();
                             const phone = (p.phone || p.mobile || '');
                             const mrn = (p.mrn || '').toLowerCase();

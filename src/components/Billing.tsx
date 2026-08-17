@@ -45,7 +45,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatCurrency, formatDate, getLocalDateStr } from '@/lib/utils';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
-import { MOCK_USERS, MOCK_BILLING, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES } from '@/mockData';
+import { MOCK_USERS, MOCK_BILLING, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES, MOCK_PATIENTS } from '@/mockData';
 import { supabaseService, isDummyPatient, toDeterministicUuid } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { canUserViewFinancials, canUserManageBilling, normalizeRole } from '@/utils/rbac';
@@ -83,8 +83,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Billing() {
   const navigate = useNavigate();
-  const [bills, setBills] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [bills, setBills] = useState<any[]>(() => storage.get(STORAGE_KEYS.BILLING, MOCK_BILLING) || []);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [users, setUsers] = useState<any[]>(() => storage.get(STORAGE_KEYS.USERS, MOCK_USERS));
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1222,12 +1222,16 @@ export default function Billing() {
     const q = (searchQuery || '').toLowerCase().trim();
     if (!q) return { patients: [], invoices: [] };
 
+    // Combine state patients and stored patients for guaranteed instant suggestions
+    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+    const combinedPats = [...(patients || []), ...storedPats];
+
     // 1. Matching Patients (from registered patients & bills)
     const patientMap = new Map<string, { id: string; name: string; mrn: string; phone: string; billCount: number }>();
 
     // Scan registered patients
-    patients.forEach((p: any) => {
-      if (isDummyPatient(p)) return;
+    combinedPats.forEach((p: any) => {
+      if (!p || isDummyPatient(p)) return;
       const name = (p.name || '').toLowerCase();
       const mrn = (p.mrn || '').toLowerCase();
       const phone = (p.phone || p.mobile || '');
@@ -1236,18 +1240,21 @@ export default function Billing() {
 
       if (name.includes(q) || mrn.includes(q) || phone.includes(q) || regId.includes(q) || uhid.includes(q)) {
         const key = p.id || p.mrn || p.name;
-        patientMap.set(key, {
-          id: p.id,
-          name: p.name,
-          mrn: p.mrn || 'N/A',
-          phone: p.phone || 'N/A',
-          billCount: 0
-        });
+        if (!patientMap.has(key)) {
+          patientMap.set(key, {
+            id: p.id,
+            name: p.name || 'Unnamed',
+            mrn: p.mrn || 'N/A',
+            phone: p.phone || p.mobile || 'N/A',
+            billCount: 0
+          });
+        }
       }
     });
 
     // Count bills and also include walk-in patient invoice names matching search
     bills.forEach((b: any) => {
+      if (!b) return;
       const pId = b.patient_id || b.patientId;
       const pName = b.patients?.name || b.patient_name || b.patientName || '';
       const pMrn = b.patients?.mrn || b.mrn || '';
@@ -1272,17 +1279,18 @@ export default function Billing() {
       }
     });
 
-    const matchingPatients = Array.from(patientMap.values()).slice(0, 6);
+    const matchingPatients = Array.from(patientMap.values()).slice(0, 8);
 
     // 2. Matching Invoices (by sequential ID, ID, or amount/department)
     const matchingInvoices = bills.filter((b: any) => {
+      if (!b) return false;
       const seqId = getSequentialInvoiceId(b).toLowerCase();
       const bId = String(b.id || '').toLowerCase();
       const numQ = q.replace(/\D/g, '');
       const seqNum = seqId.replace(/\D/g, '');
       const numSeqMatch = numQ.length > 0 && (seqId.includes(q) || (seqNum.length > 0 && seqNum.endsWith(numQ)));
       return seqId.includes(q) || numSeqMatch || bId.includes(q);
-    }).slice(0, 4);
+    }).slice(0, 5);
 
     return {
       patients: matchingPatients,
@@ -2305,28 +2313,37 @@ export default function Billing() {
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
                   
-                  {showPatientResults && patientSearchTerm.length > 0 && (
+                  {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-[220px] overflow-y-auto custom-scrollbar">
-                      {patients.filter((p: any) => {
+                      {(() => {
                         const term = patientSearchTerm.toLowerCase().trim();
-                        const name = (p.name || '').toLowerCase();
-                        const phone = (p.phone || '');
-                        const mrn = (p.mrn || '').toLowerCase();
-                        const pid = (p.id || '').toLowerCase();
-                        const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
-                        const uhid = (p.uhid || '').toLowerCase();
-                        return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
-                      }).length > 0 ? (
-                        patients.filter((p: any) => {
-                          const term = patientSearchTerm.toLowerCase().trim();
+                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                        const pool = [...(patients || []), ...storedPats];
+                        const seen = new Set<string>();
+                        const matched = pool.filter((p: any) => {
+                          if (!p || isDummyPatient(p)) return false;
+                          const key = p.id || p.mrn || p.name;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+
                           const name = (p.name || '').toLowerCase();
-                          const phone = (p.phone || '');
+                          const phone = (p.phone || p.mobile || '');
                           const mrn = (p.mrn || '').toLowerCase();
                           const pid = (p.id || '').toLowerCase();
                           const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
                           const uhid = (p.uhid || '').toLowerCase();
                           return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
-                        }).map((p: any) => {
+                        });
+
+                        if (matched.length === 0) {
+                          return (
+                            <div className="px-4 py-4 text-center text-xs text-muted-foreground font-medium">
+                              No matching patients found.
+                            </div>
+                          );
+                        }
+
+                        return matched.map((p: any) => {
                           const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
                           return (
                             <div 
@@ -2346,18 +2363,14 @@ export default function Billing() {
                                   </Badge>
                                 </div>
                                 <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                                  Phone: {p.phone || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''}
+                                  Phone: {p.phone || p.mobile || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''}
                                 </p>
                               </div>
                               {newInvoice.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
                             </div>
                           );
-                        })
-                      ) : (
-                        <div className="px-4 py-4 text-center text-xs text-muted-foreground font-medium">
-                          No matching patients found.
-                        </div>
-                      )}
+                        });
+                      })()}
                     </div>
                   )}
                   
@@ -4113,8 +4126,15 @@ export default function Billing() {
                 <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[220px] overflow-y-auto custom-scrollbar">
                   {(() => {
                     const q = conPatientSearch.toLowerCase().trim();
-                    const matched = patients.filter(p => {
+                    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                    const pool = [...(patients || []), ...storedPats];
+                    const seen = new Set<string>();
+                    const matched = pool.filter(p => {
                       if (!p || isDummyPatient(p)) return false;
+                      const key = p.id || p.mrn || p.name;
+                      if (seen.has(key)) return false;
+                      seen.add(key);
+
                       const name = (p.name || '').toLowerCase();
                       const phone = (p.phone || p.mobile || '');
                       const mrn = (p.mrn || '').toLowerCase();

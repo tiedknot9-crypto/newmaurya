@@ -28,7 +28,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
-import { supabaseService } from '@/services/supabaseService';
+import { MOCK_PATIENTS, MOCK_INVENTORY } from '@/mockData';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
@@ -339,8 +340,8 @@ export default function PharmacyPOS() {
     storage.set(STORAGE_KEYS.AUDIT_LOGS, [newLog, ...logs].slice(0, 500));
   };
 
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [inventory, setInventory] = useState<any[]>(() => storage.get(STORAGE_KEYS.INVENTORY, MOCK_INVENTORY) || []);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
@@ -1221,51 +1222,66 @@ export default function PharmacyPOS() {
                 
                 {showPatientResults && (
                   <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[250px] overflow-y-auto custom-scrollbar">
-                    {patients.filter((p: any) => {
-                      if (!patientSearchTerm || patientSearchTerm.trim() === '') return true;
-                      const term = patientSearchTerm.toLowerCase().trim();
-                      const name = (p.name || '').toLowerCase();
-                      const phone = (p.phone || '');
-                      const mrn = (p.mrn || '').toLowerCase();
-                      const pid = (p.id || '').toLowerCase();
-                      const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
-                      const uhid = (p.uhid || '').toLowerCase();
-                      return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
-                    }).map((p: any) => {
-                      const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
-                      return (
-                        <div 
-                          key={p.id} 
-                          className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
-                          onClick={() => {
-                            setSelectedPatientId(p.id);
-                            setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
-                            setShowPatientResults(false);
-                          }}
-                        >
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                              <Badge variant="outline" className={`text-[8px] font-black px-1.5 py-0 ${p.type === 'IPD' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                {p.type || 'OPD'}
-                              </Badge>
-                              <Badge variant="outline" className="text-[9px] font-mono font-bold bg-teal-50 text-teal-800 border-teal-200 px-1.5 py-0">
-                                Reg/ID: {displayRegId}
-                              </Badge>
-                            </div>
-                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                              Phone: {p.phone || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''} {p.uhid ? `• UHID: ${p.uhid}` : ''}
-                            </p>
+                    {(() => {
+                      const term = (patientSearchTerm || '').toLowerCase().trim();
+                      const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                      const pool = [...(patients || []), ...storedPats];
+                      const seen = new Set<string>();
+                      const matched = pool.filter((p: any) => {
+                        if (!p || isDummyPatient(p)) return false;
+                        const key = p.id || p.mrn || p.name;
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+
+                        if (!term) return true;
+                        const name = (p.name || '').toLowerCase();
+                        const phone = (p.phone || p.mobile || '');
+                        const mrn = (p.mrn || '').toLowerCase();
+                        const pid = (p.id || '').toLowerCase();
+                        const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
+                        const uhid = (p.uhid || '').toLowerCase();
+                        return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
+                      });
+
+                      if (matched.length === 0) {
+                        return (
+                          <div className="p-4 text-center text-xs text-slate-400 font-bold">
+                            No matching registered patients found. Use + to register new patient.
                           </div>
-                          {selectedPatientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
-                        </div>
-                      );
-                    })}
-                    {patients.length === 0 && (
-                      <div className="p-4 text-center text-xs text-slate-400 font-bold">
-                        No registered OPD/IPD patients found. Use + to register.
-                      </div>
-                    )}
+                        );
+                      }
+
+                      return matched.map((p: any) => {
+                        const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                        return (
+                          <div 
+                            key={p.id} 
+                            className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
+                            onClick={() => {
+                              setSelectedPatientId(p.id);
+                              setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                              setShowPatientResults(false);
+                            }}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                                <Badge variant="outline" className={`text-[8px] font-black px-1.5 py-0 ${p.type === 'IPD' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                  {p.type || 'OPD'}
+                                </Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono font-bold bg-teal-50 text-teal-800 border-teal-200 px-1.5 py-0">
+                                  Reg/ID: {displayRegId}
+                                </Badge>
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                Phone: {p.phone || p.mobile || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''} {p.uhid ? `• UHID: ${p.uhid}` : ''}
+                              </p>
+                            </div>
+                            {selectedPatientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>

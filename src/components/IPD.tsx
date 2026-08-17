@@ -73,7 +73,7 @@ import {
   TabsTrigger 
 } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { supabaseService } from '@/services/supabaseService';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { canUserModifyRecord, normalizeRole } from '@/utils/rbac';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -207,7 +207,7 @@ export default function IPD() {
   const navigate = useNavigate();
   const [view, setView] = useState<'beds' | 'admissions'>('beds');
   const [beds, setBeds] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>(MOCK_USERS);
@@ -2298,7 +2298,7 @@ export default function IPD() {
                 const wardMatch = String(bed.ward || '').toLowerCase().includes(query);
                 const typeMatch = String(bed.bed_type || '').toLowerCase().includes(query);
                 if (!patient) return numMatch || wardMatch || typeMatch;
-                return patient.name.toLowerCase().includes(query) || 
+                return (patient.name || '').toLowerCase().includes(query) || 
                        (patient.phone || '').includes(searchQuery) ||
                        (patient.mrn || '').toLowerCase().includes(query) ||
                        numMatch || wardMatch || typeMatch;
@@ -2626,20 +2626,39 @@ export default function IPD() {
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
                   
-                  {showPatientResults && patientSearchTerm.length > 0 && (
-                    <div className="relative z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[180px] overflow-y-auto custom-scrollbar">
-                      {patients.filter(p => 
-                        (p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                        (p.phone || '').includes(patientSearchTerm) ||
-                        (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())) &&
-                        p.status !== 'Discharged' && p.status !== 'discharged'
-                      ).length > 0 ? (
-                        patients.filter(p => 
-                          (p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())) &&
-                          p.status !== 'Discharged' && p.status !== 'discharged'
-                        ).map(p => (
+                  {showPatientResults && patientSearchTerm.trim().length > 0 && (
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[180px] overflow-y-auto custom-scrollbar">
+                      {(() => {
+                        const term = patientSearchTerm.toLowerCase().trim();
+                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                        const pool = [...(patients || []), ...storedPats];
+                        const seen = new Set<string>();
+                        const matched = pool.filter(p => {
+                          if (!p || isDummyPatient(p)) return false;
+                          const key = p.id || p.mrn || p.name;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+                          const status = (p.status || '').toLowerCase();
+
+                          if (status === 'discharged') return false;
+
+                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
+                        });
+
+                        if (matched.length === 0) {
+                          return (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                              No active patients found.
+                            </div>
+                          );
+                        }
+
+                        return matched.map(p => (
                           <div 
                             key={p.id} 
                             className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
@@ -2664,12 +2683,8 @@ export default function IPD() {
                             </div>
                             {admissionForm.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
                           </div>
-                        ))
-                      ) : (
-                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                          No patients found.
-                        </div>
-                      )}
+                        ));
+                      })()}
                     </div>
                   )}
                 </div>
@@ -3263,20 +3278,26 @@ export default function IPD() {
                       )}
                     </div>
 
-                    {showDischargeSearchDropdown && dischargeSearchTerm.length > 0 && (
+                    {showDischargeSearchDropdown && dischargeSearchTerm.trim().length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[190px] overflow-y-auto divide-y divide-slate-100">
-                        {displayPatients.filter(p =>
-                          (p.name.toLowerCase().includes(dischargeSearchTerm.toLowerCase()) ||
-                          (p.phone || '').includes(dischargeSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(dischargeSearchTerm.toLowerCase())) &&
-                          p.status !== 'Discharged' && p.status !== 'discharged'
-                        ).length > 0 ? (
-                          displayPatients.filter(p =>
-                            (p.name.toLowerCase().includes(dischargeSearchTerm.toLowerCase()) ||
-                            (p.phone || '').includes(dischargeSearchTerm) ||
-                            (p.mrn || '').toLowerCase().includes(dischargeSearchTerm.toLowerCase())) &&
-                            p.status !== 'Discharged' && p.status !== 'discharged'
-                          ).map(p => {
+                        {displayPatients.filter(p => {
+                          if (!p) return false;
+                          const q = dischargeSearchTerm.toLowerCase().trim();
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const status = (p.status || '').toLowerCase();
+                          return (name.includes(q) || phone.includes(q) || mrn.includes(q)) && status !== 'discharged';
+                        }).length > 0 ? (
+                          displayPatients.filter(p => {
+                            if (!p) return false;
+                            const q = dischargeSearchTerm.toLowerCase().trim();
+                            const name = (p.name || '').toLowerCase();
+                            const phone = (p.phone || p.mobile || '');
+                            const mrn = (p.mrn || '').toLowerCase();
+                            const status = (p.status || '').toLowerCase();
+                            return (name.includes(q) || phone.includes(q) || mrn.includes(q)) && status !== 'discharged';
+                          }).map(p => {
                             const bed = beds.find(b => b.patient_id === p.id || b.patientId === p.id);
                             const isAdmitted = p.status === 'Admitted' || !!bed;
                             return (

@@ -44,14 +44,16 @@ import {
   DialogDescription
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { supabaseService } from '@/services/supabaseService';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { MOCK_PATIENTS } from '@/mockData';
 
 export default function Insurance() {
   const navigate = useNavigate();
   const [insuranceRecords, setInsuranceRecords] = useState<any[]>([]);
   const [dischargeRecords, setDischargeRecords] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [hospitalInfo, setHospitalInfo] = useState<any>({
     name: 'Global Multispeciality Hospital',
     address: 'Global Hospital ,Infront of Aura Inn Bansi Road Basti',
@@ -298,16 +300,36 @@ export default function Insurance() {
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
                   
-                  {showPatientResults && patientSearchTerm.length > 0 && (
+                  {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {patients.filter(p => 
-                        p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                        (p.phone || '').includes(patientSearchTerm)
-                      ).length > 0 ? (
-                        patients.filter(p => 
-                          p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm)
-                        ).map(p => (
+                      {(() => {
+                        const term = patientSearchTerm.toLowerCase().trim();
+                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                        const pool = [...(patients || []), ...storedPats];
+                        const seen = new Set<string>();
+                        const matched = pool.filter(p => {
+                          if (!p || isDummyPatient(p)) return false;
+                          const key = p.id || p.mrn || p.name;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+
+                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
+                        });
+
+                        if (matched.length === 0) {
+                          return (
+                            <div className="px-4 py-4 text-center text-sm text-muted-foreground">
+                              No patients found.
+                            </div>
+                          );
+                        }
+
+                        return matched.map(p => (
                           <div 
                             key={p.id} 
                             className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
@@ -319,16 +341,12 @@ export default function Insurance() {
                           >
                             <div>
                               <p className="text-sm font-medium">{p.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                              <p className="text-[10px] text-muted-foreground">{p.phone || 'N/A'} • MRN: {p.mrn || 'N/A'}</p>
                             </div>
                             {newClaim.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
                           </div>
-                        ))
-                      ) : (
-                        <div className="px-4 py-4 text-center text-sm text-muted-foreground">
-                          No patients found.
-                        </div>
-                      )}
+                        ));
+                      })()}
                     </div>
                   )}
 

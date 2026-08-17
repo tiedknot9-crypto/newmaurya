@@ -29,13 +29,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { supabaseService } from '@/services/supabaseService';
+import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { ConfirmDialog } from './ConfirmDialog';
+import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { MOCK_PATIENTS } from '@/mockData';
 
 export default function NursingStation() {
   const [tasks, setTasks] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [vitals, setVitals] = useState<any[]>([]);
   const [shifts, setShifts] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
@@ -255,23 +257,51 @@ export default function NursingStation() {
                     <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   </div>
                   
-                  {showPatientResults && patientSearchTerm.length > 0 && (
+                  {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                      {patients.filter(p => 
-                        (p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                        (p.phone || '').includes(patientSearchTerm) ||
-                        (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())) &&
-                        p.status === 'Active'
-                      ).map(p => (
-                        <div 
-                          key={p.id} 
-                          className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
-                          onClick={() => handleAdmitPatient(p.id)}
-                        >
-                          <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                          <p className="text-[10px] text-slate-500 font-medium">{p.mrn} • {p.phone}</p>
-                        </div>
-                      ))}
+                      {(() => {
+                        const term = patientSearchTerm.toLowerCase().trim();
+                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+                        const pool = [...(patients || []), ...storedPats];
+                        const seen = new Set<string>();
+                        const matched = pool.filter(p => {
+                          if (!p || isDummyPatient(p)) return false;
+                          const key = p.id || p.mrn || p.name;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const status = (p.status || '').toLowerCase();
+                          if (status === 'discharged') return false;
+
+                          return name.includes(term) || phone.includes(term) || mrn.includes(term);
+                        });
+
+                        if (matched.length === 0) {
+                          return (
+                            <div className="p-3 text-center text-xs text-slate-400 font-medium">
+                              No active patients found.
+                            </div>
+                          );
+                        }
+
+                        return matched.map(p => (
+                          <div 
+                            key={p.id} 
+                            className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
+                            onClick={() => {
+                              handleAdmitPatient(p.id);
+                              setShowPatientResults(false);
+                              setPatientSearchTerm(p.name);
+                            }}
+                          >
+                            <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                            <p className="text-[10px] text-slate-500 font-medium">{p.mrn || 'N/A'} • {p.phone || 'N/A'}</p>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   )}
                 </div>
