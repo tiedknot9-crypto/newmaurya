@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OPDCollectionTab } from './OPDCollectionTab';
 import OPD from './OPD';
@@ -284,28 +284,61 @@ export default function Billing() {
     return !isAddedByAdmin(record);
   };
 
-  const getSequentialInvoiceId = (bill: any) => {
-    if (!bill) return '';
-    const idStr = String(bill.id || '');
-    if (idStr.startsWith('exp') || idStr.startsWith('note-')) {
-      return idStr.toUpperCase();
-    }
+  const invoiceSequentialIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!bills || bills.length === 0) return map;
+    
     const patientInvoices = bills.filter(b => {
       const bId = String(b?.id || '');
       return !bId.startsWith('exp') && !bId.startsWith('note-');
     });
     const sorted = [...patientInvoices].sort((a, b) => {
-      const dateA = new Date(a.created_at || a.date || 0).getTime();
-      const dateB = new Date(b.created_at || b.date || 0).getTime();
+      const dateA = new Date(a.created_at || a.date || a.invoice_date || 0).getTime();
+      const dateB = new Date(b.created_at || b.date || b.invoice_date || 0).getTime();
       if (dateA !== dateB) return dateA - dateB;
       return String(a.id || '').localeCompare(String(b.id || ''));
     });
-    const index = sorted.findIndex(b => b.id === bill.id);
-    if (index === -1) {
-      return `#${idStr.slice(0, 8).toUpperCase()}`;
+    sorted.forEach((b, idx) => {
+      if (b?.id) {
+        map.set(String(b.id), `#${String(idx + 1).padStart(4, '0')}`);
+      }
+    });
+    return map;
+  }, [bills]);
+
+  const getSequentialInvoiceId = useCallback((bill: any) => {
+    if (!bill) return '';
+    const idStr = String(bill.id || '');
+    if (idStr.startsWith('exp') || idStr.startsWith('note-')) {
+      return idStr.toUpperCase();
     }
-    return `#${String(index + 1).padStart(4, '0')}`;
-  };
+    return invoiceSequentialIdMap.get(idStr) || `#${idStr.slice(0, 8).toUpperCase()}`;
+  }, [invoiceSequentialIdMap]);
+
+  const patientsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    (patients || []).forEach((p: any) => {
+      if (p && p.id) {
+        map.set(p.id, p);
+      }
+    });
+    return map;
+  }, [patients]);
+
+  const patientPool = useMemo(() => {
+    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
+    const pool = [...(patients || []), ...storedPats];
+    const seen = new Set<string>();
+    const results: any[] = [];
+    for (const p of pool) {
+      if (!p || isDummyPatient(p)) continue;
+      const key = p.id || p.mrn || p.name;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      results.push(p);
+    }
+    return results;
+  }, [patients]);
 
   const logAudit = (action: string, entityId: string, details: any) => {
     const logs = storage.get(STORAGE_KEYS.AUDIT_LOGS, []);
@@ -337,6 +370,17 @@ export default function Billing() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showRecentSearchDropdown, setShowRecentSearchDropdown] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowRecentSearchDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [activeTab, setActiveTab] = useState<'analytics' | 'recent' | 'consolidated' | 'opd-collection' | 'opd-panel'>(() => {
     const user = storage.get(STORAGE_KEYS.SESSION_USER, null);
     return canUserViewFinancials(user?.role) ? 'analytics' : 'recent';
@@ -1223,165 +1267,176 @@ export default function Billing() {
     const q = (searchQuery || '').toLowerCase().trim();
     if (!q) return { patients: [], invoices: [] };
 
-    // 1. Matching Patients (from registered patients & bills)
-    const matchingRegistered = getFilteredPatientsPool(patients, q);
+    const qTokens = q.split(/\s+/).filter(Boolean);
+    const numQ = q.replace(/\D/g, '');
+
+    // 1. Matching Patients (from pre-memoized patientPool)
     const patientMap = new Map<string, { id: string; name: string; mrn: string; phone: string; billCount: number }>();
 
-    matchingRegistered.forEach((p: any) => {
-      const key = p.id || p.mrn || p.name;
-      if (!patientMap.has(key)) {
+    for (const p of patientPool) {
+      if (matchPatient(p, q)) {
+        const key = p.id || p.mrn || p.name;
         patientMap.set(key, {
           id: p.id,
           name: getPatientDisplayName(p),
-          mrn: p.mrn || 'N/A',
+          mrn: p.mrn || p.registration_number || 'N/A',
           phone: p.phone || p.mobile || 'N/A',
           billCount: 0
         });
+        if (patientMap.size >= 8) break;
       }
-    });
+    }
 
-    // Count bills and also include walk-in patient invoice names matching search
-    bills.forEach((b: any) => {
-      if (!b) return;
-      const pId = b.patient_id || b.patientId;
-      const pName = b.patients?.name || b.patient_name || b.patientName || '';
-      const pMrn = b.patients?.mrn || b.mrn || '';
-      const pPhone = b.patients?.phone || b.phone || '';
-
-      if (pId && patientMap.has(pId)) {
-        const rec = patientMap.get(pId)!;
-        rec.billCount += 1;
-      } else if (pName && (matchPatient({ name: pName, mrn: pMrn, phone: pPhone }, q))) {
-        const key = pId || pName;
-        if (!patientMap.has(key)) {
-          patientMap.set(key, {
-            id: pId || key,
-            name: pName,
-            mrn: pMrn || 'N/A',
-            phone: pPhone || 'N/A',
-            billCount: 1
-          });
-        } else {
-          patientMap.get(key)!.billCount += 1;
-        }
-      }
-    });
-
-    const matchingPatients = Array.from(patientMap.values()).slice(0, 8);
-
-    // 2. Matching Invoices (by sequential ID, ID, or amount/department)
-    const matchingInvoices = bills.filter((b: any) => {
-      if (!b) return false;
+    // 2. Matching Invoices (by sequential ID #XXXX, digits, raw ID, patient name, MRN, phone, department, amount, status)
+    const matchingInvoices: any[] = [];
+    for (const b of bills) {
+      if (!b) continue;
       const seqId = getSequentialInvoiceId(b).toLowerCase();
-      const bId = String(b.id || '').toLowerCase();
-      const numQ = q.replace(/\D/g, '');
+      const rawId = String(b.id || '').toLowerCase();
+      const matchedP = b.patient_id ? patientsMap.get(b.patient_id) : null;
+      const patName = (b.patients?.name || b.patient_name || b.patientName || matchedP?.name || '').toLowerCase();
+      const patMrn = (b.patients?.mrn || b.mrn || matchedP?.mrn || '').toLowerCase();
+      const patPhone = (b.patients?.phone || b.phone || b.patient_phone || b.patientPhone || matchedP?.phone || '');
+      const bType = (b.type || '').toLowerCase();
+      const bStatus = (b.status || b.payment_status || '').toLowerCase();
+
       const seqNum = seqId.replace(/\D/g, '');
-      const numSeqMatch = numQ.length > 0 && (seqId.includes(q) || (seqNum.length > 0 && seqNum.endsWith(numQ)));
-      return seqId.includes(q) || numSeqMatch || bId.includes(q);
-    }).slice(0, 5);
+      const numSeqMatch = numQ.length > 0 && (seqId.includes(q) || (seqNum.length > 0 && (seqNum.includes(numQ) || seqNum.endsWith(numQ))));
 
-    return {
-      patients: matchingPatients,
-      invoices: matchingInvoices
-    };
-  }, [searchQuery, patients, bills]);
-
-  const filteredBills = bills.filter(bill => {
-    if (!bill) return false;
-    
-    const q = (searchQuery || '').trim().toLowerCase();
-    let searchMatch = true;
-    if (q) {
-      const seqId = getSequentialInvoiceId(bill).toLowerCase();
-      const rawId = (bill.id || '').toLowerCase();
-      const patName = (bill.patients?.name || bill.patient_name || bill.patientName || '').toLowerCase();
-      const patMrn = (bill.patients?.mrn || bill.mrn || '').toLowerCase();
-      const patPhone = (bill.patients?.phone || bill.phone || bill.patient_phone || bill.patientPhone || '');
-      const patEmail = (bill.patients?.email || bill.email || '').toLowerCase();
-      
-      const pId = bill.patient_id || bill.patientId;
-      const matchedP = pId ? patients.find((p: any) => p.id === pId) : null;
-      const lookupName = (matchedP?.name || '').toLowerCase();
-      const lookupMrn = (matchedP?.mrn || '').toLowerCase();
-      const lookupPhone = (matchedP?.phone || '');
-      const lookupRegId = String(matchedP?.registration_number || matchedP?.registration_id || '').toLowerCase();
-      
-      const bType = (bill.type || '').toLowerCase();
-      const bMethod = (bill.payment_method || '').toLowerCase();
-      const bStatus = (bill.status || bill.payment_status || '').toLowerCase();
-      const bRemarks = (bill.payment_remarks || bill.remarks || '').toLowerCase();
-      
-      const numQ = q.replace(/\D/g, '');
-      const seqNum = seqId.replace(/\D/g, '');
-      const numSeqMatch = numQ.length > 0 && (seqId.includes(q) || (seqNum.length > 0 && seqNum.endsWith(numQ)));
-
-      searchMatch = 
+      const matchesInvoice = 
         seqId.includes(q) ||
         numSeqMatch ||
         rawId.includes(q) ||
         patName.includes(q) ||
         patMrn.includes(q) ||
         patPhone.includes(q) ||
-        patEmail.includes(q) ||
-        lookupName.includes(q) ||
-        lookupMrn.includes(q) ||
-        lookupPhone.includes(q) ||
-        lookupRegId.includes(q) ||
         bType.includes(q) ||
-        bMethod.includes(q) ||
         bStatus.includes(q) ||
-        bRemarks.includes(q) ||
-        (bill.invoice_items || []).some((item: any) => 
-          (item?.name || item?.item_name || item?.description || item?.category || '').toLowerCase().includes(q)
-        );
-    }
-    
-    let categoryMatch = false;
-    if (filterCategory === 'all') {
-      categoryMatch = true;
-    } else {
-      const bType = (bill.type || '').toLowerCase();
-      const bMethod = (bill.payment_method || '').toLowerCase();
-      const hasItemCategory = (cat: string) => 
-        (bill.invoice_items || []).some((item: any) => 
-          item && item.category && item.category.toLowerCase() === cat.toLowerCase()
-        );
-      
-      if (filterCategory === 'opd') {
-        categoryMatch = bType === 'opd' || hasItemCategory('opd');
-      } else if (filterCategory === 'ipd') {
-        categoryMatch = bType === 'ipd' || hasItemCategory('ipd');
-      } else if (filterCategory === 'lab') {
-        categoryMatch = bType === 'lab' || hasItemCategory('lab') || hasItemCategory('path');
-      } else if (filterCategory === 'radiology') {
-        categoryMatch = bType === 'radiology' || hasItemCategory('radio') || hasItemCategory('radiology');
-      } else if (filterCategory === 'pharmacy') {
-        categoryMatch = bType === 'pharmacy' || hasItemCategory('pharmacy');
-      } else if (filterCategory === 'ot') {
-        categoryMatch = bType === 'ot' || hasItemCategory('ot');
-      } else if (filterCategory === 'insurance') {
-        categoryMatch = bMethod === 'insurance' || bType.includes('insurance');
-      } else if (filterCategory === 'refunds') {
-        categoryMatch = (bill.status || '').toLowerCase() === 'refunded' || 
-                        (bill.payment_status || '').toLowerCase() === 'refunded' || 
-                        (bill.payment_remarks || '').includes('[Refunded');
-      } else if (filterCategory === 'independent') {
-        categoryMatch = bType === 'independent' || hasItemCategory('independent');
+        (qTokens.length > 0 && qTokens.every(tok => 
+          seqId.includes(tok) || rawId.includes(tok) || patName.includes(tok) || patMrn.includes(tok) || patPhone.includes(tok)
+        ));
+
+      if (matchesInvoice) {
+        matchingInvoices.push(b);
+        const pId = b.patient_id || b.patientId;
+        const pName = b.patients?.name || b.patient_name || b.patientName || matchedP?.name || '';
+        const key = pId || pName;
+        if (key && patientMap.has(key)) {
+          patientMap.get(key)!.billCount += 1;
+        } else if (pName && patientMap.size < 8 && matchPatient({ name: pName, mrn: patMrn, phone: patPhone }, q)) {
+          patientMap.set(key || pName, {
+            id: pId || key || pName,
+            name: pName,
+            mrn: patMrn || 'N/A',
+            phone: patPhone || 'N/A',
+            billCount: 1
+          });
+        }
+        if (matchingInvoices.length >= 8) break;
       }
     }
-    
-    const billDate = getLocalDateStr(bill.created_at || bill.date || bill.invoice_date);
-    
-    let dateRangeMatch = true;
-    if (recentInvoicesStartDate && billDate) {
-      dateRangeMatch = dateRangeMatch && billDate >= recentInvoicesStartDate;
-    }
-    if (recentInvoicesEndDate && billDate) {
-      dateRangeMatch = dateRangeMatch && billDate <= recentInvoicesEndDate;
-    }
-    
-    return searchMatch && categoryMatch && dateRangeMatch;
-  });
+
+    return {
+      patients: Array.from(patientMap.values()).slice(0, 8),
+      invoices: matchingInvoices.slice(0, 8)
+    };
+  }, [searchQuery, patientPool, bills, getSequentialInvoiceId, patientsMap]);
+
+  const filteredBills = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    const numQ = q.replace(/\D/g, '');
+    const qTokens = q.split(/\s+/).filter(Boolean);
+
+    return bills.filter(bill => {
+      if (!bill) return false;
+      
+      if (q) {
+        const seqId = getSequentialInvoiceId(bill).toLowerCase();
+        const rawId = (bill.id || '').toLowerCase();
+        const pId = bill.patient_id || bill.patientId;
+        const matchedP = pId ? patientsMap.get(pId) : null;
+        
+        const patName = (bill.patients?.name || bill.patient_name || bill.patientName || matchedP?.name || '').toLowerCase();
+        const patMrn = (bill.patients?.mrn || bill.mrn || matchedP?.mrn || '').toLowerCase();
+        const patPhone = (bill.patients?.phone || bill.phone || bill.patient_phone || bill.patientPhone || matchedP?.phone || '');
+        const patEmail = (bill.patients?.email || bill.email || matchedP?.email || '').toLowerCase();
+        const lookupRegId = String(matchedP?.registration_number || matchedP?.registration_id || '').toLowerCase();
+        
+        const bType = (bill.type || '').toLowerCase();
+        const bMethod = (bill.payment_method || '').toLowerCase();
+        const bStatus = (bill.status || bill.payment_status || '').toLowerCase();
+        const bRemarks = (bill.payment_remarks || bill.remarks || '').toLowerCase();
+        
+        const seqNum = seqId.replace(/\D/g, '');
+        const numSeqMatch = numQ.length > 0 && (seqId.includes(q) || (seqNum.length > 0 && (seqNum.includes(numQ) || seqNum.endsWith(numQ))));
+
+        const searchMatch = 
+          seqId.includes(q) ||
+          numSeqMatch ||
+          rawId.includes(q) ||
+          patName.includes(q) ||
+          patMrn.includes(q) ||
+          patPhone.includes(q) ||
+          patEmail.includes(q) ||
+          lookupRegId.includes(q) ||
+          bType.includes(q) ||
+          bMethod.includes(q) ||
+          bStatus.includes(q) ||
+          bRemarks.includes(q) ||
+          (qTokens.length > 0 && qTokens.every(tok => 
+            seqId.includes(tok) || rawId.includes(tok) || patName.includes(tok) || patMrn.includes(tok) || patPhone.includes(tok)
+          )) ||
+          (bill.invoice_items || []).some((item: any) => 
+            (item?.name || item?.item_name || item?.description || item?.category || '').toLowerCase().includes(q)
+          );
+        
+        if (!searchMatch) return false;
+      }
+      
+      if (filterCategory !== 'all') {
+        const bType = (bill.type || '').toLowerCase();
+        const bMethod = (bill.payment_method || '').toLowerCase();
+        const hasItemCategory = (cat: string) => 
+          (bill.invoice_items || []).some((item: any) => 
+            item && item.category && item.category.toLowerCase() === cat.toLowerCase()
+          );
+        
+        if (filterCategory === 'opd') {
+          if (bType !== 'opd' && !hasItemCategory('opd')) return false;
+        } else if (filterCategory === 'ipd') {
+          if (bType !== 'ipd' && !hasItemCategory('ipd')) return false;
+        } else if (filterCategory === 'lab') {
+          if (bType !== 'lab' && !hasItemCategory('lab') && !hasItemCategory('path')) return false;
+        } else if (filterCategory === 'radiology') {
+          if (bType !== 'radiology' && !hasItemCategory('radio') && !hasItemCategory('radiology')) return false;
+        } else if (filterCategory === 'pharmacy') {
+          if (bType !== 'pharmacy' && !hasItemCategory('pharmacy')) return false;
+        } else if (filterCategory === 'ot') {
+          if (bType !== 'ot' && !hasItemCategory('ot')) return false;
+        } else if (filterCategory === 'insurance') {
+          if (bMethod !== 'insurance' && !bType.includes('insurance')) return false;
+        } else if (filterCategory === 'refunds') {
+          const isRefund = (bill.status || '').toLowerCase() === 'refunded' || 
+                          (bill.payment_status || '').toLowerCase() === 'refunded' || 
+                          (bill.payment_remarks || '').includes('[Refunded');
+          if (!isRefund) return false;
+        } else if (filterCategory === 'independent') {
+          if (bType !== 'independent' && !hasItemCategory('independent')) return false;
+        }
+      }
+      
+      const billDate = getLocalDateStr(bill.created_at || bill.date || bill.invoice_date);
+      
+      if (recentInvoicesStartDate && billDate && billDate < recentInvoicesStartDate) {
+        return false;
+      }
+      if (recentInvoicesEndDate && billDate && billDate > recentInvoicesEndDate) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [bills, searchQuery, getSequentialInvoiceId, patientsMap, filterCategory, recentInvoicesStartDate, recentInvoicesEndDate]);
 
   const groupedBillsByDate = bills.reduce((acc: Record<string, any[]>, bill) => {
     let dateKey = getLocalDateStr(bill.created_at || bill.date) || getLocalDateStr(new Date());
@@ -3619,19 +3674,21 @@ export default function Billing() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-64 sm:w-72 md:w-80">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <div ref={searchContainerRef} className="relative w-64 sm:w-72 md:w-80">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <Input 
                     placeholder="Search name, MRN, phone, invoice #..." 
-                    className="pl-9 pr-8 bg-slate-50 border border-slate-200 h-9 rounded-lg text-xs font-medium focus-visible:ring-1 focus-visible:ring-medical-blue" 
+                    className="pl-9 pr-8 bg-slate-50 border border-slate-200 h-9 rounded-lg text-xs font-medium focus-visible:ring-1 focus-visible:ring-medical-blue transition-all" 
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
                       setShowRecentSearchDropdown(true);
+                      setRecentInvoicesPage(1);
                     }}
                     onFocus={() => setShowRecentSearchDropdown(true)}
+                    onClick={() => setShowRecentSearchDropdown(true)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Escape') setShowRecentSearchDropdown(false);
+                      if (e.key === 'Escape' || e.key === 'Enter') setShowRecentSearchDropdown(false);
                     }}
                   />
                   {searchQuery && (
@@ -3650,82 +3707,118 @@ export default function Billing() {
                   )}
 
                   {/* Instant Autocomplete Suggestions List */}
-                  {showRecentSearchDropdown && searchQuery.trim().length > 0 && (
+                  {showRecentSearchDropdown && (
                     <div className="absolute top-10 left-0 w-full md:w-[340px] bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
-                      {searchSuggestions.patients.length > 0 || searchSuggestions.invoices.length > 0 ? (
-                        <div className="max-h-[290px] overflow-y-auto custom-scrollbar">
-                          {searchSuggestions.patients.length > 0 && (
-                            <div>
-                              <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5 border-b border-slate-100">
-                                <User className="w-3 h-3 text-medical-blue" />
-                                Matching Patients ({searchSuggestions.patients.length})
-                              </div>
-                              {searchSuggestions.patients.map((pat) => (
-                                <div
-                                  key={pat.id || pat.name}
-                                  className="px-3 py-2 hover:bg-blue-50/70 cursor-pointer transition-colors flex items-center justify-between group border-b border-slate-50 last:border-0"
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    setSearchQuery(pat.name);
-                                    setShowRecentSearchDropdown(false);
-                                  }}
-                                >
-                                  <div className="min-w-0 pr-2">
-                                    <p className="text-xs font-bold text-slate-800 group-hover:text-medical-blue transition-colors truncate">
-                                      {pat.name}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400 font-medium truncate">
-                                      MRN: {pat.mrn} • Ph: {pat.phone}
-                                    </p>
-                                  </div>
-                                  <Badge variant="outline" className="text-[9px] bg-blue-50/60 text-medical-blue border-blue-200 font-bold shrink-0">
-                                    {pat.billCount > 0 ? `${pat.billCount} inv` : 'Select'}
-                                  </Badge>
+                      {searchQuery.trim().length > 0 ? (
+                        searchSuggestions.patients.length > 0 || searchSuggestions.invoices.length > 0 ? (
+                          <div className="max-h-[290px] overflow-y-auto custom-scrollbar">
+                            {searchSuggestions.patients.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5 border-b border-slate-100">
+                                  <User className="w-3 h-3 text-medical-blue" />
+                                  Matching Patients ({searchSuggestions.patients.length})
                                 </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {searchSuggestions.invoices.length > 0 && (
-                            <div>
-                              <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5 border-b border-slate-100">
-                                <CreditCard className="w-3 h-3 text-emerald-600" />
-                                Matching Invoices ({searchSuggestions.invoices.length})
-                              </div>
-                              {searchSuggestions.invoices.map((inv: any) => {
-                                const seqId = getSequentialInvoiceId(inv);
-                                const invPatName = inv.patients?.name || inv.patient_name || inv.patientName || 'Walk-in';
-                                return (
+                                {searchSuggestions.patients.map((pat) => (
                                   <div
-                                    key={inv.id}
-                                    className="px-3 py-2 hover:bg-emerald-50/60 cursor-pointer transition-colors flex items-center justify-between group border-b border-slate-50 last:border-0"
+                                    key={pat.id || pat.name}
+                                    className="px-3 py-2 hover:bg-blue-50/70 cursor-pointer transition-colors flex items-center justify-between group border-b border-slate-50 last:border-0"
                                     onMouseDown={(e) => {
                                       e.preventDefault();
-                                      setSearchQuery(seqId);
+                                      setSearchQuery(pat.name);
                                       setShowRecentSearchDropdown(false);
                                     }}
                                   >
                                     <div className="min-w-0 pr-2">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs font-black text-medical-blue">{seqId}</span>
-                                        <span className="text-xs font-semibold text-slate-700 truncate">• {invPatName}</span>
-                                      </div>
-                                      <p className="text-[10px] text-slate-400">
-                                        {inv.type || 'General'} • {formatDate(inv.created_at || inv.date)}
+                                      <p className="text-xs font-bold text-slate-800 group-hover:text-medical-blue transition-colors truncate">
+                                        {pat.name}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 font-medium truncate">
+                                        MRN: {pat.mrn} • Ph: {pat.phone}
                                       </p>
                                     </div>
-                                    <span className="text-xs font-bold text-slate-800 shrink-0">
-                                      {formatCurrency(inv.payable_amount ?? inv.total_amount ?? 0)}
-                                    </span>
+                                    <Badge variant="outline" className="text-[9px] bg-blue-50/60 text-medical-blue border-blue-200 font-bold shrink-0">
+                                      {pat.billCount > 0 ? `${pat.billCount} inv` : 'Select'}
+                                    </Badge>
                                   </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {searchSuggestions.invoices.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5 border-b border-slate-100">
+                                  <CreditCard className="w-3 h-3 text-emerald-600" />
+                                  Matching Invoices ({searchSuggestions.invoices.length})
+                                </div>
+                                {searchSuggestions.invoices.map((inv: any) => {
+                                  const seqId = getSequentialInvoiceId(inv);
+                                  const invPatName = inv.patients?.name || inv.patient_name || inv.patientName || 'Walk-in';
+                                  return (
+                                    <div
+                                      key={inv.id}
+                                      className="px-3 py-2 hover:bg-emerald-50/60 cursor-pointer transition-colors flex items-center justify-between group border-b border-slate-50 last:border-0"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setSearchQuery(seqId);
+                                        setShowRecentSearchDropdown(false);
+                                      }}
+                                    >
+                                      <div className="min-w-0 pr-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs font-black text-medical-blue">{seqId}</span>
+                                          <span className="text-xs font-semibold text-slate-700 truncate">• {invPatName}</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">
+                                          {inv.type || 'General'} • {formatDate(inv.created_at || inv.date)}
+                                        </p>
+                                      </div>
+                                      <span className="text-xs font-bold text-slate-800 shrink-0">
+                                        {formatCurrency(inv.payable_amount ?? inv.total_amount ?? 0)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="px-4 py-3 text-center text-xs text-slate-400 italic">
+                            No direct patient or invoice matches found. Press Enter to filter table.
+                          </div>
+                        )
+                      ) : (
+                        <div className="p-3">
+                          <p className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-medical-blue" />
+                            Instant Live Search
+                          </p>
+                          <p className="text-[10px] text-slate-400 leading-relaxed mb-2">
+                            Type any initial letter (e.g. <span className="font-semibold text-slate-600">V</span> for Vamika), phone digits, MRN, or invoice # (e.g. <span className="font-semibold text-slate-600">256</span> or <span className="font-semibold text-slate-600">#0256</span>).
+                          </p>
+                          {bills.slice(0, 3).length > 0 && (
+                            <div className="border-t border-slate-100 pt-2 space-y-1">
+                              <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Quick Suggestions:</p>
+                              {bills.slice(0, 3).map((b: any) => {
+                                const seq = getSequentialInvoiceId(b);
+                                const pName = b.patients?.name || b.patient_name || b.patientName || 'Walk-in';
+                                return (
+                                  <button
+                                    key={b.id}
+                                    type="button"
+                                    className="w-full text-left px-2 py-1 hover:bg-slate-50 rounded text-[11px] flex items-center justify-between text-slate-600"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      setSearchQuery(seq);
+                                      setShowRecentSearchDropdown(false);
+                                    }}
+                                  >
+                                    <span className="font-bold text-medical-blue">{seq} <span className="font-normal text-slate-700">• {pName}</span></span>
+                                    <span className="text-[10px] font-semibold text-slate-400">{formatCurrency(b.payable_amount ?? b.total_amount ?? 0)}</span>
+                                  </button>
                                 );
                               })}
                             </div>
                           )}
-                        </div>
-                      ) : (
-                        <div className="px-4 py-3 text-center text-xs text-slate-400 italic">
-                          No direct patient or invoice name matches. Press Enter to filter table.
                         </div>
                       )}
                       <div className="px-3 py-1.5 bg-slate-50/90 flex items-center justify-between text-[10px] text-slate-400">
