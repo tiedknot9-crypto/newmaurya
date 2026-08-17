@@ -54,6 +54,7 @@ import { Separator } from '@/components/ui/separator';
 import { MOCK_BED_RATES, MOCK_USERS, MOCK_PATIENTS } from '@/mockData';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { 
   Dialog, 
@@ -1903,47 +1904,41 @@ export default function IPD() {
                     
                     {showPatientResults && patientSearchTerm.trim().length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                        {patients.filter(p => {
-                          if (!p) return false;
-                          const term = patientSearchTerm.toLowerCase().trim();
-                          const name = (p.name || '').toLowerCase();
-                          const phone = (p.phone || p.mobile || '');
-                          const mrn = (p.mrn || '').toLowerCase();
-                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-                          return (name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term)) &&
-                            p.status !== 'Discharged' && p.status !== 'discharged';
-                        }).length > 0 ? (
-                          patients.filter(p => {
-                            if (!p) return false;
-                            const term = patientSearchTerm.toLowerCase().trim();
-                            const name = (p.name || '').toLowerCase();
-                            const phone = (p.phone || p.mobile || '');
-                            const mrn = (p.mrn || '').toLowerCase();
-                            const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-                            return (name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term)) &&
-                              p.status !== 'Discharged' && p.status !== 'discharged';
-                          }).map(p => (
-                            <div 
-                              key={p.id} 
-                              className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                              onClick={() => {
-                                setAdmissionForm({...admissionForm, patientId: p.id});
-                                setPatientSearchTerm(p.name);
-                                setShowPatientResults(false);
-                              }}
-                            >
-                              <div>
-                                <p className="text-sm font-medium">{p.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                        {(() => {
+                          const matched = getFilteredPatientsPool(patients, patientSearchTerm).filter(p => 
+                            p.status !== 'Discharged' && p.status !== 'discharged'
+                          );
+
+                          if (matched.length === 0) {
+                            return (
+                              <div className="px-4 py-4 text-center text-sm text-muted-foreground">
+                                No patients found.
                               </div>
-                              {admissionForm.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-4 text-center text-sm text-muted-foreground">
-                            No patients found.
-                          </div>
-                        )}
+                            );
+                          }
+
+                          return matched.map(p => {
+                            const pName = getPatientDisplayName(p);
+                            const displayRegId = getPatientDisplayId(p);
+                            return (
+                              <div 
+                                key={p.id} 
+                                className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
+                                onClick={() => {
+                                  setAdmissionForm({...admissionForm, patientId: p.id});
+                                  setPatientSearchTerm(`${pName} (Reg/ID: ${displayRegId})`);
+                                  setShowPatientResults(false);
+                                }}
+                              >
+                                <div>
+                                  <p className="text-sm font-medium">{pName}</p>
+                                  <p className="text-[10px] text-muted-foreground">{p.phone || p.mobile || 'No phone'} • ID: {displayRegId}</p>
+                                </div>
+                                {admissionForm.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
 

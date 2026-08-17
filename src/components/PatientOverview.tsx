@@ -43,6 +43,7 @@ import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { toast } from 'sonner';
 import { supabaseService, toDeterministicUuid } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { getPrescriptionPrintHtml } from '@/lib/prescriptionPrint';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { OTConsentModal } from './ot/OTConsentModal';
@@ -599,12 +600,7 @@ export default function PatientOverview({ userRole }: { userRole?: string }) {
     }
 
     if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(query) || 
-        (p.mrn && p.mrn.toLowerCase().includes(query)) ||
-        (p.phone && p.phone.includes(query))
-      );
+      result = result.filter(p => matchPatient(p, searchQuery));
     }
     
     return result;
@@ -1243,31 +1239,35 @@ View full details at: ${shareUrl}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPatients.map((patient) => (
-            <Card 
-              key={patient.id} 
-              className="hover:ring-2 hover:ring-medical-blue/20 transition-all cursor-pointer border-none shadow-sm"
-              onClick={() => setSearchParams({ id: patient.id })}
-            >
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-medical-blue font-bold text-lg">
-                  {patient.name.charAt(0)}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <p className="font-bold text-slate-800 truncate">{patient.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-bold bg-slate-100 text-slate-500 border-none">
-                      {patient.mrn || 'N/A'}
-                    </Badge>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {patient.phone || 'No phone'}
-                    </p>
+          {filteredPatients.map((patient) => {
+            const pName = getPatientDisplayName(patient);
+            const displayId = getPatientDisplayId(patient);
+            return (
+              <Card 
+                key={patient.id} 
+                className="hover:ring-2 hover:ring-medical-blue/20 transition-all cursor-pointer border-none shadow-sm"
+                onClick={() => setSearchParams({ id: patient.id })}
+              >
+                <CardContent className="p-4 flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-medical-blue font-bold text-lg">
+                    {pName.charAt(0)}
                   </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-300" />
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex-1 overflow-hidden">
+                    <p className="font-bold text-slate-800 truncate">{pName}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-bold bg-slate-100 text-slate-500 border-none">
+                        ID: {displayId}
+                      </Badge>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {patient.phone || patient.mobile || 'No phone'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     );

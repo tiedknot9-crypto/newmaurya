@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { OTConsentRecord, Patient, User, OperationRecord } from '@/types';
 import { supabaseService } from '@/services/supabaseService';
+import { getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { getOTConsentPrintHtml } from '@/lib/otConsentPrint';
 import { toast } from 'sonner';
@@ -444,16 +445,20 @@ export function OTConsentModal({
                     <SelectValue placeholder="Select patient..." />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-[#EAAFA9] text-slate-900">
-                    {patientsList.map(p => (
-                      <SelectItem key={p.id} value={p.id} className="text-xs">
-                        {p.name} ({p.mrn || 'N/A'}) - {p.age}y/{p.gender}
-                      </SelectItem>
-                    ))}
+                    {patientsList.map(p => {
+                      const pName = getPatientDisplayName(p);
+                      const displayId = getPatientDisplayId(p);
+                      return (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {pName} (ID: {displayId}) - {p.age ? `${p.age}y` : ''}/{p.gender || 'N/A'}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               ) : (
                 <div className="mt-1.5 p-2 bg-[#FFF4F3] rounded-lg border border-[#F4BDBA] text-xs font-bold text-[#4A1518]">
-                  {currentPatient?.name || 'Selected Patient'} ({currentPatient?.mrn || 'MRN'})
+                  {currentPatient ? `${getPatientDisplayName(currentPatient)} (ID: ${getPatientDisplayId(currentPatient)})` : 'Selected Patient'}
                 </div>
               )}
             </div>

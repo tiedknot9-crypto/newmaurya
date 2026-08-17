@@ -31,6 +31,7 @@ import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_PATIENTS, MOCK_INVENTORY } from '@/mockData';
 import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { generatePharmacyInvoiceHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
@@ -1223,25 +1224,7 @@ export default function PharmacyPOS() {
                 {showPatientResults && (
                   <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[250px] overflow-y-auto custom-scrollbar">
                     {(() => {
-                      const term = (patientSearchTerm || '').toLowerCase().trim();
-                      const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                      const pool = [...(patients || []), ...storedPats];
-                      const seen = new Set<string>();
-                      const matched = pool.filter((p: any) => {
-                        if (!p || isDummyPatient(p)) return false;
-                        const key = p.id || p.mrn || p.name;
-                        if (seen.has(key)) return false;
-                        seen.add(key);
-
-                        if (!term) return true;
-                        const name = (p.name || '').toLowerCase();
-                        const phone = (p.phone || p.mobile || '');
-                        const mrn = (p.mrn || '').toLowerCase();
-                        const pid = (p.id || '').toLowerCase();
-                        const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
-                        const uhid = (p.uhid || '').toLowerCase();
-                        return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
-                      });
+                      const matched = getFilteredPatientsPool(patients, patientSearchTerm);
 
                       if (matched.length === 0) {
                         return (
@@ -1252,29 +1235,30 @@ export default function PharmacyPOS() {
                       }
 
                       return matched.map((p: any) => {
-                        const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                        const pName = getPatientDisplayName(p);
+                        const displayRegId = getPatientDisplayId(p);
                         return (
                           <div 
                             key={p.id} 
                             className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
                             onClick={() => {
                               setSelectedPatientId(p.id);
-                              setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                              setPatientSearchTerm(`${pName} (ID: ${displayRegId})`);
                               setShowPatientResults(false);
                             }}
                           >
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                                <p className="text-sm font-bold text-slate-800">{pName}</p>
                                 <Badge variant="outline" className={`text-[8px] font-black px-1.5 py-0 ${p.type === 'IPD' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                                   {p.type || 'OPD'}
                                 </Badge>
                                 <Badge variant="outline" className="text-[9px] font-mono font-bold bg-teal-50 text-teal-800 border-teal-200 px-1.5 py-0">
-                                  Reg/ID: {displayRegId}
+                                  ID: {displayRegId}
                                 </Badge>
                               </div>
                               <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                                Phone: {p.phone || p.mobile || 'N/A'} {p.mrn ? `• MRN: ${p.mrn}` : ''} {p.uhid ? `• UHID: ${p.uhid}` : ''}
+                                Phone: {p.phone || p.mobile || 'No phone'} {p.mrn ? `• MRN: ${p.mrn}` : ''} {p.uhid ? `• UHID: ${p.uhid}` : ''}
                               </p>
                             </div>
                             {selectedPatientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue shrink-0" />}
@@ -1303,32 +1287,40 @@ export default function PharmacyPOS() {
           </div>
 
           {selectedPatientId && (
-            <div className="p-4 bg-blue-50/80 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
-                  <User className="h-5 w-5" />
+            (() => {
+              const selPatient = getFilteredPatientsPool(patients, '', p => p.id === selectedPatientId)[0] || patients.find(p => p.id === selectedPatientId);
+              if (!selPatient) return null;
+              const selName = getPatientDisplayName(selPatient);
+              const selId = getPatientDisplayId(selPatient);
+              return (
+                <div className="p-4 bg-blue-50/80 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-top-2 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm shrink-0">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-blue-900 text-sm truncate leading-none mb-1">
+                        {selName}
+                      </p>
+                      <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight">
+                        ID: {selId} • Ph: {selPatient.phone || selPatient.mobile || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg shrink-0"
+                    onClick={() => {
+                      setSelectedPatientId('');
+                      setPatientSearchTerm('');
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-blue-900 text-sm truncate leading-none mb-1">
-                    {patients.find(p => p.id === selectedPatientId)?.name}
-                  </p>
-                  <p className="text-[10px] text-blue-700 font-bold uppercase tracking-tight">
-                    MRN: {patients.find(p => p.id === selectedPatientId)?.mrn} • Ph: {patients.find(p => p.id === selectedPatientId)?.phone}
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg shrink-0"
-                onClick={() => {
-                  setSelectedPatientId('');
-                  setPatientSearchTerm('');
-                }}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+              );
+            })()
           )}
         </div>
 

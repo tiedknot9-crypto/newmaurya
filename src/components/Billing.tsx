@@ -48,6 +48,7 @@ import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_USERS, MOCK_BILLING, MOCK_BED_RATES, MOCK_OT_RATES, MOCK_LAB_TESTS, MOCK_MATERIAL_RATES, MOCK_PATIENTS } from '@/mockData';
 import { supabaseService, isDummyPatient, toDeterministicUuid } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { canUserViewFinancials, canUserManageBilling, normalizeRole } from '@/utils/rbac';
 import { 
   ResponsiveContainer, 
@@ -1222,33 +1223,20 @@ export default function Billing() {
     const q = (searchQuery || '').toLowerCase().trim();
     if (!q) return { patients: [], invoices: [] };
 
-    // Combine state patients and stored patients for guaranteed instant suggestions
-    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-    const combinedPats = [...(patients || []), ...storedPats];
-
     // 1. Matching Patients (from registered patients & bills)
+    const matchingRegistered = getFilteredPatientsPool(patients, q);
     const patientMap = new Map<string, { id: string; name: string; mrn: string; phone: string; billCount: number }>();
 
-    // Scan registered patients
-    combinedPats.forEach((p: any) => {
-      if (!p || isDummyPatient(p)) return;
-      const name = (p.name || '').toLowerCase();
-      const mrn = (p.mrn || '').toLowerCase();
-      const phone = (p.phone || p.mobile || '');
-      const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-      const uhid = (p.uhid || '').toLowerCase();
-
-      if (name.includes(q) || mrn.includes(q) || phone.includes(q) || regId.includes(q) || uhid.includes(q)) {
-        const key = p.id || p.mrn || p.name;
-        if (!patientMap.has(key)) {
-          patientMap.set(key, {
-            id: p.id,
-            name: p.name || 'Unnamed',
-            mrn: p.mrn || 'N/A',
-            phone: p.phone || p.mobile || 'N/A',
-            billCount: 0
-          });
-        }
+    matchingRegistered.forEach((p: any) => {
+      const key = p.id || p.mrn || p.name;
+      if (!patientMap.has(key)) {
+        patientMap.set(key, {
+          id: p.id,
+          name: getPatientDisplayName(p),
+          mrn: p.mrn || 'N/A',
+          phone: p.phone || p.mobile || 'N/A',
+          billCount: 0
+        });
       }
     });
 
@@ -1263,7 +1251,7 @@ export default function Billing() {
       if (pId && patientMap.has(pId)) {
         const rec = patientMap.get(pId)!;
         rec.billCount += 1;
-      } else if (pName && (pName.toLowerCase().includes(q) || pMrn.toLowerCase().includes(q) || pPhone.includes(q))) {
+      } else if (pName && (matchPatient({ name: pName, mrn: pMrn, phone: pPhone }, q))) {
         const key = pId || pName;
         if (!patientMap.has(key)) {
           patientMap.set(key, {
@@ -2316,24 +2304,7 @@ export default function Billing() {
                   {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-[220px] overflow-y-auto custom-scrollbar">
                       {(() => {
-                        const term = patientSearchTerm.toLowerCase().trim();
-                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                        const pool = [...(patients || []), ...storedPats];
-                        const seen = new Set<string>();
-                        const matched = pool.filter((p: any) => {
-                          if (!p || isDummyPatient(p)) return false;
-                          const key = p.id || p.mrn || p.name;
-                          if (seen.has(key)) return false;
-                          seen.add(key);
-
-                          const name = (p.name || '').toLowerCase();
-                          const phone = (p.phone || p.mobile || '');
-                          const mrn = (p.mrn || '').toLowerCase();
-                          const pid = (p.id || '').toLowerCase();
-                          const regId = String(p.registration_number || p.registration_id || p.registrationId || '').toLowerCase();
-                          const uhid = (p.uhid || '').toLowerCase();
-                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || pid.includes(term) || regId.includes(term) || uhid.includes(term);
-                        });
+                        const matched = getFilteredPatientsPool(patients, patientSearchTerm);
 
                         if (matched.length === 0) {
                           return (
@@ -2344,20 +2315,21 @@ export default function Billing() {
                         }
 
                         return matched.map((p: any) => {
-                          const displayRegId = p.registration_number || p.registration_id || p.registrationId || p.mrn || p.id;
+                          const displayRegId = getPatientDisplayId(p);
+                          const pName = getPatientDisplayName(p);
                           return (
                             <div 
                               key={p.id} 
                               className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 transition-colors"
                               onClick={() => {
                                 setNewInvoice({...newInvoice, patientId: p.id});
-                                setPatientSearchTerm(`${p.name} (Reg/ID: ${displayRegId})`);
+                                setPatientSearchTerm(`${pName} (Reg/ID: ${displayRegId})`);
                                 setShowPatientResults(false);
                               }}
                             >
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                                  <p className="text-sm font-semibold text-slate-900">{pName}</p>
                                   <Badge variant="outline" className="text-[9px] font-mono font-bold bg-blue-50 text-blue-800 border-blue-200 px-1.5 py-0">
                                     ID: {displayRegId}
                                   </Badge>
@@ -4125,45 +4097,33 @@ export default function Billing() {
               {showConPatientResults && conPatientSearch.trim().length > 0 && (
                 <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[220px] overflow-y-auto custom-scrollbar">
                   {(() => {
-                    const q = conPatientSearch.toLowerCase().trim();
-                    const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                    const pool = [...(patients || []), ...storedPats];
-                    const seen = new Set<string>();
-                    const matched = pool.filter(p => {
-                      if (!p || isDummyPatient(p)) return false;
-                      const key = p.id || p.mrn || p.name;
-                      if (seen.has(key)) return false;
-                      seen.add(key);
-
-                      const name = (p.name || '').toLowerCase();
-                      const phone = (p.phone || p.mobile || '');
-                      const mrn = (p.mrn || '').toLowerCase();
-                      const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-                      const uhid = (p.uhid || '').toLowerCase();
-                      return name.includes(q) || phone.includes(q) || mrn.includes(q) || regId.includes(q) || uhid.includes(q);
-                    });
+                    const matched = getFilteredPatientsPool(patients, conPatientSearch);
 
                     if (matched.length === 0) {
                       return <div className="p-4 text-center text-xs text-muted-foreground">No patients matched this search</div>;
                     }
 
-                    return matched.map(p => (
-                      <div 
-                        key={p.id} 
-                        className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 text-sm"
-                        onClick={() => {
-                          setConPatientId(p.id);
-                          setConPatientSearch(p.name);
-                          setShowConPatientResults(false);
-                        }}
-                      >
-                        <div>
-                          <p className="font-bold text-slate-800">{p.name}</p>
-                          <p className="text-[10px] text-muted-foreground">MRN: {p.mrn || 'N/A'} | Age: {p.age || 'N/A'}</p>
+                    return matched.map(p => {
+                      const pName = getPatientDisplayName(p);
+                      const displayRegId = getPatientDisplayId(p);
+                      return (
+                        <div 
+                          key={p.id} 
+                          className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0 text-sm"
+                          onClick={() => {
+                            setConPatientId(p.id);
+                            setConPatientSearch(`${pName} (Reg/ID: ${displayRegId})`);
+                            setShowConPatientResults(false);
+                          }}
+                        >
+                          <div>
+                            <p className="font-bold text-slate-800">{pName}</p>
+                            <p className="text-[10px] text-muted-foreground">MRN: {p.mrn || 'N/A'} | ID: {displayRegId}</p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px]">{p.phone || p.mobile || 'N/A'}</Badge>
                         </div>
-                        <Badge variant="outline" className="text-[10px]">{p.phone || 'N/A'}</Badge>
-                      </div>
-                    ));
+                      );
+                    });
                   })()}
                 </div>
               )}

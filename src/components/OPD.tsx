@@ -58,6 +58,7 @@ import {
 import { MOCK_USERS, MOCK_PATIENTS, MOCK_APPOINTMENTS } from '@/mockData';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId, isWalkInPatient } from '@/utils/patientSearch';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { playNotificationSound } from '@/lib/notifications';
 import { supabaseService, toDeterministicUuid, isUuid } from '@/services/supabaseService';
@@ -2165,23 +2166,7 @@ export default function OPD() {
                     {showPatientResults && patientSearchTerm.trim().length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
                         {(() => {
-                          const term = patientSearchTerm.toLowerCase().trim();
-                          const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                          const pool = [...(patients || []), ...storedPats];
-                          const seen = new Set<string>();
-                          const matched = pool.filter(p => {
-                            if (!p) return false;
-                            const key = p.id || p.mrn || p.name;
-                            if (seen.has(key)) return false;
-                            seen.add(key);
-
-                            const name = (p.name || '').toLowerCase();
-                            const phone = (p.phone || p.mobile || '');
-                            const mrn = (p.mrn || '').toLowerCase();
-                            const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-                            const uhid = (p.uhid || '').toLowerCase();
-                            return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term) || uhid.includes(term);
-                          });
+                          const matched = getFilteredPatientsPool(patients, patientSearchTerm);
 
                           if (matched.length === 0) {
                             return (
@@ -2205,23 +2190,27 @@ export default function OPD() {
                             );
                           }
 
-                          return matched.map(p => (
-                            <div 
-                              key={p.id} 
-                              className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                              onClick={() => {
-                                setNewAppointment({...newAppointment, patientId: p.id});
-                                setPatientSearchTerm(p.name);
-                                setShowPatientResults(false);
-                              }}
-                            >
-                              <div>
-                                <p className="text-sm font-medium">{p.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{p.phone} • MRN: {p.mrn}</p>
+                          return matched.map(p => {
+                            const pName = getPatientDisplayName(p);
+                            const displayRegId = getPatientDisplayId(p);
+                            return (
+                              <div 
+                                key={p.id} 
+                                className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
+                                onClick={() => {
+                                  setNewAppointment({...newAppointment, patientId: p.id});
+                                  setPatientSearchTerm(pName);
+                                  setShowPatientResults(false);
+                                }}
+                              >
+                                <div>
+                                  <p className="text-sm font-medium">{pName}</p>
+                                  <p className="text-[10px] text-muted-foreground">{p.phone || p.mobile || 'No phone'} • ID: {displayRegId}</p>
+                                </div>
+                                {newAppointment.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
                               </div>
-                              {newAppointment.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     )}

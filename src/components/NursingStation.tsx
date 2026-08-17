@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { getFilteredPatientsPool, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { ConfirmDialog } from './ConfirmDialog';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_PATIENTS } from '@/mockData';
@@ -260,23 +261,9 @@ export default function NursingStation() {
                   {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
                       {(() => {
-                        const term = patientSearchTerm.toLowerCase().trim();
-                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                        const pool = [...(patients || []), ...storedPats];
-                        const seen = new Set<string>();
-                        const matched = pool.filter(p => {
-                          if (!p || isDummyPatient(p)) return false;
-                          const key = p.id || p.mrn || p.name;
-                          if (seen.has(key)) return false;
-                          seen.add(key);
-
-                          const name = (p.name || '').toLowerCase();
-                          const phone = (p.phone || p.mobile || '');
-                          const mrn = (p.mrn || '').toLowerCase();
+                        const matched = getFilteredPatientsPool(patients, patientSearchTerm).filter(p => {
                           const status = (p.status || '').toLowerCase();
-                          if (status === 'discharged') return false;
-
-                          return name.includes(term) || phone.includes(term) || mrn.includes(term);
+                          return status !== 'discharged';
                         });
 
                         if (matched.length === 0) {
@@ -287,20 +274,24 @@ export default function NursingStation() {
                           );
                         }
 
-                        return matched.map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
-                            onClick={() => {
-                              handleAdmitPatient(p.id);
-                              setShowPatientResults(false);
-                              setPatientSearchTerm(p.name);
-                            }}
-                          >
-                            <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                            <p className="text-[10px] text-slate-500 font-medium">{p.mrn || 'N/A'} • {p.phone || 'N/A'}</p>
-                          </div>
-                        ));
+                        return matched.map(p => {
+                          const pName = getPatientDisplayName(p);
+                          const displayId = getPatientDisplayId(p);
+                          return (
+                            <div 
+                              key={p.id} 
+                              className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
+                              onClick={() => {
+                                handleAdmitPatient(p.id);
+                                setShowPatientResults(false);
+                                setPatientSearchTerm(pName);
+                              }}
+                            >
+                              <p className="text-sm font-bold text-slate-800">{pName}</p>
+                              <p className="text-[10px] text-slate-500 font-medium">ID: {displayId} • {p.phone || p.mobile || 'No phone'}</p>
+                            </div>
+                          );
+                        });
                       })()}
                     </div>
                   )}

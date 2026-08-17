@@ -37,6 +37,7 @@ import { OperationRecord, OperationTheatre, OTConsentRecord } from '@/types';
 import { toast } from 'sonner';
 import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { MOCK_PATIENTS } from '@/mockData';
 import { canUserModifyRecord } from '@/utils/rbac';
@@ -371,23 +372,7 @@ export default function OTManagement() {
                   {showPatientResults && patientSearchTerm.trim().length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
                       {(() => {
-                        const term = patientSearchTerm.toLowerCase().trim();
-                        const storedPats = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || [];
-                        const pool = [...(patients || []), ...storedPats];
-                        const seen = new Set<string>();
-                        const matched = pool.filter(p => {
-                          if (!p || isDummyPatient(p)) return false;
-                          const key = p.id || p.mrn || p.name;
-                          if (seen.has(key)) return false;
-                          seen.add(key);
-
-                          const name = (p.name || '').toLowerCase();
-                          const phone = (p.phone || p.mobile || '');
-                          const mrn = (p.mrn || '').toLowerCase();
-                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
-
-                          return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term);
-                        });
+                        const matched = getFilteredPatientsPool(patients, patientSearchTerm);
 
                         if (matched.length === 0) {
                           return (
@@ -397,52 +382,64 @@ export default function OTManagement() {
                           );
                         }
 
-                        return matched.map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
-                            onClick={() => {
-                              setNewOp({...newOp, patientId: p.id});
-                              setPatientSearchTerm(p.name);
-                              setShowPatientResults(false);
-                            }}
-                          >
-                            <div>
-                              <p className="text-sm font-medium">{p.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{p.phone || 'N/A'} • MRN: {p.mrn || 'N/A'}</p>
+                        return matched.map(p => {
+                          const pName = getPatientDisplayName(p);
+                          const displayId = getPatientDisplayId(p);
+                          return (
+                            <div 
+                              key={p.id} 
+                              className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
+                              onClick={() => {
+                                setNewOp({...newOp, patientId: p.id});
+                                setPatientSearchTerm(`${pName} (ID: ${displayId})`);
+                                setShowPatientResults(false);
+                              }}
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{pName}</p>
+                                <p className="text-[10px] text-muted-foreground">{p.phone || p.mobile || 'No phone'} • ID: {displayId}</p>
+                              </div>
+                              {newOp.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
                             </div>
-                            {newOp.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
-                          </div>
-                        ));
+                          );
+                        });
                       })()}
                     </div>
                   )}
 
-                  {newOp.patientId && patients.find(p => p.id === newOp.patientId) && (
-                    <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <User className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-blue-700 truncate">
-                          {patients.find(p => p.id === newOp.patientId)?.name}
-                        </p>
-                        <p className="text-[10px] text-blue-600 truncate">
-                          {patients.find(p => p.id === newOp.patientId)?.age} yrs • {patients.find(p => p.id === newOp.patientId)?.gender} • MRN: {patients.find(p => p.id === newOp.patientId)?.mrn}
-                        </p>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 text-blue-400 hover:text-blue-600 hover:bg-blue-100"
-                        onClick={() => {
-                          setNewOp({...newOp, patientId: ''});
-                          setPatientSearchTerm('');
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                  {newOp.patientId && (
+                    (() => {
+                      const selPatient = getFilteredPatientsPool(patients, '', p => p.id === newOp.patientId)[0] || patients.find(p => p.id === newOp.patientId);
+                      if (!selPatient) return null;
+                      const selName = getPatientDisplayName(selPatient);
+                      const selId = getPatientDisplayId(selPatient);
+                      return (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-md flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                            <User className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-blue-700 truncate">
+                              {selName}
+                            </p>
+                            <p className="text-[10px] text-blue-600 truncate">
+                              {selPatient.age || 'N/A'} yrs • {selPatient.gender || 'N/A'} • ID: {selId}
+                            </p>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-blue-400 hover:text-blue-600 hover:bg-blue-100"
+                            onClick={() => {
+                              setNewOp({...newOp, patientId: ''});
+                              setPatientSearchTerm('');
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })()
                   )}
                 </div>
 

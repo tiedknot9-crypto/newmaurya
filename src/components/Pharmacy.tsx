@@ -54,6 +54,7 @@ import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { supabaseService } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
+import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId } from '@/utils/patientSearch';
 import { canUserModifyRecord, normalizeRole } from '@/utils/rbac';
 import { toast } from 'sonner';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -250,19 +251,12 @@ export default function Pharmacy() {
           doctorName: adm.attending_doctor_name || adm.doctor_name
         }));
     } else if (returnPatientType === 'OPD') {
-      return patients
-        .filter(p => {
-          if (!query) return true;
-          const nameMatch = (p.name || '').toLowerCase().includes(query);
-          const mrnMatch = (p.mrn || '').toLowerCase().includes(query);
-          const phoneMatch = (p.phone || p.mobile || '').toLowerCase().includes(query);
-          return nameMatch || mrnMatch || phoneMatch;
-        })
+      return getFilteredPatientsPool(patients, returnPatientSearch)
         .slice(0, 15)
         .map(p => ({
           id: p.id,
-          name: p.name,
-          mrn: p.mrn,
+          name: getPatientDisplayName(p),
+          mrn: getPatientDisplayId(p),
           phone: p.phone || p.mobile || '',
           patientType: 'OPD'
         }));
