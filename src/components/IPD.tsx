@@ -1901,20 +1901,28 @@ export default function IPD() {
                       <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     </div>
                     
-                    {showPatientResults && patientSearchTerm.length > 0 && (
+                    {showPatientResults && patientSearchTerm.trim().length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                        {patients.filter(p => 
-                          (p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())) &&
-                          p.status !== 'Discharged' && p.status !== 'discharged'
-                        ).length > 0 ? (
-                          patients.filter(p => 
-                            (p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                            (p.phone || '').includes(patientSearchTerm) ||
-                            (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())) &&
-                            p.status !== 'Discharged' && p.status !== 'discharged'
-                          ).map(p => (
+                        {patients.filter(p => {
+                          if (!p) return false;
+                          const term = patientSearchTerm.toLowerCase().trim();
+                          const name = (p.name || '').toLowerCase();
+                          const phone = (p.phone || p.mobile || '');
+                          const mrn = (p.mrn || '').toLowerCase();
+                          const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+                          return (name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term)) &&
+                            p.status !== 'Discharged' && p.status !== 'discharged';
+                        }).length > 0 ? (
+                          patients.filter(p => {
+                            if (!p) return false;
+                            const term = patientSearchTerm.toLowerCase().trim();
+                            const name = (p.name || '').toLowerCase();
+                            const phone = (p.phone || p.mobile || '');
+                            const mrn = (p.mrn || '').toLowerCase();
+                            const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+                            return (name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term)) &&
+                              p.status !== 'Discharged' && p.status !== 'discharged';
+                          }).map(p => (
                             <div 
                               key={p.id} 
                               className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"

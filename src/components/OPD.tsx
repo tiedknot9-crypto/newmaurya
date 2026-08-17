@@ -2162,18 +2162,43 @@ export default function OPD() {
                       <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     </div>
                     
-                    {showPatientResults && patientSearchTerm.length > 0 && (
+                    {showPatientResults && patientSearchTerm.trim().length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-[200px] overflow-y-auto custom-scrollbar">
-                        {patients.filter(p => 
-                          p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                          (p.phone || '').includes(patientSearchTerm) ||
-                          (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                        ).length > 0 ? (
-                          patients.filter(p => 
-                            p.name.toLowerCase().includes(patientSearchTerm.toLowerCase()) || 
-                            (p.phone || '').includes(patientSearchTerm) ||
-                            (p.mrn || '').toLowerCase().includes(patientSearchTerm.toLowerCase())
-                          ).map(p => (
+                        {(() => {
+                          const term = patientSearchTerm.toLowerCase().trim();
+                          const matched = patients.filter(p => {
+                            if (!p) return false;
+                            const name = (p.name || '').toLowerCase();
+                            const phone = (p.phone || p.mobile || '');
+                            const mrn = (p.mrn || '').toLowerCase();
+                            const regId = String(p.registration_number || p.registration_id || p.id || '').toLowerCase();
+                            const uhid = (p.uhid || '').toLowerCase();
+                            return name.includes(term) || phone.includes(term) || mrn.includes(term) || regId.includes(term) || uhid.includes(term);
+                          });
+
+                          if (matched.length === 0) {
+                            return (
+                              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                No patients found.
+                                {!isDoctor && (
+                                  <Button 
+                                    variant="link" 
+                                    size="sm" 
+                                    className="text-medical-blue block mx-auto"
+                                    onClick={() => {
+                                      setIsAppointmentOpen(false);
+                                      setIsRegisterOpen(true);
+                                      setNewPatient({...newPatient, name: patientSearchTerm});
+                                    }}
+                                  >
+                                    Register New Patient
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return matched.map(p => (
                             <div 
                               key={p.id} 
                               className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0"
@@ -2189,26 +2214,8 @@ export default function OPD() {
                               </div>
                               {newAppointment.patientId === p.id && <CheckCircle2 className="w-4 h-4 text-medical-blue" />}
                             </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                            No patients found.
-                            {!isDoctor && (
-                              <Button 
-                                variant="link" 
-                                size="sm" 
-                                className="text-medical-blue block mx-auto"
-                                onClick={() => {
-                                  setIsAppointmentOpen(false);
-                                  setIsRegisterOpen(true);
-                                  setNewPatient({...newPatient, name: patientSearchTerm});
-                                }}
-                              >
-                                Register New Patient
-                              </Button>
-                            )}
-                          </div>
-                        )}
+                          ));
+                        })()}
                       </div>
                     )}
 
