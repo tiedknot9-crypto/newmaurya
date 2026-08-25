@@ -22,7 +22,15 @@ import {
   FileText,
   CheckCircle2,
   Receipt,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Sparkles,
+  Layers,
+  Store,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -511,13 +519,28 @@ export default function Pharmacy() {
   }, [returnRecords, returnSearchQuery]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryPageSize, setInventoryPageSize] = useState(10);
 
   const filteredInventory = useMemo(() => {
     return inventory.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()))
+      (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.batch_number && item.batch_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.vendor_name && item.vendor_name.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   }, [inventory, searchQuery]);
+
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setInventoryPage(1);
+  }, [searchQuery]);
+
+  const totalInventoryPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPageSize));
+  const paginatedInventory = useMemo(() => {
+    const start = (inventoryPage - 1) * inventoryPageSize;
+    return filteredInventory.slice(start, start + inventoryPageSize);
+  }, [filteredInventory, inventoryPage, inventoryPageSize]);
 
   const [billingSearchQuery, setBillingSearchQuery] = useState('');
   const [billingStartDate, setBillingStartDate] = useState('');
@@ -604,6 +627,13 @@ export default function Pharmacy() {
     loose_stock: 0,
   });
 
+  // Duplicate stock name detector for Add Stock modal
+  const existingStockMatch = useMemo(() => {
+    const trimmed = (newItem.name || '').trim().toLowerCase();
+    if (!trimmed || trimmed.length < 2) return null;
+    return inventory.find(i => i.name.trim().toLowerCase() === trimmed);
+  }, [newItem.name, inventory]);
+
   const handleCategorySelection = (categoryVal: string) => {
     const matchedCategory = PHARMACY_CATEGORIES.find(c => c.id === categoryVal);
     const configuredSlabs = storage.get(STORAGE_KEYS.TAX_SLABS, [
@@ -627,15 +657,263 @@ export default function Pharmacy() {
       hsn_code: (!prev.hsn_code || ['3004', '3002', '9018', '3005', '2106', '3808'].includes(prev.hsn_code)) ? statutoryHsn : prev.hsn_code
     }));
   };
+
+  // State and helpers for Purchase Stock Dialog (typing medicine name & spacious block)
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+
+  const [purchaseMedicineInput, setPurchaseMedicineInput] = useState('');
+  const [purchaseSelectedMedicine, setPurchaseSelectedMedicine] = useState<any>(null);
+  const [purchaseIsTypingOpen, setPurchaseIsTypingOpen] = useState(false);
+  const [purchaseCategory, setPurchaseCategory] = useState('Medicine');
+  const [purchaseUnit, setPurchaseUnit] = useState('Tablets');
+  const [purchaseQty, setPurchaseQty] = useState<number | ''>('');
+  const [purchasePrice, setPurchasePrice] = useState<number | ''>('');
+  const [purchaseMrp, setPurchaseMrp] = useState<number | ''>('');
+  const [purchaseSellingPrice, setPurchaseSellingPrice] = useState<number | ''>('');
+  const [purchaseTax, setPurchaseTax] = useState<number>(12);
+  const [purchaseHsn, setPurchaseHsn] = useState('3004');
+  const [purchaseBatch, setPurchaseBatch] = useState('');
+  const [purchaseExpiry, setPurchaseExpiry] = useState('');
+  const [purchaseMfg, setPurchaseMfg] = useState('');
+  const [purchaseSupplier, setPurchaseSupplier] = useState('');
+  const [purchaseSupplierPhone, setPurchaseSupplierPhone] = useState('');
+  const [purchaseBillNo, setPurchaseBillNo] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [purchaseRack, setPurchaseRack] = useState('');
+  const [purchaseComposition, setPurchaseComposition] = useState('');
+
+  const resetPurchaseForm = () => {
+    setPurchaseMedicineInput('');
+    setPurchaseSelectedMedicine(null);
+    setPurchaseIsTypingOpen(false);
+    setPurchaseCategory('Medicine');
+    setPurchaseUnit('Tablets');
+    setPurchaseQty('');
+    setPurchasePrice('');
+    setPurchaseMrp('');
+    setPurchaseSellingPrice('');
+    setPurchaseTax(12);
+    setPurchaseHsn('3004');
+    setPurchaseBatch('');
+    setPurchaseExpiry('');
+    setPurchaseMfg('');
+    setPurchaseSupplier('');
+    setPurchaseSupplierPhone('');
+    setPurchaseBillNo('');
+    setPurchaseDate(new Date().toISOString().split('T')[0]);
+    setPurchaseRack('');
+    setPurchaseComposition('');
+  };
+
+  const handleSelectPurchaseMedicine = (item: any) => {
+    setPurchaseSelectedMedicine(item);
+    setPurchaseMedicineInput(item.name);
+    setPurchaseCategory(item.category || 'Medicine');
+    setPurchaseUnit(item.unit || 'Tablets');
+    setPurchasePrice(item.purchase_price ?? (item.selling_price ? item.selling_price * 0.8 : ''));
+    setPurchaseMrp(item.mrp ?? '');
+    setPurchaseSellingPrice(item.selling_price ?? '');
+    setPurchaseTax(item.tax_percentage ?? 12);
+    setPurchaseHsn(item.hsn_code || '3004');
+    setPurchaseBatch(item.batch_number || '');
+    setPurchaseExpiry(item.expiry_date || '');
+    setPurchaseMfg(item.mfg_date || '');
+    setPurchaseRack(item.rack_number || '');
+    setPurchaseComposition(item.composition || '');
+    if (item.vendor_name) {
+      setPurchaseSupplier(item.vendor_name);
+    }
+    if (item.vendor_phone) {
+      setPurchaseSupplierPhone(item.vendor_phone);
+    }
+    setPurchaseIsTypingOpen(false);
+  };
+
+  const handleUseNewTypedMedicine = (customName?: string) => {
+    const nameToUse = (customName || purchaseMedicineInput).trim();
+    if (!nameToUse) return;
+    setPurchaseSelectedMedicine(null);
+    setPurchaseMedicineInput(nameToUse);
+    setPurchaseCategory('Medicine');
+    setPurchaseUnit('Tablets');
+    setPurchaseTax(12);
+    setPurchaseHsn('3004');
+    setPurchaseIsTypingOpen(false);
+  };
+
+  const purchaseMedicineSuggestions = useMemo(() => {
+    const q = purchaseMedicineInput.trim().toLowerCase();
+    if (!q) return inventory.slice(0, 10);
+    return inventory.filter(item => 
+      item.name.toLowerCase().includes(q) ||
+      (item.category && item.category.toLowerCase().includes(q)) ||
+      (item.composition && item.composition.toLowerCase().includes(q))
+    ).slice(0, 12);
+  }, [inventory, purchaseMedicineInput]);
+
+  const handleRecordPurchase = async () => {
+    const medName = (purchaseSelectedMedicine ? purchaseSelectedMedicine.name : purchaseMedicineInput).trim();
+    if (!medName) {
+      toast.error('Please type or select a medicine name');
+      return;
+    }
+    const qty = Number(purchaseQty);
+    if (!qty || qty <= 0) {
+      toast.error('Please enter a valid purchase quantity greater than 0');
+      return;
+    }
+
+    const pPrice = Number(purchasePrice) || 0;
+    const mrpVal = Number(purchaseMrp) || 0;
+    const spVal = Number(purchaseSellingPrice) || (pPrice ? pPrice * 1.2 : 0);
+    const taxVal = Number(purchaseTax) || 0;
+    const supplierVal = purchaseSupplier.trim() || 'General Supplier';
+    const timestamp = new Date().toISOString();
+
+    if (purchaseSelectedMedicine) {
+      // Existing item in inventory: add purchased quantity to current stock
+      const updatedStock = Number(purchaseSelectedMedicine.stock || 0) + qty;
+      const updates = {
+        stock: updatedStock,
+        purchase_price: pPrice || purchaseSelectedMedicine.purchase_price,
+        mrp: mrpVal || purchaseSelectedMedicine.mrp,
+        selling_price: spVal || purchaseSelectedMedicine.selling_price,
+        tax_percentage: taxVal || purchaseSelectedMedicine.tax_percentage,
+        batch_number: purchaseBatch.trim() || purchaseSelectedMedicine.batch_number,
+        expiry_date: purchaseExpiry || purchaseSelectedMedicine.expiry_date,
+        mfg_date: purchaseMfg || purchaseSelectedMedicine.mfg_date,
+        vendor_name: supplierVal || purchaseSelectedMedicine.vendor_name,
+        vendor_phone: purchaseSupplierPhone || purchaseSelectedMedicine.vendor_phone,
+        purchase_bill_no: purchaseBillNo.trim() || purchaseSelectedMedicine.purchase_bill_no,
+        purchase_date: purchaseDate || timestamp.split('T')[0],
+        rack_number: purchaseRack.trim() || purchaseSelectedMedicine.rack_number,
+        updated_at: timestamp
+      };
+
+      const result = await supabaseService.updatePharmacyItem(purchaseSelectedMedicine.id, updates);
+      if (result) {
+        await supabaseService.logInventoryTransaction({
+          item_id: purchaseSelectedMedicine.id,
+          transaction_type: 'PURCHASE',
+          quantity: qty,
+          unit_price: pPrice,
+          total_price: qty * pPrice,
+          reference_id: purchaseBillNo ? `BILL-${purchaseBillNo}` : `SUP-${supplierVal}`,
+          performed_by: currentUser?.id,
+          notes: `Purchased ${qty} units from ${supplierVal} (Bill #${purchaseBillNo || 'N/A'})`
+        });
+
+        toast.success(`Purchase recorded! Added ${qty} units to "${purchaseSelectedMedicine.name}". New stock: ${updatedStock} ${purchaseSelectedMedicine.unit || 'units'}.`);
+        setIsPurchaseOpen(false);
+        resetPurchaseForm();
+        fetchData();
+      } else {
+        toast.error('Failed to record stock purchase');
+      }
+    } else {
+      // Check if item with this name already exists before creating
+      const existingByName = inventory.find(i => i.name.trim().toLowerCase() === medName.toLowerCase());
+      if (existingByName) {
+        // Update existing instead
+        const updatedStock = Number(existingByName.stock || 0) + qty;
+        const updates = {
+          stock: updatedStock,
+          purchase_price: pPrice || existingByName.purchase_price,
+          mrp: mrpVal || existingByName.mrp,
+          selling_price: spVal || existingByName.selling_price,
+          tax_percentage: taxVal || existingByName.tax_percentage,
+          batch_number: purchaseBatch.trim() || existingByName.batch_number,
+          expiry_date: purchaseExpiry || existingByName.expiry_date,
+          mfg_date: purchaseMfg || existingByName.mfg_date,
+          vendor_name: supplierVal || existingByName.vendor_name,
+          vendor_phone: purchaseSupplierPhone || existingByName.vendor_phone,
+          purchase_bill_no: purchaseBillNo.trim() || existingByName.purchase_bill_no,
+          purchase_date: purchaseDate || timestamp.split('T')[0],
+          rack_number: purchaseRack.trim() || existingByName.rack_number,
+          updated_at: timestamp
+        };
+        const result = await supabaseService.updatePharmacyItem(existingByName.id, updates);
+        if (result) {
+          await supabaseService.logInventoryTransaction({
+            item_id: existingByName.id,
+            transaction_type: 'PURCHASE',
+            quantity: qty,
+            unit_price: pPrice,
+            total_price: qty * pPrice,
+            reference_id: purchaseBillNo ? `BILL-${purchaseBillNo}` : `SUP-${supplierVal}`,
+            performed_by: currentUser?.id,
+            notes: `Purchased ${qty} units of existing item from ${supplierVal}`
+          });
+          toast.success(`Purchase recorded! Added ${qty} units to existing medicine "${existingByName.name}".`);
+          setIsPurchaseOpen(false);
+          resetPurchaseForm();
+          fetchData();
+        } else {
+          toast.error('Failed to update stock');
+        }
+      } else {
+        // Create new item in inventory
+        const newItemPayload = {
+          name: medName,
+          category: purchaseCategory || 'Medicine',
+          unit: purchaseUnit || 'Tablets',
+          stock: qty,
+          purchase_price: pPrice,
+          mrp: mrpVal,
+          selling_price: spVal,
+          tax_percentage: taxVal,
+          hsn_code: purchaseHsn || '3004',
+          batch_number: purchaseBatch.trim(),
+          expiry_date: purchaseExpiry || null,
+          mfg_date: purchaseMfg || null,
+          vendor_name: supplierVal,
+          vendor_phone: purchaseSupplierPhone,
+          purchase_bill_no: purchaseBillNo.trim(),
+          purchase_date: purchaseDate || timestamp.split('T')[0],
+          rack_number: purchaseRack.trim(),
+          composition: purchaseComposition.trim(),
+          min_stock_level: 10,
+          is_loose_sale_enabled: false,
+          units_per_strip: 10,
+          loose_selling_price: 0,
+          loose_stock: 0
+        };
+
+        const result = await supabaseService.createPharmacyItem(newItemPayload);
+        if (result) {
+          await supabaseService.logInventoryTransaction({
+            item_id: result.id || 'new-item',
+            transaction_type: 'PURCHASE',
+            quantity: qty,
+            unit_price: pPrice,
+            total_price: qty * pPrice,
+            reference_id: purchaseBillNo ? `BILL-${purchaseBillNo}` : `SUP-${supplierVal}`,
+            performed_by: currentUser?.id,
+            notes: `Initial stock purchase of new item "${medName}" (${qty} units)`
+          });
+          toast.success(`New medicine "${medName}" created and purchase of ${qty} units recorded!`);
+          setIsPurchaseOpen(false);
+          resetPurchaseForm();
+          fetchData();
+        } else {
+          toast.error('Failed to create new medicine');
+        }
+      }
+    }
+  };
 
   const handleAddItem = async () => {
     if (!newItem.name) {
       toast.error('Please enter item name');
       return;
     }
+
+    if (existingStockMatch) {
+      toast.warning(`Notice: A stock entry named "${existingStockMatch.name}" already exists (Current Stock: ${existingStockMatch.stock} ${existingStockMatch.unit || 'units'}). Creating another stock/batch record.`);
+    }
+
     const itemToAdd = {
       name: newItem.name,
       category: newItem.category,
@@ -676,7 +954,7 @@ export default function Pharmacy() {
         selling_price: 0,
         purchase_price: 0,
         tax_percentage: 12,
-        hsn_code: '',
+        hsn_code: '3004',
         rack_number: '',
         batch_number: '',
         expiry_date: '',
@@ -891,438 +1169,839 @@ export default function Pharmacy() {
         </div>
       </div>
 
-      <Dialog open={isPurchaseOpen} onOpenChange={setIsPurchaseOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Purchase New Stock</DialogTitle>
-                <DialogDescription>Record a new purchase from a supplier.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
-                <div className="space-y-2">
-                  <Label>Medicine / Item</Label>
-                  <Select 
+      <Dialog open={isPurchaseOpen} onOpenChange={(open) => {
+        setIsPurchaseOpen(open);
+        if (!open) resetPurchaseForm();
+      }}>
+        <DialogContent className="sm:max-w-[780px] md:max-w-[860px] max-h-[90vh] overflow-y-auto p-6 rounded-2xl">
+          <DialogHeader className="border-b border-slate-100 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-bold text-slate-800">Purchase New Stock</DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500">
+                    Type or select any medicine to record incoming inventory batches, procurement prices, and supplier receipts.
+                  </DialogDescription>
+                </div>
+              </div>
+              {purchaseSelectedMedicine && (
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none font-bold text-xs px-3 py-1">
+                  Existing Stock: {purchaseSelectedMedicine.stock} {purchaseSelectedMedicine.unit || 'units'}
+                </Badge>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Block 1: Medicine Identification (Type or Choose) */}
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Pill className="w-4 h-4 text-amber-600" />
+                  Medicine / Item Name <span className="text-rose-500">*</span>
+                </Label>
+                <span className="text-[11px] text-slate-500">
+                  Type freely or select matching inventory item
+                </span>
+              </div>
+
+              <div className="relative">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    placeholder="Type medicine name (e.g. Paracetamol 500mg, Amoxicillin, Augmentin)..."
+                    className="pl-10 pr-10 h-11 text-base bg-white border-slate-300 font-medium rounded-xl focus-visible:ring-amber-500"
+                    value={purchaseMedicineInput}
+                    onChange={(e) => {
+                      setPurchaseMedicineInput(e.target.value);
+                      setPurchaseIsTypingOpen(true);
+                      if (purchaseSelectedMedicine && purchaseSelectedMedicine.name !== e.target.value) {
+                        setPurchaseSelectedMedicine(null);
+                      }
+                    }}
+                    onFocus={() => setPurchaseIsTypingOpen(true)}
+                  />
+                  {purchaseMedicineInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPurchaseMedicineInput('');
+                        setPurchaseSelectedMedicine(null);
+                        setPurchaseIsTypingOpen(false);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown Suggestions when typing */}
+                {purchaseIsTypingOpen && purchaseMedicineInput.trim().length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+                    <div className="p-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                      <span>Matching Inventory Items ({purchaseMedicineSuggestions.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => handleUseNewTypedMedicine()}
+                        className="text-amber-700 font-semibold hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Use &quot;{purchaseMedicineInput.trim()}&quot; as New Item
+                      </button>
+                    </div>
+
+                    {purchaseMedicineSuggestions.length > 0 ? (
+                      <div className="divide-y divide-slate-100">
+                        {purchaseMedicineSuggestions.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleSelectPurchaseMedicine(item)}
+                            className="p-3 hover:bg-amber-50/70 cursor-pointer transition-colors flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <span>{item.name}</span>
+                                <Badge variant="outline" className="text-[10px] font-semibold text-slate-600 bg-slate-50">
+                                  {item.category}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-slate-500 flex items-center gap-3 mt-0.5">
+                                <span>Batch: <strong className="text-slate-700">{item.batch_number || 'N/A'}</strong></span>
+                                <span>Rack: <strong className="text-slate-700">{item.rack_number || 'N/A'}</strong></span>
+                                {item.expiry_date && <span>Exp: <strong className="text-slate-700">{formatDate(item.expiry_date)}</strong></span>}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                Stock: {item.stock} {item.unit}
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                SP: {formatCurrency(item.selling_price || 0)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-sm text-slate-500">
+                        No exact match found.
+                        <Button
+                          size="sm"
+                          type="button"
+                          className="mt-2 w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                          onClick={() => handleUseNewTypedMedicine()}
+                        >
+                          <Plus className="w-4 h-4 mr-1" /> Add &quot;{purchaseMedicineInput}&quot; as New Inventory Item
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Selection Status Banner */}
+              {purchaseSelectedMedicine ? (
+                <div className="flex items-center justify-between text-xs bg-emerald-50 text-emerald-900 p-2.5 rounded-lg border border-emerald-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Existing item selected: <strong>{purchaseSelectedMedicine.name}</strong> ({purchaseSelectedMedicine.stock} {purchaseSelectedMedicine.unit} currently in stock)</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-emerald-700 hover:text-emerald-900 font-semibold p-1"
+                    onClick={() => {
+                      setPurchaseSelectedMedicine(null);
+                    }}
+                  >
+                    Switch to custom name
+                  </Button>
+                </div>
+              ) : purchaseMedicineInput.trim() ? (
+                <div className="flex items-center gap-2 text-xs bg-blue-50 text-blue-800 p-2.5 rounded-lg border border-blue-200">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Purchasing new / typed medicine: <strong>&quot;{purchaseMedicineInput.trim()}&quot;</strong></span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Block 2: Comprehensive Stock, Quantities, and Pricing (Enlarged & Detailed) */}
+            <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-4">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <Layers className="w-4 h-4 text-slate-400" />
+                Purchase Quantities & Unit Pricing
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Quantity to Add <span className="text-rose-500">*</span></Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 50"
+                    className="h-10 text-base font-bold border-amber-300 focus-visible:ring-amber-500 bg-amber-50/30"
+                    value={purchaseQty}
+                    onChange={(e) => setPurchaseQty(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                  <span className="text-[10px] text-slate-500">Units / strips to add</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Purchase Cost (₹/unit)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="h-10 font-bold"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                  <span className="text-[10px] text-slate-500">Net cost per unit</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">MRP (₹)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="h-10 font-medium"
+                    value={purchaseMrp}
+                    onChange={(e) => setPurchaseMrp(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                  <span className="text-[10px] text-slate-500">Printed Max Retail Price</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Selling Price (₹)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="h-10 font-bold text-medical-blue"
+                    value={purchaseSellingPrice}
+                    onChange={(e) => setPurchaseSellingPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                  <span className="text-[10px] text-slate-500">Standard sales charge</span>
+                </div>
+              </div>
+
+              {/* Live Cost & Margin Calculation Strip */}
+              {Number(purchaseQty) > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Total Purchase Cost</span>
+                    <strong className="text-sm font-black text-slate-800">
+                      {formatCurrency(Number(purchaseQty) * (Number(purchasePrice) || 0))}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Total Expected Revenue</span>
+                    <strong className="text-sm font-black text-emerald-700">
+                      {formatCurrency(Number(purchaseQty) * (Number(purchaseSellingPrice) || Number(purchasePrice) || 0))}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">New Total Stock After Purchase</span>
+                    <strong className="text-sm font-black text-amber-700">
+                      {(purchaseSelectedMedicine ? Number(purchaseSelectedMedicine.stock || 0) : 0) + Number(purchaseQty)} {purchaseUnit}
+                    </strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Block 3: Batch, Expiry, Tax & Classification */}
+            <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-4">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <FileText className="w-4 h-4 text-slate-400" />
+                Batch & Statutory Parameters
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Category</Label>
+                  <Select
+                    value={purchaseCategory}
                     onValueChange={(val) => {
-                      const item = inventory.find(i => i.id === val);
-                      if (item) {
-                        setEditingItem(item);
+                      setPurchaseCategory(val);
+                      const matched = PHARMACY_CATEGORIES.find(c => c.id === val);
+                      if (matched) {
+                        setPurchaseTax(matched.defaultTax);
+                        setPurchaseHsn(matched.defaultHsn);
                       }
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select item" />
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {inventory.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+                      {PHARMACY_CATEGORIES.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-                {editingItem && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Quantity to Add</Label>
-                        <Input 
-                          type="number" 
-                          id="purchase-qty"
-                          placeholder="0" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>New Purchase Price (₹)</Label>
-                        <Input 
-                          type="number" 
-                          id="purchase-price"
-                          defaultValue={editingItem.purchase_price}
-                          placeholder="0.00" 
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>New MRP (₹)</Label>
-                        <Input 
-                          type="number" 
-                          id="purchase-mrp"
-                          defaultValue={editingItem.mrp}
-                          placeholder="0.00" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>New Selling Price (₹)</Label>
-                        <Input 
-                          type="number" 
-                          id="purchase-sp"
-                          defaultValue={editingItem.selling_price}
-                          placeholder="0.00" 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Batch Number</Label>
-                      <Input id="purchase-batch" placeholder="Enter batch number" defaultValue={editingItem.batch_number} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Expiry Date</Label>
-                      <Input type="date" id="purchase-expiry" defaultValue={editingItem.expiry_date} />
-                    </div>
-                  </>
-                )}
-                <div className="space-y-2">
-                  <Label>Supplier Name</Label>
-                  <Input placeholder="Enter supplier name" id="purchase-supplier" />
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Unit Type</Label>
+                  <Input
+                    placeholder="e.g. Tablets, Bottles, Strips"
+                    className="h-10"
+                    value={purchaseUnit}
+                    onChange={(e) => setPurchaseUnit(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Batch Number</Label>
+                  <Input
+                    placeholder="e.g. BTH-99201"
+                    className="h-10 font-mono"
+                    value={purchaseBatch}
+                    onChange={(e) => setPurchaseBatch(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Expiry Date</Label>
+                  <Input
+                    type="date"
+                    className="h-10"
+                    value={purchaseExpiry}
+                    onChange={(e) => setPurchaseExpiry(e.target.value)}
+                  />
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => {
-                  setIsPurchaseOpen(false);
-                  setEditingItem(null);
-                }}>Cancel</Button>
-                <Button className="bg-medical-blue" onClick={async () => {
-                  if (!editingItem) {
-                    toast.error('Please select an item');
-                    return;
-                  }
-                  
-                  const qtyToAdd = Number((document.getElementById('purchase-qty') as HTMLInputElement)?.value || 0);
-                  const newPP = Number((document.getElementById('purchase-price') as HTMLInputElement)?.value || editingItem.purchase_price);
-                  const newMRP = Number((document.getElementById('purchase-mrp') as HTMLInputElement)?.value || editingItem.mrp);
-                  const newSP = Number((document.getElementById('purchase-sp') as HTMLInputElement)?.value || editingItem.selling_price);
-                  const newBatch = (document.getElementById('purchase-batch') as HTMLInputElement)?.value || editingItem.batch_number;
-                  const newExpiry = (document.getElementById('purchase-expiry') as HTMLInputElement)?.value || editingItem.expiry_date;
-                  const supplier = (document.getElementById('purchase-supplier') as HTMLInputElement)?.value || 'N/A';
 
-                  const updates = {
-                    stock: editingItem.stock + qtyToAdd,
-                    purchase_price: newPP,
-                    mrp: newMRP,
-                    selling_price: newSP,
-                    batch_number: newBatch,
-                    expiry_date: newExpiry,
-                    updated_at: new Date().toISOString()
-                  };
-
-                  const result = await supabaseService.updatePharmacyItem(editingItem.id, updates);
-                  
-                  if (result) {
-                    // Log the transaction
-                    await supabaseService.logInventoryTransaction({
-                      item_id: editingItem.id,
-                      transaction_type: 'PURCHASE',
-                      quantity: qtyToAdd,
-                      unit_price: newPP,
-                      total_price: qtyToAdd * newPP,
-                      reference_id: `SUP-${supplier}`,
-                      performed_by: currentUser?.id
-                    });
-
-                    toast.success('Stock purchase recorded and inventory updated');
-                    fetchData();
-                    setIsPurchaseOpen(false);
-                    setEditingItem(null);
-                  } else {
-                    toast.error('Failed to update stock');
-                  }
-                }}>Record Purchase</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isAddStockOpen} onOpenChange={setIsAddStockOpen}>
-            {!isAccountant && (
-              <DialogTrigger asChild>
-                <Button className="bg-medical-blue gap-2">
-                  <Plus className="w-4 h-4" />
-                  Add New Stock
-                </Button>
-              </DialogTrigger>
-            )}
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Medicine/Item</DialogTitle>
-                <DialogDescription>Add a new item to the pharmacy inventory.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Item Name</Label>
-                    <Input 
-                      placeholder="e.g. Ibuprofen 400mg" 
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Tax / GST Rate (%)</Label>
+                  <Select
+                    value={purchaseTax.toString()}
+                    onValueChange={(v) => setPurchaseTax(Number(v))}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="GST %" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">GST Zero (0%)</SelectItem>
+                      <SelectItem value="5">GST 5%</SelectItem>
+                      <SelectItem value="12">GST 12%</SelectItem>
+                      <SelectItem value="18">GST 18%</SelectItem>
+                      <SelectItem value="28">GST 28%</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="flex items-center justify-between">
-                      <span>Category</span>
-                      <span className="text-[10px] text-emerald-600 font-medium">Auto-fetches GST</span>
-                    </Label>
-                    <Select 
-                      value={newItem.category}
-                      onValueChange={(v) => handleCategorySelection(v)}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">HSN Code</Label>
+                  <Input
+                    placeholder="3004"
+                    className="h-10 font-mono"
+                    value={purchaseHsn}
+                    onChange={(e) => setPurchaseHsn(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Storage Rack / Shelf</Label>
+                  <Input
+                    placeholder="e.g. Rack A-4"
+                    className="h-10"
+                    value={purchaseRack}
+                    onChange={(e) => setPurchaseRack(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Mfg Date</Label>
+                  <Input
+                    type="date"
+                    className="h-10"
+                    value={purchaseMfg}
+                    onChange={(e) => setPurchaseMfg(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Block 4: Supplier & Procurement Invoice */}
+            <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-4">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <Store className="w-4 h-4 text-slate-400" />
+                Vendor & Purchase Invoice Details
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Supplier / Vendor Name</Label>
+                  <Input
+                    placeholder="e.g. Apex Pharma Agencies"
+                    className="h-10"
+                    value={purchaseSupplier}
+                    onChange={(e) => setPurchaseSupplier(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Supplier Contact Phone</Label>
+                  <Input
+                    placeholder="e.g. +91 9876543210"
+                    className="h-10"
+                    value={purchaseSupplierPhone}
+                    onChange={(e) => setPurchaseSupplierPhone(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Purchase Bill / Invoice #</Label>
+                  <Input
+                    placeholder="e.g. PUR-2026-4481"
+                    className="h-10 font-mono"
+                    value={purchaseBillNo}
+                    onChange={(e) => setPurchaseBillNo(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Purchase Date</Label>
+                  <Input
+                    type="date"
+                    className="h-10"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setIsPurchaseOpen(false);
+                resetPurchaseForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold gap-2 w-full sm:w-auto px-6 h-10 shadow-md"
+              type="button"
+              onClick={handleRecordPurchase}
+            >
+              <Package className="w-4 h-4" />
+              Record Purchase & Update Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Stock / Medicine Modal with Pre-Existing Stock Name Flash Alert */}
+      <Dialog open={isAddStockOpen} onOpenChange={setIsAddStockOpen}>
+        {!isAccountant && (
+          <DialogTrigger asChild>
+            <Button className="bg-medical-blue gap-2">
+              <Plus className="w-4 h-4" />
+              Add New Stock
+            </Button>
+          </DialogTrigger>
+        )}
+        <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Add New Medicine / Inventory Item</DialogTitle>
+            <DialogDescription className="text-xs">
+              Add a new pharmaceutical formula or supply item to the clinic database.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Flash Warning Message if Medicine Name Already Exists */}
+          {existingStockMatch && (
+            <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-200/70 text-amber-900 rounded-lg shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-amber-950 text-sm">
+                      ⚠️ Stock Item Already Exists
+                    </h4>
+                    <Badge className="bg-amber-200 text-amber-900 border-none font-bold text-[10px]">
+                      Duplicate Found
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    A medicine named <strong className="font-bold underline text-amber-950">&quot;{existingStockMatch.name}&quot;</strong> is already registered in your inventory.
+                  </p>
+                  
+                  {/* Summary of pre-existing item */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] bg-white/80 p-2.5 rounded-lg border border-amber-200/70">
+                    <div>
+                      <span className="text-slate-500 block">Current Stock:</span>
+                      <strong className="text-emerald-700 font-bold">{existingStockMatch.stock} {existingStockMatch.unit}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Selling Price:</span>
+                      <strong className="text-slate-800 font-bold">{formatCurrency(existingStockMatch.selling_price || 0)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Batch:</span>
+                      <strong className="text-slate-800 font-mono">{existingStockMatch.batch_number || 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Expiry:</span>
+                      <strong className="text-slate-800">{existingStockMatch.expiry_date ? formatDate(existingStockMatch.expiry_date) : 'N/A'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs bg-white border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold"
+                      onClick={() => {
+                        // Prefill values from existing item
+                        setNewItem(prev => ({
+                          ...prev,
+                          category: existingStockMatch.category || prev.category,
+                          unit: existingStockMatch.unit || prev.unit,
+                          mrp: existingStockMatch.mrp || prev.mrp,
+                          selling_price: existingStockMatch.selling_price || prev.selling_price,
+                          purchase_price: existingStockMatch.purchase_price || prev.purchase_price,
+                          tax_percentage: existingStockMatch.tax_percentage || prev.tax_percentage,
+                          hsn_code: existingStockMatch.hsn_code || prev.hsn_code,
+                          composition: existingStockMatch.composition || prev.composition,
+                          rack_number: existingStockMatch.rack_number || prev.rack_number,
+                          vendor_name: existingStockMatch.vendor_name || prev.vendor_name,
+                          vendor_phone: existingStockMatch.vendor_phone || prev.vendor_phone
+                        }));
+                        toast.info(`Copied catalog details from pre-existing "${existingStockMatch.name}".`);
+                      }}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHARMACY_CATEGORIES.map(cat => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span>{cat.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Unit</Label>
-                    <Input 
-                      placeholder="e.g. Tablets, Bottles" 
-                      value={newItem.unit}
-                      onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
-                    />
+                      <Sparkles className="w-3 h-3 mr-1 text-amber-700" />
+                      Copy Existing Item Details
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 text-xs bg-amber-700 hover:bg-amber-800 text-white font-semibold"
+                      onClick={() => {
+                        setIsAddStockOpen(false);
+                        setIsPurchaseOpen(true);
+                        handleSelectPurchaseMedicine(existingStockMatch);
+                      }}
+                    >
+                      <Package className="w-3 h-3 mr-1" />
+                      Switch to Purchase Stock
+                    </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Initial Stock</Label>
-                    <Input 
-                      type="number" 
-                      placeholder="0" 
-                      value={newItem.stock}
-                      onChange={(e) => setNewItem({...newItem, stock: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Min Stock Level</Label>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4 py-2 px-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 col-span-2">
+                <Label className="font-bold flex items-center justify-between">
+                  <span>Item Name <span className="text-rose-500">*</span></span>
+                  {existingStockMatch && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      ⚠️ Duplicate Name Warning
+                    </span>
+                  )}
+                </Label>
+                <Input 
+                  placeholder="e.g. Ibuprofen 400mg" 
+                  value={newItem.name}
+                  className={existingStockMatch ? 'border-amber-400 focus-visible:ring-amber-500 bg-amber-50/20' : ''}
+                  onChange={(e) => setNewItem({...newItem, name: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center justify-between">
+                  <span>Category</span>
+                  <span className="text-[10px] text-emerald-600 font-medium">Auto-fetches GST</span>
+                </Label>
+                <Select 
+                  value={newItem.category}
+                  onValueChange={(v) => handleCategorySelection(v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PHARMACY_CATEGORIES.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{cat.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Unit</Label>
+                <Input 
+                  placeholder="e.g. Tablets, Bottles" 
+                  value={newItem.unit}
+                  onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Initial Stock</Label>
+                <Input 
+                  type="number" 
+                  placeholder="0" 
+                  value={newItem.stock}
+                  onChange={(e) => setNewItem({...newItem, stock: Number(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Min Stock Level</Label>
+                <Input 
+                  type="number" 
+                  placeholder="10" 
+                  value={newItem.min_stock_level}
+                  onChange={(e) => setNewItem({...newItem, min_stock_level: Number(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rack No.</Label>
+                <Input 
+                  placeholder="A-1" 
+                  value={newItem.rack_number}
+                  onChange={(e) => setNewItem({...newItem, rack_number: e.target.value})}
+                />
+              </div>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Purchase Price (₹)</Label>
+                <Input 
+                  type="number" 
+                  placeholder="0.00" 
+                  value={newItem.purchase_price}
+                  onChange={(e) => setNewItem({...newItem, purchase_price: Number(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>MRP (₹)</Label>
+                <Input 
+                  type="number" 
+                  placeholder="0.00" 
+                  value={newItem.mrp}
+                  onChange={(e) => setNewItem({...newItem, mrp: Number(e.target.value)})}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Selling Price (₹)</Label>
+                <Input 
+                  type="number" 
+                  placeholder="0.00" 
+                  value={newItem.selling_price}
+                  onChange={(e) => setNewItem({...newItem, selling_price: Number(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center justify-between">
+                  <span>Tax Percentage (%)</span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    Auto: GST {newItem.tax_percentage}%
+                  </span>
+                </Label>
+                <Select 
+                  value={newItem.tax_percentage.toString()}
+                  onValueChange={(v) => setNewItem({...newItem, tax_percentage: Number(v)})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Tax" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const activeSlabs = storage.get(STORAGE_KEYS.TAX_SLABS, [
+                        { id: 'tax-ex', name: 'GST Zero (Exempt)', rate: 0, type: 'GST', isActive: true },
+                        { id: 'tax-5', name: 'GST 5%', rate: 5, type: 'GST', isActive: true },
+                        { id: 'tax-12', name: 'GST 12%', rate: 12, type: 'GST', isActive: true },
+                        { id: 'tax-18', name: 'GST 18%', rate: 18, type: 'GST', isActive: true },
+                        { id: 'tax-28', name: 'GST 28%', rate: 28, type: 'GST', isActive: true }
+                      ]).filter((s: any) => s.isActive);
+                      
+                      return activeSlabs.map((s: any) => (
+                        <SelectItem key={s.id} value={s.rate.toString()}>
+                          {s.name} ({s.rate}%)
+                        </SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>HSN Code</Label>
+                <Input 
+                  placeholder="HSN" 
+                  value={newItem.hsn_code}
+                  onChange={(e) => setNewItem({...newItem, hsn_code: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Batch Number</Label>
+                <Input 
+                  placeholder="Batch" 
+                  value={newItem.batch_number}
+                  onChange={(e) => setNewItem({...newItem, batch_number: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Mfg Date</Label>
+                <Input 
+                  type="date" 
+                  value={newItem.mfg_date}
+                  onChange={(e) => setNewItem({...newItem, mfg_date: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Expiry Date</Label>
+                <Input 
+                  type="date" 
+                  value={newItem.expiry_date}
+                  onChange={(e) => setNewItem({...newItem, expiry_date: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t border-dashed">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Vendor & Purchase Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Vendor / Supplier Name</Label>
+                  <Input 
+                    placeholder="e.g. Global Medical Agencies" 
+                    value={newItem.vendor_name}
+                    onChange={(e) => setNewItem({...newItem, vendor_name: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vendor Contact</Label>
+                  <Input 
+                    placeholder="e.g. +91 9876543210" 
+                    value={newItem.vendor_phone}
+                    onChange={(e) => setNewItem({...newItem, vendor_phone: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Purchase Date</Label>
+                  <Input 
+                    type="date" 
+                    value={newItem.purchase_date}
+                    onChange={(e) => setNewItem({...newItem, purchase_date: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Purchase Invoice / Bill No.</Label>
+                  <Input 
+                    placeholder="e.g. INV-8890" 
+                    value={newItem.purchase_bill_no}
+                    onChange={(e) => setNewItem({...newItem, purchase_bill_no: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2 border-t border-dashed col-span-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Salt Composition & Loose Sale Setup</h4>
+              <div className="space-y-2">
+                <Label>Chemical Composition / Salt Formula</Label>
+                <Input 
+                  placeholder="e.g. Amoxicillin + Clavulanic Acid" 
+                  value={newItem.composition}
+                  onChange={(e) => setNewItem({...newItem, composition: e.target.value})}
+                />
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 border border-orange-100 mt-2">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-bold text-slate-800 cursor-pointer" htmlFor="loose-sale-checkbox">Enable Loose Sale</Label>
+                  <p className="text-[10px] text-muted-foreground">Allows selling pills or capsules individually</p>
+                </div>
+                <input 
+                  id="loose-sale-checkbox"
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                  checked={newItem.is_loose_sale_enabled}
+                  onChange={(e) => setNewItem({...newItem, is_loose_sale_enabled: e.target.checked})}
+                />
+              </div>
+
+              {newItem.is_loose_sale_enabled && (
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Units per Strip</Label>
                     <Input 
                       type="number" 
                       placeholder="10" 
-                      value={newItem.min_stock_level}
-                      onChange={(e) => setNewItem({...newItem, min_stock_level: Number(e.target.value)})}
+                      value={newItem.units_per_strip}
+                      onChange={(e) => setNewItem({...newItem, units_per_strip: Number(e.target.value)})}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Rack No.</Label>
-                    <Input 
-                      placeholder="A-1" 
-                      value={newItem.rack_number}
-                      onChange={(e) => setNewItem({...newItem, rack_number: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Purchase Price (₹)</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Loose Price (₹)</Label>
                     <Input 
                       type="number" 
-                      placeholder="0.00" 
-                      value={newItem.purchase_price}
-                      onChange={(e) => setNewItem({...newItem, purchase_price: Number(e.target.value)})}
+                      placeholder="12.00" 
+                      value={newItem.loose_selling_price}
+                      onChange={(e) => setNewItem({...newItem, loose_selling_price: Number(e.target.value)})}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>MRP (₹)</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">Loose Stock</Label>
                     <Input 
                       type="number" 
-                      placeholder="0.00" 
-                      value={newItem.mrp}
-                      onChange={(e) => setNewItem({...newItem, mrp: Number(e.target.value)})}
+                      placeholder="0" 
+                      value={newItem.loose_stock}
+                      onChange={(e) => setNewItem({...newItem, loose_stock: Number(e.target.value)})}
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Selling Price (₹)</Label>
-                    <Input 
-                      type="number" 
-                      placeholder="0.00" 
-                      value={newItem.selling_price}
-                      onChange={(e) => setNewItem({...newItem, selling_price: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center justify-between">
-                      <span>Tax Percentage (%)</span>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                        Auto: GST {newItem.tax_percentage}%
-                      </span>
-                    </Label>
-                    <Select 
-                      value={newItem.tax_percentage.toString()}
-                      onValueChange={(v) => setNewItem({...newItem, tax_percentage: Number(v)})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Tax" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const activeSlabs = storage.get(STORAGE_KEYS.TAX_SLABS, [
-                            { id: 'tax-ex', name: 'GST Zero (Exempt)', rate: 0, type: 'GST', isActive: true },
-                            { id: 'tax-5', name: 'GST 5%', rate: 5, type: 'GST', isActive: true },
-                            { id: 'tax-12', name: 'GST 12%', rate: 12, type: 'GST', isActive: true },
-                            { id: 'tax-18', name: 'GST 18%', rate: 18, type: 'GST', isActive: true },
-                            { id: 'tax-28', name: 'GST 28%', rate: 28, type: 'GST', isActive: true }
-                          ]).filter((s: any) => s.isActive);
-                          
-                          return activeSlabs.map((s: any) => (
-                            <SelectItem key={s.id} value={s.rate.toString()}>
-                              {s.name} ({s.rate}%)
-                            </SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>HSN Code</Label>
-                    <Input 
-                      placeholder="HSN" 
-                      value={newItem.hsn_code}
-                      onChange={(e) => setNewItem({...newItem, hsn_code: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Batch Number</Label>
-                    <Input 
-                      placeholder="Batch" 
-                      value={newItem.batch_number}
-                      onChange={(e) => setNewItem({...newItem, batch_number: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Mfg Date</Label>
-                    <Input 
-                      type="date" 
-                      value={newItem.mfg_date}
-                      onChange={(e) => setNewItem({...newItem, mfg_date: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Expiry Date</Label>
-                    <Input 
-                      type="date" 
-                      value={newItem.expiry_date}
-                      onChange={(e) => setNewItem({...newItem, expiry_date: e.target.value})}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2 border-t border-dashed">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Vendor & Purchase Details</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Vendor / Supplier Name</Label>
-                      <Input 
-                        placeholder="e.g. Global Medical Agencies" 
-                        value={newItem.vendor_name}
-                        onChange={(e) => setNewItem({...newItem, vendor_name: e.target.value})}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Vendor Contact</Label>
-                      <Input 
-                        placeholder="e.g. +91 9876543210" 
-                        value={newItem.vendor_phone}
-                        onChange={(e) => setNewItem({...newItem, vendor_phone: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Purchase Date</Label>
-                      <Input 
-                        type="date" 
-                        value={newItem.purchase_date}
-                        onChange={(e) => setNewItem({...newItem, purchase_date: e.target.value})}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Purchase Invoice / Bill No.</Label>
-                      <Input 
-                        placeholder="e.g. INV-8890" 
-                        value={newItem.purchase_bill_no}
-                        onChange={(e) => setNewItem({...newItem, purchase_bill_no: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-2 border-t border-dashed col-span-2">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Salt Composition & Loose Sale Setup</h4>
-                  <div className="space-y-2">
-                    <Label>Chemical Composition / Salt Formula</Label>
-                    <Input 
-                      placeholder="e.g. Amoxicillin + Clavulanic Acid" 
-                      value={newItem.composition}
-                      onChange={(e) => setNewItem({...newItem, composition: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 border border-orange-100 mt-2">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-bold text-slate-800 cursor-pointer" htmlFor="loose-sale-checkbox">Enable Loose Sale</Label>
-                      <p className="text-[10px] text-muted-foreground">Allows selling pills or capsules individually</p>
-                    </div>
-                    <input 
-                      id="loose-sale-checkbox"
-                      type="checkbox" 
-                      className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                      checked={newItem.is_loose_sale_enabled}
-                      onChange={(e) => setNewItem({...newItem, is_loose_sale_enabled: e.target.checked})}
-                    />
-                  </div>
-
-                  {newItem.is_loose_sale_enabled && (
-                    <div className="grid grid-cols-3 gap-3 pt-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold">Units per Strip</Label>
-                        <Input 
-                          type="number" 
-                          placeholder="10" 
-                          value={newItem.units_per_strip}
-                          onChange={(e) => setNewItem({...newItem, units_per_strip: Number(e.target.value)})}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold">Loose Price (₹)</Label>
-                        <Input 
-                          type="number" 
-                          placeholder="12.00" 
-                          value={newItem.loose_selling_price}
-                          onChange={(e) => setNewItem({...newItem, loose_selling_price: Number(e.target.value)})}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold">Loose Stock</Label>
-                        <Input 
-                          type="number" 
-                          placeholder="0" 
-                          value={newItem.loose_stock}
-                          onChange={(e) => setNewItem({...newItem, loose_stock: Number(e.target.value)})}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogTrigger asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogTrigger>
-                <Button className="bg-medical-blue" onClick={() => {
-                  handleAddItem();
-                  setIsAddStockOpen(false);
-                }}>Add Item</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogTrigger asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogTrigger>
+            <Button className="bg-medical-blue" onClick={() => {
+              handleAddItem();
+              setIsAddStockOpen(false);
+            }}>Add Item</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
         <TabsList className="bg-slate-100 p-1 flex flex-wrap gap-1">
@@ -1422,8 +2101,21 @@ export default function Pharmacy() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredInventory.map((item) => (
-                      <TableRow key={item.id} className="border-slate-50">
+                    {paginatedInventory.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Package className="w-8 h-8 text-slate-300" />
+                            <p className="font-semibold text-slate-700">No medicines found</p>
+                            <p className="text-xs text-slate-400">
+                              {searchQuery ? `No matches found for "${searchQuery}". Try a different keyword.` : 'Inventory is empty. Add new stock or record purchases.'}
+                            </p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedInventory.map((item) => (
+                        <TableRow key={item.id} className="border-slate-50">
                         <TableCell className="font-medium whitespace-nowrap">
                           <div>
                             <p>{item.name}</p>
@@ -1668,10 +2360,97 @@ export default function Pharmacy() {
                           </Dialog>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )))}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Inventory Pagination Bar */}
+              {filteredInventory.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-100 bg-slate-50/60 rounded-b-xl">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                    <span>
+                      Showing <strong className="font-semibold text-slate-900">{Math.min(filteredInventory.length, (inventoryPage - 1) * inventoryPageSize + 1)}</strong> to{' '}
+                      <strong className="font-semibold text-slate-900">{Math.min(filteredInventory.length, inventoryPage * inventoryPageSize)}</strong> of{' '}
+                      <strong className="font-semibold text-slate-900">{filteredInventory.length}</strong> medicines
+                    </span>
+                    <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500">Rows per page:</span>
+                      <Select
+                        value={inventoryPageSize.toString()}
+                        onValueChange={(val) => {
+                          setInventoryPageSize(Number(val));
+                          setInventoryPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-20 text-xs bg-white border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 bg-white border-slate-200 hover:bg-slate-50"
+                      disabled={inventoryPage <= 1}
+                      onClick={() => setInventoryPage(1)}
+                      title="First Page"
+                    >
+                      <ChevronsLeft className="w-4 h-4 text-slate-600" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2.5 gap-1 bg-white border-slate-200 hover:bg-slate-50 text-xs text-slate-700"
+                      disabled={inventoryPage <= 1}
+                      onClick={() => setInventoryPage(prev => Math.max(1, prev - 1))}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      Prev
+                    </Button>
+                    
+                    <div className="flex items-center gap-1 px-2 text-xs font-semibold text-slate-600">
+                      <span>Page</span>
+                      <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-900 font-bold shadow-2xs">
+                        {inventoryPage}
+                      </span>
+                      <span>of {totalInventoryPages}</span>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2.5 gap-1 bg-white border-slate-200 hover:bg-slate-50 text-xs text-slate-700"
+                      disabled={inventoryPage >= totalInventoryPages}
+                      onClick={() => setInventoryPage(prev => Math.min(totalInventoryPages, prev + 1))}
+                    >
+                      Next
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 bg-white border-slate-200 hover:bg-slate-50"
+                      disabled={inventoryPage >= totalInventoryPages}
+                      onClick={() => setInventoryPage(totalInventoryPages)}
+                      title="Last Page"
+                    >
+                      <ChevronsRight className="w-4 h-4 text-slate-600" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
