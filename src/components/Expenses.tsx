@@ -287,15 +287,19 @@ export default function Expenses() {
     }
   };
 
-  const filteredExpenses = expenses.map(e => ({
-    ...e,
-    amount: Number(e.amount) || 0,
-    category: e.category || 'Utilities',
-    description: e.description || '',
-    expense_date: getLocalDateStr(e.expense_date || e.created_at || e.date) || new Date().toISOString().split('T')[0],
-    payment_mode: e.payment_mode || e.payment_method || 'Cash',
-    status: e.status || 'Paid'
-  })).filter(e => {
+  const filteredExpenses = expenses.map(e => {
+    const expDateStr = getLocalDateStr(e.expense_date || e.date || e.created_at) || new Date().toISOString().split('T')[0];
+    return {
+      ...e,
+      amount: Number(e.amount) || 0,
+      category: e.category || 'Utilities',
+      description: e.description || '',
+      expense_date: expDateStr,
+      date: expDateStr,
+      payment_mode: e.payment_mode || e.payment_method || 'Cash',
+      status: e.status || 'Paid'
+    };
+  }).filter(e => {
     // 1. Search Query Filter (description, category, payment mode, date, amount)
     const modeStr = e.payment_mode || e.payment_method || 'Cash';
     const q = searchQuery.toLowerCase().trim();
@@ -333,7 +337,7 @@ export default function Expenses() {
 
     if (!startDate && !endDate && period !== 'all') {
       const now = new Date();
-      const todayStr = getLocalDateStrFromVal(now);
+      const todayStr = getLocalDateStr(now);
       const [y, m] = expDateStr.split('-').map(Number);
 
       if (period === 'today') {
@@ -343,17 +347,17 @@ export default function Expenses() {
       if (period === 'yesterday') {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = getLocalDateStrFromVal(yesterday);
+        const yesterdayStr = getLocalDateStr(yesterday);
         return expDateStr === yesterdayStr;
       }
 
       if (period === 'this-week') {
         const startOfWeek = new Date();
         startOfWeek.setDate(now.getDate() - now.getDay());
-        const startOfWeekStr = getLocalDateStrFromVal(startOfWeek);
+        const startOfWeekStr = getLocalDateStr(startOfWeek);
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
-        const endOfWeekStr = getLocalDateStrFromVal(endOfWeek);
+        const endOfWeekStr = getLocalDateStr(endOfWeek);
         return expDateStr >= startOfWeekStr && expDateStr <= endOfWeekStr;
       }
 
@@ -374,13 +378,18 @@ export default function Expenses() {
       }
 
       if (period === 'custom' && dateRange.start && dateRange.end) {
-        const start = getLocalDateStrFromVal(dateRange.start);
-        const end = getLocalDateStrFromVal(dateRange.end);
+        const start = getLocalDateStr(dateRange.start);
+        const end = getLocalDateStr(dateRange.end);
         return expDateStr >= start && expDateStr <= end;
       }
     }
 
     return true;
+  }).sort((a, b) => {
+    const dateA = a.expense_date || a.created_at || '';
+    const dateB = b.expense_date || b.created_at || '';
+    if (dateA !== dateB) return dateB.localeCompare(dateA);
+    return (b.created_at || '').localeCompare(a.created_at || '');
   });
 
   const totalFiltered = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);

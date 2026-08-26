@@ -1,6 +1,7 @@
 import { supabase, broadcastDataMutation, isSupabaseConfigured } from '../lib/supabase';
 import { toast } from 'sonner';
 import { storage, STORAGE_KEYS } from '../lib/storage';
+import { getLocalDateStr } from '../lib/utils';
 import { DEFAULT_PHARMACY_SETTINGS } from '../lib/pharmacyInvoicePrint';
 import { 
   MOCK_PRESCRIPTIONS, 
@@ -4158,25 +4159,99 @@ const rawSupabaseService = {
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
-        .order('expense_date', { ascending: false });
+        .order('expense_date', { ascending: false, nullsFirst: false });
       
       if (error) throw error;
-      return (data || []).map((exp: any) => ({
-        ...exp,
-        created_by: exp.recorded_by || exp.created_by,
-        payment_mode: exp.payment_mode || exp.payment_method || 'Cash',
-        payment_method: exp.payment_mode || exp.payment_method || 'Cash',
-        amount: Number(exp.amount) || 0
-      }));
+      
+      const normalizeExp = (exp: any) => {
+        const rawDate = exp.expense_date || exp.date || exp.created_at;
+        const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
+        const mode = exp.payment_mode || exp.payment_method || 'Cash';
+        return {
+          ...exp,
+          id: exp.id || 'exp-' + Math.random().toString(36).substring(2, 9),
+          category: exp.category || 'Utilities',
+          description: exp.description || '',
+          amount: Number(exp.amount) || 0,
+          expense_date: dateStr,
+          date: dateStr,
+          payment_mode: mode,
+          payment_method: mode,
+          status: exp.status || 'Paid',
+          created_by: exp.recorded_by || exp.created_by || 'u-accounts',
+          created_at: exp.created_at || (exp.expense_date ? `${exp.expense_date}T00:00:00.000Z` : new Date().toISOString())
+        };
+      };
+
+      const dbExpenses = (data || []).map(normalizeExp);
+      const localExpenses = (storage.get(STORAGE_KEYS.EXPENSES, []) || []).map(normalizeExp);
+
+      // Merge: any local/offline expense not in DB or offline created
+      const offlineExpenses = localExpenses.filter((le: any) => 
+        le.isOffline || !dbExpenses.some((de: any) => de.id === le.id)
+      );
+
+      const mergedMap = new Map<string, any>();
+      dbExpenses.forEach((item: any) => mergedMap.set(item.id, item));
+      offlineExpenses.forEach((item: any) => {
+        if (!mergedMap.has(item.id)) {
+          mergedMap.set(item.id, item);
+        }
+      });
+
+      const merged = Array.from(mergedMap.values()).sort((a, b) => {
+        const dateA = a.expense_date || a.created_at || '';
+        const dateB = b.expense_date || b.created_at || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return (b.created_at || '').localeCompare(a.created_at || '');
+      });
+
+      storage.set(STORAGE_KEYS.EXPENSES, merged);
+      return merged;
     } catch (error: any) {
-      console.error('Error fetching expenses:', error.message);
-      return null;
+      console.error('Error fetching expenses, falling back to local storage:', error.message);
+      const normalizeExp = (exp: any) => {
+        const rawDate = exp.expense_date || exp.date || exp.created_at;
+        const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
+        const mode = exp.payment_mode || exp.payment_method || 'Cash';
+        return {
+          ...exp,
+          id: exp.id || 'exp-' + Math.random().toString(36).substring(2, 9),
+          category: exp.category || 'Utilities',
+          description: exp.description || '',
+          amount: Number(exp.amount) || 0,
+          expense_date: dateStr,
+          date: dateStr,
+          payment_mode: mode,
+          payment_method: mode,
+          status: exp.status || 'Paid',
+          created_by: exp.recorded_by || exp.created_by || 'u-accounts',
+          created_at: exp.created_at || new Date().toISOString()
+        };
+      };
+      const list = (storage.get(STORAGE_KEYS.EXPENSES, []) || []).map(normalizeExp);
+      return list.sort((a, b) => {
+        const dateA = a.expense_date || a.created_at || '';
+        const dateB = b.expense_date || b.created_at || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return (b.created_at || '').localeCompare(a.created_at || '');
+      });
     }
   },
 
   createExpense: async (expense: any) => {
     try {
-      const cleaned = { ...expense };
+      const formattedDate = expense.expense_date 
+        ? getLocalDateStr(expense.expense_date) 
+        : new Date().toISOString().split('T')[0];
+
+      const cleaned = { 
+        ...expense,
+        expense_date: formattedDate,
+        amount: Number(expense.amount) || 0,
+        payment_mode: expense.payment_mode || expense.payment_method || 'Cash',
+        status: expense.status || 'Paid'
+      };
       if (cleaned.created_by && !cleaned.recorded_by) {
         cleaned.recorded_by = cleaned.created_by;
       }
@@ -4192,11 +4267,40 @@ const rawSupabaseService = {
         res.payment_mode = res.payment_mode || expense.payment_mode || expense.payment_method || 'Cash';
         res.payment_method = res.payment_mode;
         res.amount = Number(res.amount) || Number(expense.amount) || 0;
+        res.expense_date = formattedDate;
       }
+
+      // Update local storage
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const filtered = list.filter((e: any) => e.id !== res.id);
+      filtered.unshift(res);
+      storage.set(STORAGE_KEYS.EXPENSES, filtered);
+      broadcastDataMutation('expenses', 'insert');
+
       return res;
     } catch (error: any) {
-      console.error('Error creating expense:', error.message);
-      return null;
+      console.error('Error creating expense, using local fallback:', error.message);
+      const formattedDate = expense.expense_date 
+        ? getLocalDateStr(expense.expense_date) 
+        : new Date().toISOString().split('T')[0];
+      const localExp = {
+        ...expense,
+        id: expense.id || 'off-exp-' + Date.now(),
+        expense_date: formattedDate,
+        date: formattedDate,
+        amount: Number(expense.amount) || 0,
+        payment_mode: expense.payment_mode || expense.payment_method || 'Cash',
+        payment_method: expense.payment_mode || expense.payment_method || 'Cash',
+        status: expense.status || 'Paid',
+        created_by: expense.created_by || 'u-accounts',
+        created_at: expense.created_at || new Date().toISOString(),
+        isOffline: true
+      };
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      list.unshift(localExp);
+      storage.set(STORAGE_KEYS.EXPENSES, list);
+      broadcastDataMutation('expenses', 'insert');
+      return localExp;
     }
   },
 
@@ -4208,16 +4312,35 @@ const rawSupabaseService = {
         .eq('id', id);
       
       if (error) throw error;
+
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const filtered = list.filter((e: any) => e.id !== id);
+      storage.set(STORAGE_KEYS.EXPENSES, filtered);
+      broadcastDataMutation('expenses', 'delete');
+
       return true;
     } catch (error: any) {
-      console.error('Error deleting expense:', error.message);
-      return false;
+      console.error('Error deleting expense, using local fallback:', error.message);
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const filtered = list.filter((e: any) => e.id !== id);
+      storage.set(STORAGE_KEYS.EXPENSES, filtered);
+      broadcastDataMutation('expenses', 'delete');
+      return true;
     }
   },
 
   updateExpense: async (id: string, updates: any) => {
     try {
-      const cleaned = { ...updates };
+      const formattedDate = updates.expense_date 
+        ? getLocalDateStr(updates.expense_date) 
+        : new Date().toISOString().split('T')[0];
+
+      const cleaned = { 
+        ...updates,
+        expense_date: formattedDate,
+        amount: updates.amount !== undefined ? Number(updates.amount) : undefined,
+        payment_mode: updates.payment_mode || updates.payment_method || 'Cash'
+      };
       if (cleaned.created_by && !cleaned.recorded_by) {
         cleaned.recorded_by = cleaned.created_by;
       }
@@ -4233,11 +4356,36 @@ const rawSupabaseService = {
         res.payment_mode = res.payment_mode || updates.payment_mode || updates.payment_method || 'Cash';
         res.payment_method = res.payment_mode;
         res.amount = Number(res.amount) || Number(updates.amount) || 0;
+        res.expense_date = formattedDate;
       }
+
+      // Update local storage
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const updatedList = list.map((e: any) => e.id === id ? { ...e, ...res } : e);
+      storage.set(STORAGE_KEYS.EXPENSES, updatedList);
+      broadcastDataMutation('expenses', 'update');
+
       return res;
     } catch (error: any) {
-      console.error('Error updating expense:', error.message);
-      return null;
+      console.error('Error updating expense, using local fallback:', error.message);
+      const formattedDate = updates.expense_date 
+        ? getLocalDateStr(updates.expense_date) 
+        : new Date().toISOString().split('T')[0];
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const target = list.find((e: any) => e.id === id) || {};
+      const updatedItem = {
+        ...target,
+        ...updates,
+        expense_date: formattedDate,
+        date: formattedDate,
+        amount: Number(updates.amount) || 0,
+        payment_mode: updates.payment_mode || updates.payment_method || 'Cash',
+        payment_method: updates.payment_mode || updates.payment_method || 'Cash'
+      };
+      const updatedList = list.map((e: any) => e.id === id ? updatedItem : e);
+      storage.set(STORAGE_KEYS.EXPENSES, updatedList);
+      broadcastDataMutation('expenses', 'update');
+      return updatedItem;
     }
   },
 

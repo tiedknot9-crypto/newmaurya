@@ -49,7 +49,15 @@ export function getLocalDateStr(val: any): string {
     if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(clean)) {
       isoCandidate = clean.replace(/\s+/, 'T');
     }
-    const ymdMatch = isoCandidate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const ymdMatch = isoCandidate.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (ymdMatch) {
+      return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+    }
+
+    const dmyMatch = isoCandidate.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (dmyMatch) {
+      return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+    }
 
     const d = new Date(isoCandidate);
     if (!isNaN(d.getTime())) {
@@ -57,8 +65,6 @@ export function getLocalDateStr(val: any): string {
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
-    } else if (ymdMatch) {
-      return `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
     }
     return '';
   }
