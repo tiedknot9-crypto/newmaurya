@@ -3816,14 +3816,19 @@ export default function Billing() {
               })
               .map(exp => ({
                 id: exp.id,
-                patients: { name: `Facility Expense`, mrn: exp.category, phone: `N/A`, email: exp.description },
+                patients: { name: `Facility Expense`, mrn: exp.category || 'Expense', phone: `N/A`, email: exp.description || 'Facility Expense' },
                 type: 'Expense',
                 created_at: exp.expense_date || exp.created_at || new Date().toISOString(),
-                paid_amount: exp.amount,
-                total_amount: exp.amount,
+                date: exp.expense_date || exp.created_at || new Date().toISOString(),
+                paid_amount: Number(exp.amount) || 0,
+                total_amount: Number(exp.amount) || 0,
+                payable_amount: Number(exp.amount) || 0,
+                amount: Number(exp.amount) || 0,
                 status: exp.status || 'Paid',
-                payment_method: 'N/A',
+                payment_method: exp.payment_mode || exp.payment_method || 'Cash',
+                payment_mode: exp.payment_mode || exp.payment_method || 'Cash',
                 isExpense: true,
+                description: exp.description || exp.category || 'Facility Expense',
                 created_by: exp.created_by,
                 rawExpense: exp
               }))

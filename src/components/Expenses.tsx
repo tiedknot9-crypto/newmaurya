@@ -135,20 +135,30 @@ export default function Expenses() {
   useDataSync(fetchExpenses);
 
   const handleAddExpense = async () => {
-    if (!newExpense.description || !newExpense.amount) {
+    if (!newExpense.description || newExpense.amount === undefined || newExpense.amount === null || isNaN(Number(newExpense.amount))) {
       toast.error('Please fill in required fields');
       return;
     }
 
+    const formattedDate = newExpense.expense_date 
+      ? getLocalDateStr(newExpense.expense_date) 
+      : new Date().toISOString().split('T')[0];
+
     const expenseData = {
       ...newExpense,
+      expense_date: formattedDate,
+      amount: Number(newExpense.amount) || 0,
       payment_mode: newExpense.payment_mode || 'Cash',
+      payment_method: newExpense.payment_mode || 'Cash',
+      status: newExpense.status || 'Paid',
       created_by: currentUser?.id || 'u-accounts'
     };
 
     const result = await supabaseService.createExpense(expenseData);
     if (result) {
       toast.success('Expense recorded');
+      const itemToInsert = { ...expenseData, ...result, id: result.id || expenseData.id || 'exp-' + Date.now() };
+      setExpenses(prev => [itemToInsert, ...prev]);
       fetchExpenses();
       window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'expenses', action: 'insert' } }));
       setNewExpense({ 
@@ -166,7 +176,7 @@ export default function Expenses() {
   };
 
   const handleUpdateExpense = async () => {
-    if (!editingExpense || !editingExpense.description || !editingExpense.amount) {
+    if (!editingExpense || !editingExpense.description || editingExpense.amount === undefined || editingExpense.amount === null || isNaN(Number(editingExpense.amount))) {
       toast.error('Please fill in required fields');
       return;
     }
@@ -177,18 +187,26 @@ export default function Expenses() {
     }
 
     const { id, created_at, ...updates } = editingExpense;
-    const result = await supabaseService.updateExpense(id, {
-      expense_date: updates.expense_date,
-      category: updates.category,
+    const formattedDate = updates.expense_date 
+      ? getLocalDateStr(updates.expense_date) 
+      : getLocalDateStr(editingExpense.created_at) || new Date().toISOString().split('T')[0];
+
+    const updatedPayload = {
+      expense_date: formattedDate,
+      category: updates.category || 'Utilities',
       description: updates.description,
-      amount: Number(updates.amount),
+      amount: Number(updates.amount) || 0,
       payment_mode: updates.payment_mode || updates.payment_method || 'Cash',
-      status: updates.status,
-      created_by: editingExpense.created_by || editingExpense.issued_by
-    });
+      payment_method: updates.payment_mode || updates.payment_method || 'Cash',
+      status: updates.status || 'Paid',
+      created_by: editingExpense.created_by || editingExpense.issued_by || currentUser?.id
+    };
+
+    const result = await supabaseService.updateExpense(id, updatedPayload);
 
     if (result) {
       toast.success('Expense record updated');
+      setExpenses(prev => prev.map(e => e.id === id ? { ...e, ...result, ...updatedPayload } : e));
       fetchExpenses();
       window.dispatchEvent(new CustomEvent('supabase-data-sync', { detail: { table: 'expenses', action: 'update' } }));
       setEditingExpense(null);
@@ -269,7 +287,15 @@ export default function Expenses() {
     }
   };
 
-  const filteredExpenses = expenses.filter(e => {
+  const filteredExpenses = expenses.map(e => ({
+    ...e,
+    amount: Number(e.amount) || 0,
+    category: e.category || 'Utilities',
+    description: e.description || '',
+    expense_date: getLocalDateStr(e.expense_date || e.created_at || e.date) || new Date().toISOString().split('T')[0],
+    payment_mode: e.payment_mode || e.payment_method || 'Cash',
+    status: e.status || 'Paid'
+  })).filter(e => {
     // 1. Search Query Filter (description, category, payment mode, date, amount)
     const modeStr = e.payment_mode || e.payment_method || 'Cash';
     const q = searchQuery.toLowerCase().trim();
@@ -298,10 +324,8 @@ export default function Expenses() {
     }
 
     // 4. Date-wise & Period-wise Filter
-    const dateVal = e.expense_date || e.created_at;
-    if (!dateVal) return false;
-    const expDateStr = getLocalDateStrFromVal(dateVal);
-    if (!expDateStr) return false;
+    const expDateStr = e.expense_date;
+    if (!expDateStr) return true;
 
     // Direct Start & End date inputs override
     if (startDate && expDateStr < startDate) return false;
@@ -832,7 +856,15 @@ export default function Expenses() {
                             {canModify(expense) ? (
                               <>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-medical-blue" onClick={() => {
-                                  setEditingExpense({...expense});
+                                  setEditingExpense({
+                                    ...expense,
+                                    expense_date: getLocalDateStr(expense.expense_date || expense.created_at || expense.date) || new Date().toISOString().split('T')[0],
+                                    amount: expense.amount !== undefined ? Number(expense.amount) : 0,
+                                    payment_mode: expense.payment_mode || expense.payment_method || 'Cash',
+                                    category: expense.category || 'Utilities',
+                                    description: expense.description || '',
+                                    status: expense.status || 'Paid'
+                                  });
                                   setIsEditExpenseOpen(true);
                                 }}>
                                   <Edit className="w-4 h-4" />

@@ -4163,7 +4163,10 @@ const rawSupabaseService = {
       if (error) throw error;
       return (data || []).map((exp: any) => ({
         ...exp,
-        created_by: exp.recorded_by
+        created_by: exp.recorded_by || exp.created_by,
+        payment_mode: exp.payment_mode || exp.payment_method || 'Cash',
+        payment_method: exp.payment_mode || exp.payment_method || 'Cash',
+        amount: Number(exp.amount) || 0
       }));
     } catch (error: any) {
       console.error('Error fetching expenses:', error.message);
@@ -4182,15 +4185,13 @@ const rawSupabaseService = {
       await ensureForeignKeysExist(cleaned);
       const dbExpense = cleanUuidFields(cleaned);
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert([dbExpense])
-        .select();
-      
-      if (error) throw error;
-      const res = data[0];
+      const data = await selfHealingQuery('insert', 'expenses', dbExpense);
+      const res = (data && data[0]) ? data[0] : expense;
       if (res) {
-        res.created_by = res.recorded_by;
+        res.created_by = res.recorded_by || expense.created_by;
+        res.payment_mode = res.payment_mode || expense.payment_mode || expense.payment_method || 'Cash';
+        res.payment_method = res.payment_mode;
+        res.amount = Number(res.amount) || Number(expense.amount) || 0;
       }
       return res;
     } catch (error: any) {
@@ -4225,16 +4226,13 @@ const rawSupabaseService = {
       await ensureForeignKeysExist(cleaned);
       const dbUpdates = cleanUuidFields(cleaned);
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .update(dbUpdates)
-        .eq('id', id)
-        .select();
-      
-      if (error) throw error;
-      const res = data[0];
+      const data = await selfHealingQuery('update', 'expenses', dbUpdates, id);
+      const res = (data && data[0]) ? data[0] : { id, ...updates };
       if (res) {
-        res.created_by = res.recorded_by;
+        res.created_by = res.recorded_by || updates.created_by;
+        res.payment_mode = res.payment_mode || updates.payment_mode || updates.payment_method || 'Cash';
+        res.payment_method = res.payment_mode;
+        res.amount = Number(res.amount) || Number(updates.amount) || 0;
       }
       return res;
     } catch (error: any) {
@@ -5095,7 +5093,10 @@ function updateLocalCacheOnMutation(key: string, args: any[], result: any) {
         storage.set('hms_live_queue', updated);
       } else if (k.includes('expense')) {
         const list = storage.get(STORAGE_KEYS.EXPENSES, []);
-        const updated = list.map((e: any) => e.id === id ? { ...e, ...result } : e);
+        const exists = list.some((e: any) => e.id === id);
+        const updated = exists 
+          ? list.map((e: any) => e.id === id ? { ...e, ...result } : e)
+          : [{ id, ...result }, ...list];
         storage.set(STORAGE_KEYS.EXPENSES, updated);
       } else if (k.includes('consent') || k.includes('ot_consent')) {
         const list = storage.get(STORAGE_KEYS.OT_CONSENTS, MOCK_OT_CONSENTS);
@@ -5489,6 +5490,12 @@ function executeOfflineMutation(key: string, args: any[]): any {
           storage.set(STORAGE_KEYS.EXPENSES, list);
           broadcastDataMutation('expenses', 'update');
           return list[index];
+        } else {
+          const newItem = { id, ...updates };
+          list.unshift(newItem);
+          storage.set(STORAGE_KEYS.EXPENSES, list);
+          broadcastDataMutation('expenses', 'update');
+          return newItem;
         }
       }
 
