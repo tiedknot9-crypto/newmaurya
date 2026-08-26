@@ -6633,12 +6633,7 @@ export async function syncOfflineDataWithSupabase() {
         await ensureForeignKeysExist(exData);
         const dbExData = cleanUuidFields(exData);
         
-        const { data, error } = await supabase
-          .from('expenses')
-          .insert([dbExData])
-          .select();
-
-        if (error) throw error;
+        const data = await selfHealingQuery('insert', 'expenses', dbExData);
         if (data && data[0]) {
           idMap[ex.id] = data[0].id;
           syncCount++;
