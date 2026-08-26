@@ -655,7 +655,24 @@ export default function Billing() {
       }
 
       // Payment method breakdown
-      const method = b.payment_method || b.paymentMode || 'N/A';
+      const rawMethod = b.payment_method || b.paymentMode || 'N/A';
+      let method = 'N/A';
+      const mLower = String(rawMethod).toLowerCase();
+      if (mLower.includes('upi') || mLower.includes('qr')) {
+        method = 'UPI';
+      } else if (mLower.includes('card')) {
+        method = 'Card';
+      } else if (mLower.includes('cash')) {
+        method = 'Cash';
+      } else if (mLower.includes('insurance')) {
+        method = 'Insurance';
+      } else if (mLower.includes('net') || mLower.includes('bank') || mLower.includes('transfer')) {
+        method = 'Bank Transfer';
+      } else if (mLower.includes('cheque') || mLower.includes('check')) {
+        method = 'Cheque';
+      } else if (rawMethod && rawMethod !== 'N/A') {
+        method = rawMethod;
+      }
       methodTotals[method] = (methodTotals[method] || 0) + paidVal;
 
       // Trend mapping (by date)

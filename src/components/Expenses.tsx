@@ -394,7 +394,10 @@ export default function Expenses() {
 
   const totalFiltered = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const cashExpenses = filteredExpenses
-    .filter(e => (e.payment_mode || e.payment_method || 'Cash').toLowerCase() === 'cash')
+    .filter(e => {
+      const pm = (e.payment_mode || e.payment_method || 'Cash').toLowerCase();
+      return pm === 'cash' || (pm.includes('cash') && !pm.includes('upi') && !pm.includes('qr') && !pm.includes('card') && !pm.includes('net') && !pm.includes('bank') && !pm.includes('cheque'));
+    })
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const digitalExpenses = totalFiltered - cashExpenses;
   const utilityBills = filteredExpenses

@@ -1036,24 +1036,14 @@ export function normalizeExpenseRecord(exp: any, localMap?: Map<string, any>) {
   const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
   
   let mode = exp.payment_mode || exp.payment_method;
-  
-  // 1. Check direct localStorage key for this expense ID
-  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.id) {
-    try {
-      const savedMode = localStorage.getItem(`expense_paymode_${exp.id}`);
-      if (savedMode) mode = savedMode;
-    } catch (_) {}
-  }
 
-  // 2. Check localMap if provided
-  if ((!mode || mode === 'Cash' || mode === 'cash') && localMap && exp.id && localMap.has(exp.id)) {
-    const localItem = localMap.get(exp.id);
-    if (localItem && (localItem.payment_mode || localItem.payment_method)) {
-      mode = localItem.payment_mode || localItem.payment_method;
+  // 1. Try parsing [paymode:...] tag in description or paid_to first (highest fidelity from DB)
+  if (exp.description) {
+    const match = String(exp.description).match(/\[paymode:([^\]]+)\]/i);
+    if (match && match[1]) {
+      mode = match[1];
     }
   }
-
-  // 3. Try parsing [paymode:...] tag in paid_to or description
   if ((!mode || mode === 'Cash' || mode === 'cash') && exp.paid_to) {
     const match = String(exp.paid_to).match(/\[paymode:([^\]]+)\]/i);
     if (match && match[1]) {
@@ -1062,10 +1052,20 @@ export function normalizeExpenseRecord(exp: any, localMap?: Map<string, any>) {
       mode = String(exp.paid_to).trim();
     }
   }
-  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.description) {
-    const match = String(exp.description).match(/\[paymode:([^\]]+)\]/i);
-    if (match && match[1]) {
-      mode = match[1];
+  
+  // 2. Check direct localStorage key for this expense ID
+  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.id) {
+    try {
+      const savedMode = localStorage.getItem(`expense_paymode_${exp.id}`);
+      if (savedMode) mode = savedMode;
+    } catch (_) {}
+  }
+
+  // 3. Check localMap if provided
+  if ((!mode || mode === 'Cash' || mode === 'cash') && localMap && exp.id && localMap.has(exp.id)) {
+    const localItem = localMap.get(exp.id);
+    if (localItem && (localItem.payment_mode || localItem.payment_method)) {
+      mode = localItem.payment_mode || localItem.payment_method;
     }
   }
 
@@ -4324,6 +4324,12 @@ const rawSupabaseService = {
         try { localStorage.setItem(`expense_paymode_${expense.id}`, mode); } catch (_) {}
       }
 
+      let cleanDesc = (expense.description || expense.category || 'Facility Expense').replace(/\[paymode:[^\]]+\]/gi, '').trim();
+      let dbDesc = cleanDesc;
+      if (!dbDesc.includes('[paymode:')) {
+        dbDesc = `${dbDesc} [paymode:${mode}]`;
+      }
+
       let paidToWithMode = expense.paid_to ? String(expense.paid_to) : '';
       if (!paidToWithMode.includes('[paymode:')) {
         paidToWithMode = paidToWithMode ? `${paidToWithMode} [paymode:${mode}]` : `[paymode:${mode}]`;
@@ -4331,6 +4337,7 @@ const rawSupabaseService = {
 
       const cleaned = { 
         ...expense,
+        description: dbDesc,
         expense_date: formattedDate,
         amount: Number(expense.amount) || 0,
         payment_mode: mode,
@@ -4469,6 +4476,9 @@ const rawSupabaseService = {
         try { localStorage.setItem(`expense_paymode_${id}`, mode); } catch (_) {}
       }
 
+      let cleanDesc = updates.description !== undefined ? String(updates.description).replace(/\[paymode:[^\]]+\]/gi, '').trim() : undefined;
+      let dbDesc = cleanDesc !== undefined ? (cleanDesc ? `${cleanDesc} [paymode:${mode}]` : `[paymode:${mode}]`) : undefined;
+
       let paidToWithMode = updates.paid_to !== undefined ? String(updates.paid_to) : undefined;
       if (paidToWithMode !== undefined && !paidToWithMode.includes('[paymode:')) {
         paidToWithMode = paidToWithMode ? `${paidToWithMode} [paymode:${mode}]` : `[paymode:${mode}]`;
@@ -4482,6 +4492,7 @@ const rawSupabaseService = {
         amount: updates.amount !== undefined ? Number(updates.amount) : undefined,
         payment_mode: mode,
         payment_method: mode,
+        ...(dbDesc !== undefined ? { description: dbDesc } : {}),
         ...(paidToWithMode !== undefined ? { paid_to: paidToWithMode } : {})
       };
       if (cleaned.created_by && !cleaned.recorded_by) {
