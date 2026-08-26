@@ -196,6 +196,9 @@ export default function Billing() {
               const matchedPatient = patientsData ? patientsData.find((p: any) => p.id === pId) : null;
               const isPaid = aptPaymentStatus === 'Paid' || aptPaymentStatus === 'Settled';
 
+              const docName = apt.doctorName || apt.doctor_name || (staffData ? staffData.find((s: any) => s.id === apt.doctorId || s.id === apt.doctor_id)?.name : null) || 'General Physician';
+              const opdDesc = `OPD Doctor Consultation Fee (${docName})`;
+
               const virtualInv = {
                 id: `virtual-inv-opd-${apt.id}`,
                 patient_id: pId,
@@ -209,6 +212,23 @@ export default function Billing() {
                 payment_method: apt.payment_method || apt.paymentMethod || 'Cash',
                 payment_remarks: apt.paymentRemarks || '',
                 type: 'OPD',
+                description: opdDesc,
+                items: [{
+                  item_name: opdDesc,
+                  description: opdDesc,
+                  quantity: 1,
+                  unit_price: baseFee,
+                  total_price: baseFee,
+                  category: 'OPD'
+                }],
+                invoice_items: [{
+                  item_name: opdDesc,
+                  description: opdDesc,
+                  quantity: 1,
+                  unit_price: baseFee,
+                  total_price: baseFee,
+                  category: 'OPD'
+                }],
                 created_at: apt.created_at || new Date().toISOString(),
                 patients: matchedPatient ? {
                   id: matchedPatient.id,
@@ -314,6 +334,183 @@ export default function Billing() {
     }
     return invoiceSequentialIdMap.get(idStr) || `#${idStr.slice(0, 8).toUpperCase()}`;
   }, [invoiceSequentialIdMap]);
+
+  const getInvoiceServicesAndDescription = useCallback((bill: any) => {
+    if (!bill) {
+      return {
+        main: 'General Healthcare Services',
+        sub: '',
+        itemCount: 1,
+        itemsSummary: ['General Healthcare Services']
+      };
+    }
+
+    // 1. Facility expense record
+    if (bill.isExpense) {
+      const expenseTitle = bill.description || bill.title || bill.expense_name || bill.category || 'Facility Expense';
+      const vendorOrNote = bill.vendor_name || bill.paid_to || bill.notes || 'Facility Operations';
+      return {
+        main: expenseTitle,
+        sub: vendorOrNote,
+        itemCount: 1,
+        itemsSummary: [expenseTitle]
+      };
+    }
+
+    // 2. Extract item lines from invoice_items or items or services
+    const rawItems = bill.invoice_items || bill.items || bill.services || [];
+    const validItems: string[] = [];
+    if (Array.isArray(rawItems)) {
+      rawItems.forEach((it: any) => {
+        if (!it) return;
+        if (typeof it === 'string' && it.trim().length > 0) {
+          validItems.push(it.trim());
+        } else if (typeof it === 'object') {
+          const name = it.item_name || it.name || it.description || it.service_name || it.particulars;
+          if (name && typeof name === 'string' && name.trim().length > 0) {
+            const qty = Number(it.quantity || it.qty || 0);
+            if (qty > 1) {
+              validItems.push(`${name.trim()} (x${qty})`);
+            } else {
+              validItems.push(name.trim());
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Direct descriptions or notes on the invoice
+    const explicitDesc = (bill.description || bill.notes || bill.remarks || '').trim();
+    const paymentRemarks = (bill.payment_remarks || bill.paymentRemarks || '').trim();
+    const cleanPaymentRemarks = paymentRemarks
+      .replace(/\[Refunded.*?\]/g, '')
+      .replace(/^(Paid via|Received via|Cash|UPI|Card).*$/i, '')
+      .trim();
+
+    // If we have actual items extracted
+    if (validItems.length > 0) {
+      let mainText = validItems[0];
+      let subText = '';
+
+      if (validItems.length === 1) {
+        if (explicitDesc && explicitDesc !== validItems[0]) {
+          subText = explicitDesc;
+        } else if (cleanPaymentRemarks && cleanPaymentRemarks.length > 3) {
+          subText = cleanPaymentRemarks;
+        } else {
+          const typeStr = bill.type ? `${bill.type} Bill Item` : 'Item Charge';
+          subText = typeStr;
+        }
+      } else if (validItems.length === 2) {
+        mainText = `${validItems[0]}, ${validItems[1]}`;
+        subText = explicitDesc || '2 prescribed / billable items';
+      } else {
+        mainText = `${validItems[0]}, ${validItems[1]}`;
+        subText = `+${validItems.length - 2} more item${validItems.length - 2 > 1 ? 's' : ''}${explicitDesc ? ` • ${explicitDesc}` : ''}`;
+      }
+
+      return {
+        main: mainText,
+        sub: subText,
+        itemCount: validItems.length,
+        itemsSummary: validItems
+      };
+    }
+
+    // If explicit description exists on the bill
+    if (explicitDesc && explicitDesc.length > 0) {
+      return {
+        main: explicitDesc,
+        sub: cleanPaymentRemarks || (bill.type ? `${bill.type} Department Services` : 'Hospital Services'),
+        itemCount: 1,
+        itemsSummary: [explicitDesc]
+      };
+    }
+
+    // If clean payment remarks exist
+    if (cleanPaymentRemarks && cleanPaymentRemarks.length > 3) {
+      return {
+        main: cleanPaymentRemarks,
+        sub: bill.type ? `${bill.type} Bill Particulars` : 'Hospital Charges',
+        itemCount: 1,
+        itemsSummary: [cleanPaymentRemarks]
+      };
+    }
+
+    // Department-specific intelligent descriptors
+    const bType = String(bill.type || bill.invoice_type || '').toUpperCase();
+    if (bType === 'OPD') {
+      return {
+        main: 'OPD Doctor Consultation Fee',
+        sub: 'Outpatient Assessment & Consultation',
+        itemCount: 1,
+        itemsSummary: ['OPD Doctor Consultation Fee']
+      };
+    }
+    if (bType === 'IPD') {
+      return {
+        main: 'Inpatient Hospitalization & Room Care',
+        sub: 'Nursing, Bed & Ward Facilities',
+        itemCount: 1,
+        itemsSummary: ['Inpatient Hospitalization & Room Care']
+      };
+    }
+    if (bType === 'PHARMACY') {
+      return {
+        main: 'Dispensed Medicines & Pharmaceuticals',
+        sub: 'Pharmacy Prescription Medication',
+        itemCount: 1,
+        itemsSummary: ['Dispensed Medicines & Pharmaceuticals']
+      };
+    }
+    if (bType === 'LAB' || bType === 'PATH' || bType === 'PATHOLOGY') {
+      return {
+        main: 'Pathology Diagnostic Laboratory Tests',
+        sub: 'Clinical Diagnostics & Investigation',
+        itemCount: 1,
+        itemsSummary: ['Pathology Diagnostic Laboratory Tests']
+      };
+    }
+    if (bType === 'RADIO' || bType === 'RADIOLOGY') {
+      return {
+        main: 'Radiology Scan & Diagnostic Imaging',
+        sub: 'Medical Imaging & Scanning Investigation',
+        itemCount: 1,
+        itemsSummary: ['Radiology Scan & Diagnostic Imaging']
+      };
+    }
+    if (bType === 'OT') {
+      return {
+        main: 'Operation Theatre & Surgical Charges',
+        sub: 'Surgery, Anesthesia & OT Facilities',
+        itemCount: 1,
+        itemsSummary: ['Operation Theatre & Surgical Charges']
+      };
+    }
+    if (bType === 'MATERNITY') {
+      return {
+        main: 'Maternity & Delivery Care Services',
+        sub: 'Obstetric & Postnatal Care Services',
+        itemCount: 1,
+        itemsSummary: ['Maternity & Delivery Care Services']
+      };
+    }
+    if (bType === 'INDEPENDENT') {
+      return {
+        main: 'Medical Consultation & Service Charges',
+        sub: 'Independent Bill Particulars',
+        itemCount: 1,
+        itemsSummary: ['Medical Consultation & Service Charges']
+      };
+    }
+
+    return {
+      main: 'Hospital Healthcare Services',
+      sub: 'Medical Care & Administration Charges',
+      itemCount: 1,
+      itemsSummary: ['Hospital Healthcare Services']
+    };
+  }, []);
 
   const patientsMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -1172,6 +1369,8 @@ export default function Billing() {
         statusText = 'Unpaid';
       }
 
+      const descSummary = invoiceItems.map(i => i.description || i.serviceItem).filter(Boolean).join(', ');
+
       const billToAdd = {
         patient_id: newInvoice.patientId,
         total_amount: totalInvoiceAmount,
@@ -1183,6 +1382,7 @@ export default function Billing() {
         payment_reference: invoicePaymentRef || '',
         status: statusText,
         type: 'Independent',
+        description: descSummary || 'Independent Hospital Bill',
         created_by: currentUser?.id || 'u-accounts',
         issued_by: currentUser?.id || 'u-accounts',
         created_at: invoiceDateTime ? new Date(invoiceDateTime).toISOString() : new Date().toISOString()
@@ -1595,6 +1795,8 @@ export default function Billing() {
       statusText = 'Unpaid';
     }
 
+    const descSummary = invoiceItems.map(i => i.description || i.serviceItem).filter(Boolean).join(', ');
+
     const billToUpdate = {
       patient_id: editingBill.patient_id || editingBill.patientId,
       total_amount: totalInvoiceAmount,
@@ -1606,6 +1808,7 @@ export default function Billing() {
       payment_status: statusText,
       status: statusText,
       type: editingBill.type || 'Independent',
+      description: descSummary || editingBill.description || 'Independent Hospital Bill',
       created_by: editingBill.created_by || editingBill.issued_by,
       created_at: editInvoiceDateTime ? new Date(editInvoiceDateTime).toISOString() : (editingBill.created_at || editingBill.date || new Date().toISOString())
     };
@@ -3942,9 +4145,9 @@ export default function Billing() {
                   <TableHeader>
                     <TableRow className="hover:bg-transparent border-slate-100 text-[11px] uppercase tracking-wider font-bold text-slate-500">
                       <TableHead className="whitespace-nowrap">Invoice ID</TableHead>
-                      <TableHead className="whitespace-nowrap">Patient/Facility Details</TableHead>
+                      <TableHead className="whitespace-nowrap">Patient / Facility Details</TableHead>
                       <TableHead className="whitespace-nowrap">Department</TableHead>
-                      <TableHead className="whitespace-nowrap">Contact Info / Description</TableHead>
+                      <TableHead className="whitespace-nowrap">Services / Items & Description</TableHead>
                       <TableHead className="whitespace-nowrap">Date</TableHead>
                       <TableHead className="whitespace-nowrap">Amount</TableHead>
                       <TableHead className="whitespace-nowrap">Status</TableHead>
@@ -3955,6 +4158,7 @@ export default function Billing() {
                   <TableBody>
                     {paginatedBills.map((bill) => {
                       const roleUpper = (currentUser?.role || '').toUpperCase();
+                      const serviceInfo = getInvoiceServicesAndDescription(bill);
                       return (
                         <TableRow key={bill.id} className="border-slate-50 hover:bg-slate-50/50 transition-colors">
                           <TableCell className="font-bold text-medical-blue whitespace-nowrap">
@@ -3962,8 +4166,18 @@ export default function Billing() {
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-800">{bill.patients?.name || 'Walk-in'}</span>
-                              <span className="text-[10px] text-muted-foreground font-medium">{bill.patients?.mrn || 'N/A'}</span>
+                              <span className="font-bold text-slate-800">
+                                {bill.patients?.name || bill.patient_name || bill.patientName || (bill.isExpense ? bill.title || bill.category || 'Facility Expense' : 'Walk-in')}
+                              </span>
+                              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                                <span className="text-slate-600 font-semibold">{bill.patients?.mrn || (bill.isExpense ? bill.vendor_name || 'Internal' : 'N/A')}</span>
+                                {bill.patients?.phone && (
+                                  <>
+                                    <span className="text-slate-300">•</span>
+                                    <span className="text-slate-500 font-medium">{bill.patients.phone}</span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
@@ -3971,10 +4185,23 @@ export default function Billing() {
                               {String(bill.type || '').toUpperCase() === 'INDEPENDENT' ? 'Independent' : (bill.type || 'General')}
                             </Badge>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <div className="flex flex-col text-[11px]">
-                              <span className="text-slate-600 font-medium">{bill.patients?.phone || 'N/A'}</span>
-                              <span className="text-slate-400 max-w-[200px] truncate">{bill.patients?.email || 'No description'}</span>
+                          <TableCell className="max-w-[280px]">
+                            <div className="flex flex-col text-[11px] leading-tight">
+                              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                                <span className="truncate max-w-[210px]" title={serviceInfo.main}>
+                                  {serviceInfo.main}
+                                </span>
+                                {serviceInfo.itemCount > 1 && (
+                                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-blue-50 text-blue-700 font-bold border border-blue-200 shrink-0">
+                                    {serviceInfo.itemCount} items
+                                  </Badge>
+                                )}
+                              </div>
+                              {serviceInfo.sub && (
+                                <span className="text-slate-500 text-[10px] truncate max-w-[250px] mt-0.5" title={serviceInfo.sub}>
+                                  {serviceInfo.sub}
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(bill.created_at)}</TableCell>
