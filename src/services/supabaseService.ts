@@ -1030,6 +1030,94 @@ function mapPharmacyItemFromPostgres(item: any) {
   };
 }
 
+export function normalizeExpenseRecord(exp: any, localMap?: Map<string, any>) {
+  if (!exp) return exp;
+  const rawDate = exp.expense_date || exp.date || exp.created_at;
+  const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
+  
+  let mode = exp.payment_mode || exp.payment_method;
+  
+  // 1. Check direct localStorage key for this expense ID
+  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.id) {
+    try {
+      const savedMode = localStorage.getItem(`expense_paymode_${exp.id}`);
+      if (savedMode) mode = savedMode;
+    } catch (_) {}
+  }
+
+  // 2. Check localMap if provided
+  if ((!mode || mode === 'Cash' || mode === 'cash') && localMap && exp.id && localMap.has(exp.id)) {
+    const localItem = localMap.get(exp.id);
+    if (localItem && (localItem.payment_mode || localItem.payment_method)) {
+      mode = localItem.payment_mode || localItem.payment_method;
+    }
+  }
+
+  // 3. Try parsing [paymode:...] tag in paid_to or description
+  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.paid_to) {
+    const match = String(exp.paid_to).match(/\[paymode:([^\]]+)\]/i);
+    if (match && match[1]) {
+      mode = match[1];
+    } else if (['UPI', 'Card', 'Net Banking', 'Cheque', 'Other', 'upi', 'card'].includes(String(exp.paid_to).trim())) {
+      mode = String(exp.paid_to).trim();
+    }
+  }
+  if ((!mode || mode === 'Cash' || mode === 'cash') && exp.description) {
+    const match = String(exp.description).match(/\[paymode:([^\]]+)\]/i);
+    if (match && match[1]) {
+      mode = match[1];
+    }
+  }
+
+  // Normalize mode casing
+  if (mode) {
+    const mLower = String(mode).trim().toLowerCase();
+    if (mLower === 'upi' || mLower.includes('upi') || mLower.includes('qr')) {
+      mode = 'UPI';
+    } else if (mLower === 'card' || mLower.includes('card') || mLower.includes('debit') || mLower.includes('credit')) {
+      mode = 'Card';
+    } else if (mLower === 'net banking' || mLower === 'netbanking' || mLower.includes('net') || mLower.includes('bank')) {
+      mode = 'Net Banking';
+    } else if (mLower.includes('cheque') || mLower.includes('check')) {
+      mode = 'Cheque';
+    } else if (mLower === 'other') {
+      mode = 'Other';
+    } else if (mLower === 'cash') {
+      mode = 'Cash';
+    }
+  } else {
+    mode = 'Cash';
+  }
+
+  if (exp.id) {
+    try {
+      localStorage.setItem(`expense_paymode_${exp.id}`, mode);
+    } catch (_) {}
+  }
+
+  // Clean paid_to and description tags
+  let cleanPaidTo = exp.paid_to ? String(exp.paid_to).replace(/\[paymode:[^\]]+\]/gi, '').trim() : '';
+  if (cleanPaidTo === mode) cleanPaidTo = '';
+
+  let cleanDesc = exp.description ? String(exp.description).replace(/\[paymode:[^\]]+\]/gi, '').trim() : '';
+
+  return {
+    ...exp,
+    id: exp.id || 'exp-' + Math.random().toString(36).substring(2, 9),
+    category: exp.category || 'Utilities',
+    description: cleanDesc || exp.category || 'Facility Expense',
+    paid_to: cleanPaidTo,
+    amount: Number(exp.amount) || 0,
+    expense_date: dateStr,
+    date: dateStr,
+    payment_mode: mode,
+    payment_method: mode,
+    status: exp.status || 'Paid',
+    created_by: exp.recorded_by || exp.created_by || 'u-accounts',
+    created_at: exp.created_at || (exp.expense_date ? `${exp.expense_date}T00:00:00.000Z` : new Date().toISOString())
+  };
+}
+
 function mapOTScheduleFromPostgres(row: any) {
   if (!row) return row;
   const patientId = row.patientId || row.patient_id;
@@ -4163,31 +4251,17 @@ const rawSupabaseService = {
       
       if (error) throw error;
       
-      const normalizeExp = (exp: any) => {
-        const rawDate = exp.expense_date || exp.date || exp.created_at;
-        const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
-        const mode = exp.payment_mode || exp.payment_method || 'Cash';
-        return {
-          ...exp,
-          id: exp.id || 'exp-' + Math.random().toString(36).substring(2, 9),
-          category: exp.category || 'Utilities',
-          description: exp.description || '',
-          amount: Number(exp.amount) || 0,
-          expense_date: dateStr,
-          date: dateStr,
-          payment_mode: mode,
-          payment_method: mode,
-          status: exp.status || 'Paid',
-          created_by: exp.recorded_by || exp.created_by || 'u-accounts',
-          created_at: exp.created_at || (exp.expense_date ? `${exp.expense_date}T00:00:00.000Z` : new Date().toISOString())
-        };
-      };
+      const localExpenses = storage.get(STORAGE_KEYS.EXPENSES, []) || [];
+      const localMap = new Map<string, any>();
+      localExpenses.forEach((le: any) => {
+        if (le.id) localMap.set(le.id, le);
+      });
 
-      const dbExpenses = (data || []).map(normalizeExp);
-      const localExpenses = (storage.get(STORAGE_KEYS.EXPENSES, []) || []).map(normalizeExp);
+      const dbExpenses = (data || []).map((e: any) => normalizeExpenseRecord(e, localMap));
+      const normalizedLocalExpenses = localExpenses.map((e: any) => normalizeExpenseRecord(e, localMap));
 
       // Merge: any local/offline expense not in DB or offline created
-      const offlineExpenses = localExpenses.filter((le: any) => 
+      const offlineExpenses = normalizedLocalExpenses.filter((le: any) => 
         le.isOffline || !dbExpenses.some((de: any) => de.id === le.id)
       );
 
@@ -4210,26 +4284,12 @@ const rawSupabaseService = {
       return merged;
     } catch (error: any) {
       console.error('Error fetching expenses, falling back to local storage:', error.message);
-      const normalizeExp = (exp: any) => {
-        const rawDate = exp.expense_date || exp.date || exp.created_at;
-        const dateStr = getLocalDateStr(rawDate) || new Date().toISOString().split('T')[0];
-        const mode = exp.payment_mode || exp.payment_method || 'Cash';
-        return {
-          ...exp,
-          id: exp.id || 'exp-' + Math.random().toString(36).substring(2, 9),
-          category: exp.category || 'Utilities',
-          description: exp.description || '',
-          amount: Number(exp.amount) || 0,
-          expense_date: dateStr,
-          date: dateStr,
-          payment_mode: mode,
-          payment_method: mode,
-          status: exp.status || 'Paid',
-          created_by: exp.recorded_by || exp.created_by || 'u-accounts',
-          created_at: exp.created_at || new Date().toISOString()
-        };
-      };
-      const list = (storage.get(STORAGE_KEYS.EXPENSES, []) || []).map(normalizeExp);
+      const localExpenses = storage.get(STORAGE_KEYS.EXPENSES, []) || [];
+      const localMap = new Map<string, any>();
+      localExpenses.forEach((le: any) => {
+        if (le.id) localMap.set(le.id, le);
+      });
+      const list = localExpenses.map((e: any) => normalizeExpenseRecord(e, localMap));
       return list.sort((a, b) => {
         const dateA = a.expense_date || a.created_at || '';
         const dateB = b.expense_date || b.created_at || '';
@@ -4245,11 +4305,37 @@ const rawSupabaseService = {
         ? getLocalDateStr(expense.expense_date) 
         : new Date().toISOString().split('T')[0];
 
+      const rawMode = expense.payment_mode || expense.payment_method || 'Cash';
+      let mode = 'Cash';
+      const mLower = String(rawMode).trim().toLowerCase();
+      if (mLower === 'upi' || mLower.includes('upi') || mLower.includes('qr')) {
+        mode = 'UPI';
+      } else if (mLower === 'card' || mLower.includes('card') || mLower.includes('debit') || mLower.includes('credit')) {
+        mode = 'Card';
+      } else if (mLower === 'net banking' || mLower === 'netbanking' || mLower.includes('net') || mLower.includes('bank')) {
+        mode = 'Net Banking';
+      } else if (mLower.includes('cheque') || mLower.includes('check')) {
+        mode = 'Cheque';
+      } else if (mLower === 'other') {
+        mode = 'Other';
+      }
+
+      if (expense.id) {
+        try { localStorage.setItem(`expense_paymode_${expense.id}`, mode); } catch (_) {}
+      }
+
+      let paidToWithMode = expense.paid_to ? String(expense.paid_to) : '';
+      if (!paidToWithMode.includes('[paymode:')) {
+        paidToWithMode = paidToWithMode ? `${paidToWithMode} [paymode:${mode}]` : `[paymode:${mode}]`;
+      }
+
       const cleaned = { 
         ...expense,
         expense_date: formattedDate,
         amount: Number(expense.amount) || 0,
-        payment_mode: expense.payment_mode || expense.payment_method || 'Cash',
+        payment_mode: mode,
+        payment_method: mode,
+        paid_to: paidToWithMode,
         status: expense.status || 'Paid'
       };
       if (cleaned.created_by && !cleaned.recorded_by) {
@@ -4264,38 +4350,61 @@ const rawSupabaseService = {
       const res = (data && data[0]) ? data[0] : expense;
       if (res) {
         res.created_by = res.recorded_by || expense.created_by;
-        res.payment_mode = res.payment_mode || expense.payment_mode || expense.payment_method || 'Cash';
-        res.payment_method = res.payment_mode;
+        res.payment_mode = mode;
+        res.payment_method = mode;
         res.amount = Number(res.amount) || Number(expense.amount) || 0;
         res.expense_date = formattedDate;
+        if (res.id) {
+          try { localStorage.setItem(`expense_paymode_${res.id}`, mode); } catch (_) {}
+        }
       }
+
+      const normalizedRes = normalizeExpenseRecord(res);
 
       // Update local storage
       const list = storage.get(STORAGE_KEYS.EXPENSES, []);
-      const filtered = list.filter((e: any) => e.id !== res.id);
-      filtered.unshift(res);
+      const filtered = list.filter((e: any) => e.id !== normalizedRes.id);
+      filtered.unshift(normalizedRes);
       storage.set(STORAGE_KEYS.EXPENSES, filtered);
       broadcastDataMutation('expenses', 'insert');
 
-      return res;
+      return normalizedRes;
     } catch (error: any) {
       console.error('Error creating expense, using local fallback:', error.message);
       const formattedDate = expense.expense_date 
         ? getLocalDateStr(expense.expense_date) 
         : new Date().toISOString().split('T')[0];
-      const localExp = {
+      const rawMode = expense.payment_mode || expense.payment_method || 'Cash';
+      let mode = 'Cash';
+      const mLower = String(rawMode).trim().toLowerCase();
+      if (mLower === 'upi' || mLower.includes('upi') || mLower.includes('qr')) {
+        mode = 'UPI';
+      } else if (mLower === 'card' || mLower.includes('card')) {
+        mode = 'Card';
+      } else if (mLower.includes('net') || mLower.includes('bank')) {
+        mode = 'Net Banking';
+      } else if (mLower.includes('cheque')) {
+        mode = 'Cheque';
+      } else if (mLower === 'other') {
+        mode = 'Other';
+      }
+
+      const localExp = normalizeExpenseRecord({
         ...expense,
         id: expense.id || 'off-exp-' + Date.now(),
         expense_date: formattedDate,
         date: formattedDate,
         amount: Number(expense.amount) || 0,
-        payment_mode: expense.payment_mode || expense.payment_method || 'Cash',
-        payment_method: expense.payment_mode || expense.payment_method || 'Cash',
+        payment_mode: mode,
+        payment_method: mode,
         status: expense.status || 'Paid',
         created_by: expense.created_by || 'u-accounts',
         created_at: expense.created_at || new Date().toISOString(),
         isOffline: true
-      };
+      });
+      if (localExp.id) {
+        try { localStorage.setItem(`expense_paymode_${localExp.id}`, mode); } catch (_) {}
+      }
       const list = storage.get(STORAGE_KEYS.EXPENSES, []);
       list.unshift(localExp);
       storage.set(STORAGE_KEYS.EXPENSES, list);
@@ -4313,6 +4422,7 @@ const rawSupabaseService = {
       
       if (error) throw error;
 
+      try { localStorage.removeItem(`expense_paymode_${id}`); } catch (_) {}
       const list = storage.get(STORAGE_KEYS.EXPENSES, []);
       const filtered = list.filter((e: any) => e.id !== id);
       storage.set(STORAGE_KEYS.EXPENSES, filtered);
@@ -4321,6 +4431,7 @@ const rawSupabaseService = {
       return true;
     } catch (error: any) {
       console.error('Error deleting expense, using local fallback:', error.message);
+      try { localStorage.removeItem(`expense_paymode_${id}`); } catch (_) {}
       const list = storage.get(STORAGE_KEYS.EXPENSES, []);
       const filtered = list.filter((e: any) => e.id !== id);
       storage.set(STORAGE_KEYS.EXPENSES, filtered);
@@ -4335,11 +4446,43 @@ const rawSupabaseService = {
         ? getLocalDateStr(updates.expense_date) 
         : new Date().toISOString().split('T')[0];
 
+      const rawMode = updates.payment_mode || updates.payment_method;
+      let mode = rawMode || 'Cash';
+      if (rawMode) {
+        const mLower = String(rawMode).trim().toLowerCase();
+        if (mLower === 'upi' || mLower.includes('upi') || mLower.includes('qr')) {
+          mode = 'UPI';
+        } else if (mLower === 'card' || mLower.includes('card')) {
+          mode = 'Card';
+        } else if (mLower.includes('net') || mLower.includes('bank')) {
+          mode = 'Net Banking';
+        } else if (mLower.includes('cheque')) {
+          mode = 'Cheque';
+        } else if (mLower === 'other') {
+          mode = 'Other';
+        } else if (mLower === 'cash') {
+          mode = 'Cash';
+        }
+      }
+
+      if (id) {
+        try { localStorage.setItem(`expense_paymode_${id}`, mode); } catch (_) {}
+      }
+
+      let paidToWithMode = updates.paid_to !== undefined ? String(updates.paid_to) : undefined;
+      if (paidToWithMode !== undefined && !paidToWithMode.includes('[paymode:')) {
+        paidToWithMode = paidToWithMode ? `${paidToWithMode} [paymode:${mode}]` : `[paymode:${mode}]`;
+      } else if (paidToWithMode === undefined) {
+        paidToWithMode = `[paymode:${mode}]`;
+      }
+
       const cleaned = { 
         ...updates,
         expense_date: formattedDate,
         amount: updates.amount !== undefined ? Number(updates.amount) : undefined,
-        payment_mode: updates.payment_mode || updates.payment_method || 'Cash'
+        payment_mode: mode,
+        payment_method: mode,
+        ...(paidToWithMode !== undefined ? { paid_to: paidToWithMode } : {})
       };
       if (cleaned.created_by && !cleaned.recorded_by) {
         cleaned.recorded_by = cleaned.created_by;
@@ -4353,39 +4496,72 @@ const rawSupabaseService = {
       const res = (data && data[0]) ? data[0] : { id, ...updates };
       if (res) {
         res.created_by = res.recorded_by || updates.created_by;
-        res.payment_mode = res.payment_mode || updates.payment_mode || updates.payment_method || 'Cash';
-        res.payment_method = res.payment_mode;
+        res.payment_mode = mode;
+        res.payment_method = mode;
         res.amount = Number(res.amount) || Number(updates.amount) || 0;
         res.expense_date = formattedDate;
       }
 
-      // Update local storage
+      const normalizedRes = normalizeExpenseRecord(res);
+
       const list = storage.get(STORAGE_KEYS.EXPENSES, []);
-      const updatedList = list.map((e: any) => e.id === id ? { ...e, ...res } : e);
-      storage.set(STORAGE_KEYS.EXPENSES, updatedList);
+      const index = list.findIndex((e: any) => e.id === id);
+      if (index !== -1) {
+        list[index] = { ...list[index], ...normalizedRes };
+      } else {
+        list.unshift(normalizedRes);
+      }
+      storage.set(STORAGE_KEYS.EXPENSES, list);
       broadcastDataMutation('expenses', 'update');
 
-      return res;
+      return normalizedRes;
     } catch (error: any) {
       console.error('Error updating expense, using local fallback:', error.message);
       const formattedDate = updates.expense_date 
         ? getLocalDateStr(updates.expense_date) 
         : new Date().toISOString().split('T')[0];
-      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
-      const target = list.find((e: any) => e.id === id) || {};
-      const updatedItem = {
-        ...target,
+      const rawMode = updates.payment_mode || updates.payment_method || 'Cash';
+      let mode = 'Cash';
+      const mLower = String(rawMode).trim().toLowerCase();
+      if (mLower === 'upi' || mLower.includes('upi') || mLower.includes('qr')) {
+        mode = 'UPI';
+      } else if (mLower === 'card' || mLower.includes('card')) {
+        mode = 'Card';
+      } else if (mLower.includes('net') || mLower.includes('bank')) {
+        mode = 'Net Banking';
+      } else if (mLower.includes('cheque')) {
+        mode = 'Cheque';
+      } else if (mLower === 'other') {
+        mode = 'Other';
+      }
+
+      if (id) {
+        try { localStorage.setItem(`expense_paymode_${id}`, mode); } catch (_) {}
+      }
+
+      const localExp = normalizeExpenseRecord({
         ...updates,
+        id,
         expense_date: formattedDate,
         date: formattedDate,
         amount: Number(updates.amount) || 0,
-        payment_mode: updates.payment_mode || updates.payment_method || 'Cash',
-        payment_method: updates.payment_mode || updates.payment_method || 'Cash'
-      };
-      const updatedList = list.map((e: any) => e.id === id ? updatedItem : e);
-      storage.set(STORAGE_KEYS.EXPENSES, updatedList);
+        payment_mode: mode,
+        payment_method: mode,
+        status: updates.status || 'Paid',
+        created_by: updates.created_by || 'u-accounts',
+        created_at: updates.created_at || new Date().toISOString(),
+        isOffline: true
+      });
+      const list = storage.get(STORAGE_KEYS.EXPENSES, []);
+      const index = list.findIndex((e: any) => e.id === id);
+      if (index !== -1) {
+        list[index] = { ...list[index], ...localExp };
+      } else {
+        list.unshift(localExp);
+      }
+      storage.set(STORAGE_KEYS.EXPENSES, list);
       broadcastDataMutation('expenses', 'update');
-      return updatedItem;
+      return localExp;
     }
   },
 
@@ -5915,6 +6091,13 @@ function executeOfflineQuery(key: string, args: any[]): any {
       });
     } else if (key === 'getPharmacyItems') {
       cached = cached.map(mapPharmacyItemFromPostgres);
+    } else if (key === 'getExpenses') {
+      const localExpenses = storage.get(STORAGE_KEYS.EXPENSES, []) || [];
+      const localMap = new Map<string, any>();
+      localExpenses.forEach((le: any) => {
+        if (le.id) localMap.set(le.id, le);
+      });
+      cached = cached.map((e: any) => normalizeExpenseRecord(e, localMap));
     }
     return cached;
   }

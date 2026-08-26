@@ -578,7 +578,12 @@ export default function Pharmacy() {
 
     if (billingPaymentFilter && billingPaymentFilter !== 'ALL') {
       result = result.filter(bill => {
-        const pm = (bill.payment_method || bill.paymentMethod || '').toLowerCase();
+        const pm = (bill.payment_method || bill.paymentMethod || bill.payment_mode || bill.paymentMode || '').toLowerCase();
+        if (billingPaymentFilter === 'UPI') return pm.includes('upi') || pm.includes('qr');
+        if (billingPaymentFilter === 'Cash') return pm.includes('cash');
+        if (billingPaymentFilter === 'Card') return pm.includes('card');
+        if (billingPaymentFilter === 'Credit') return pm.includes('credit');
+        if (billingPaymentFilter === 'Multi') return pm.includes('split') || pm.includes('multi');
         return pm.includes(billingPaymentFilter.toLowerCase());
       });
     }

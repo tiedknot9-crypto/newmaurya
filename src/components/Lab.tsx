@@ -708,7 +708,7 @@ export default function Lab() {
   // Billing State
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedTests, setSelectedTests] = useState<{id: string, name: string, price: number}[]>([]);
-  const [paymentMode, setPaymentMode] = useState('cash');
+  const [paymentMode, setPaymentMode] = useState('Cash');
 
   useEffect(() => {
     const current = storage.get(STORAGE_KEYS.LAB_BILLS, null);
@@ -3010,9 +3010,9 @@ export default function Lab() {
                           <SelectValue placeholder="Select mode" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cash">cash</SelectItem>
-                          <SelectItem value="upi">upi</SelectItem>
-                          <SelectItem value="card">card</SelectItem>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="UPI">UPI / QR Code</SelectItem>
+                          <SelectItem value="Card">Card</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

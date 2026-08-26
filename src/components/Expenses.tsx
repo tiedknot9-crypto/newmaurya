@@ -319,12 +319,12 @@ export default function Expenses() {
     // 3. Payment Mode Filter
     if (paymentModeFilter !== 'all') {
       const pm = (e.payment_mode || e.payment_method || 'Cash').toLowerCase();
-      if (paymentModeFilter === 'cash' && pm !== 'cash') return false;
-      if (paymentModeFilter === 'upi' && !pm.includes('upi')) return false;
+      if (paymentModeFilter === 'cash' && !pm.includes('cash')) return false;
+      if (paymentModeFilter === 'upi' && !pm.includes('upi') && !pm.includes('qr')) return false;
       if (paymentModeFilter === 'card' && !pm.includes('card')) return false;
       if (paymentModeFilter === 'netbanking' && !pm.includes('net') && !pm.includes('bank')) return false;
-      if (paymentModeFilter === 'cheque' && !pm.includes('cheque')) return false;
-      if (paymentModeFilter === 'other' && (pm === 'cash' || pm.includes('upi') || pm.includes('card') || pm.includes('net') || pm.includes('cheque'))) return false;
+      if (paymentModeFilter === 'cheque' && !pm.includes('cheque') && !pm.includes('check')) return false;
+      if (paymentModeFilter === 'other' && (pm.includes('cash') || pm.includes('upi') || pm.includes('qr') || pm.includes('card') || pm.includes('net') || pm.includes('bank') || pm.includes('cheque') || pm.includes('check'))) return false;
     }
 
     // 4. Date-wise & Period-wise Filter
@@ -848,9 +848,27 @@ export default function Expenses() {
                         </TableCell>
                         <TableCell className="text-sm font-semibold text-slate-800 whitespace-nowrap">{expense.description}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <Badge variant="secondary" className="text-[10px] font-extrabold uppercase bg-slate-100 text-slate-700 border border-slate-200/60">
-                            {expense.payment_mode || expense.payment_method || 'Cash'}
-                          </Badge>
+                          {(() => {
+                            const rawMode = expense.payment_mode || expense.payment_method || 'Cash';
+                            const mLower = String(rawMode).toLowerCase();
+                            if (mLower.includes('upi') || mLower.includes('qr')) {
+                              return <Badge className="text-[10px] font-black uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">UPI / QR</Badge>;
+                            }
+                            if (mLower.includes('card')) {
+                              return <Badge className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">Card</Badge>;
+                            }
+                            if (mLower.includes('net') || mLower.includes('bank')) {
+                              return <Badge className="text-[10px] font-black uppercase bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">Net Banking</Badge>;
+                            }
+                            if (mLower.includes('cheque') || mLower.includes('check')) {
+                              return <Badge className="text-[10px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">Cheque</Badge>;
+                            }
+                            return (
+                              <Badge variant="secondary" className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200/60">
+                                {rawMode}
+                              </Badge>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="font-bold text-slate-900 whitespace-nowrap">{formatCurrency(expense.amount)}</TableCell>
                         <TableCell className="whitespace-nowrap">

@@ -3836,11 +3836,11 @@ export default function Billing() {
 
         const displayedBills = baseBills.filter(bill => {
           if (filterPaymentMethod === 'all') return true;
-          const method = (bill.payment_method || '').toLowerCase();
-          if (filterPaymentMethod === 'cash') return method === 'cash';
-          if (filterPaymentMethod === 'upi') return method === 'upi';
-          if (filterPaymentMethod === 'card') return method === 'card';
-          if (filterPaymentMethod === 'insurance') return method === 'insurance';
+          const method = (bill.payment_method || bill.payment_mode || bill.paymentMode || '').toLowerCase();
+          if (filterPaymentMethod === 'cash') return method.includes('cash');
+          if (filterPaymentMethod === 'upi') return method.includes('upi') || method.includes('qr');
+          if (filterPaymentMethod === 'card') return method.includes('card');
+          if (filterPaymentMethod === 'insurance') return method.includes('insurance');
           if (filterPaymentMethod === 'na') return method === 'n/a' || method === 'na' || !method;
           return false;
         }).sort((a, b) => {
@@ -4243,7 +4243,23 @@ export default function Billing() {
                             </Badge>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
-                            <Badge variant="outline" className="text-[10px] font-bold uppercase">{bill.payment_method || 'N/A'}</Badge>
+                            {(() => {
+                              const rawMethod = bill.payment_method || bill.payment_mode || bill.paymentMode || 'N/A';
+                              const mLower = String(rawMethod).toLowerCase();
+                              if (mLower.includes('upi') || mLower.includes('qr')) {
+                                return <Badge className="text-[10px] font-black uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">UPI / QR</Badge>;
+                              }
+                              if (mLower.includes('card')) {
+                                return <Badge className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">Card</Badge>;
+                              }
+                              if (mLower.includes('cash')) {
+                                return <Badge variant="secondary" className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200/60">Cash</Badge>;
+                              }
+                              if (mLower.includes('insurance')) {
+                                return <Badge className="text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">Insurance</Badge>;
+                              }
+                              return <Badge variant="outline" className="text-[10px] font-bold uppercase">{rawMethod}</Badge>;
+                            })()}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2 items-center">
