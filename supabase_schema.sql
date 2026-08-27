@@ -1782,6 +1782,19 @@ ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 ALTER TABLE public.prescriptions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
 
+-- Ensure Invoices table contains payment mode and reference fields
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_remarks TEXT;
+
+-- Ensure Appointments table contains payment fields
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS payment_ref_no TEXT;
+
+-- Ensure Expenses table contains payment mode fields
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_mode TEXT;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS reference_no TEXT;
+
 -- 19. Pathology LIMS Relational Schema
 -- Category Master Table
 CREATE TABLE IF NOT EXISTS public.test_categories (
