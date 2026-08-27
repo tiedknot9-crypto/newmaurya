@@ -655,21 +655,23 @@ export default function Billing() {
       }
 
       // Payment method breakdown
-      const rawMethod = b.payment_method || b.paymentMode || 'N/A';
-      let method = 'N/A';
+      const rawMethod = b.payment_method || b.payment_mode || b.paymentMode || 'N/A';
+      let method = 'Cash';
       const mLower = String(rawMethod).toLowerCase();
       if (mLower.includes('upi') || mLower.includes('qr')) {
-        method = 'UPI';
+        method = 'UPI / QR';
       } else if (mLower.includes('card')) {
         method = 'Card';
       } else if (mLower.includes('cash')) {
         method = 'Cash';
-      } else if (mLower.includes('insurance')) {
+      } else if (mLower.includes('insurance') || mLower.includes('tpa')) {
         method = 'Insurance';
-      } else if (mLower.includes('net') || mLower.includes('bank') || mLower.includes('transfer')) {
-        method = 'Bank Transfer';
-      } else if (mLower.includes('cheque') || mLower.includes('check')) {
+      } else if (mLower.includes('net') || mLower.includes('bank') || mLower.includes('transfer') || mLower.includes('neft') || mLower.includes('rtgs')) {
+        method = 'Net Banking';
+      } else if (mLower.includes('cheque') || mLower.includes('check') || mLower.includes('dd')) {
         method = 'Cheque';
+      } else if (mLower.includes('multi') || mLower.includes('split')) {
+        method = 'Multi-mode';
       } else if (rawMethod && rawMethod !== 'N/A') {
         method = rawMethod;
       }
@@ -706,9 +708,13 @@ export default function Billing() {
     // Map Method Totals
     const methodColors: Record<string, string> = {
       'Cash': '#10b981',
-      'UPI': '#0ea5e9',
-      'Card': '#8b5cf6',
-      'Insurance': '#f59e0b',
+      'UPI / QR': '#8b5cf6',
+      'UPI': '#8b5cf6',
+      'Card': '#0ea5e9',
+      'Net Banking': '#6366f1',
+      'Cheque': '#f59e0b',
+      'Insurance': '#ec4899',
+      'Multi-mode': '#14b8a6',
       'N/A': '#94a3b8'
     };
     const methodData = Object.entries(methodTotals).map(([method, total]) => ({
@@ -2836,8 +2842,10 @@ export default function Billing() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Cash">Cash</SelectItem>
-                            <SelectItem value="UPI">UPI / QR</SelectItem>
-                            <SelectItem value="Card">Credit/Debit Card</SelectItem>
+                            <SelectItem value="UPI">UPI / QR Code</SelectItem>
+                            <SelectItem value="Card">Credit / Debit Card</SelectItem>
+                            <SelectItem value="Net Banking">Net Banking / NEFT / RTGS</SelectItem>
+                            <SelectItem value="Cheque">Cheque / Demand Draft</SelectItem>
                             <SelectItem value="Insurance">Insurance Claim</SelectItem>
                             <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
                           </SelectContent>
@@ -3096,7 +3104,9 @@ export default function Billing() {
                           <SelectContent>
                             <SelectItem value="Cash">Cash</SelectItem>
                             <SelectItem value="UPI">UPI / QR</SelectItem>
-                            <SelectItem value="Card">Credit/Debit Card</SelectItem>
+                            <SelectItem value="Card">Credit / Debit Card</SelectItem>
+                            <SelectItem value="Net Banking">Net Banking / NEFT / RTGS</SelectItem>
+                            <SelectItem value="Cheque">Cheque / DD</SelectItem>
                             <SelectItem value="Insurance">Insurance Claim</SelectItem>
                             <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
                           </SelectContent>
@@ -3242,7 +3252,10 @@ export default function Billing() {
                             <SelectContent className="rounded-xl">
                               <SelectItem value="Cash">Cash</SelectItem>
                               <SelectItem value="UPI">UPI / QR Scan</SelectItem>
-                              <SelectItem value="Card">Card</SelectItem>
+                              <SelectItem value="Card">Credit / Debit Card</SelectItem>
+                              <SelectItem value="Net Banking">Net Banking / NEFT / RTGS</SelectItem>
+                              <SelectItem value="Cheque">Cheque / DD</SelectItem>
+                              <SelectItem value="Insurance">Insurance Claim</SelectItem>
                               <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
                             </SelectContent>
                           </Select>
@@ -3618,6 +3631,42 @@ export default function Billing() {
                 </Card>
               </div>
 
+              {/* Collections by Payment Mode Strip */}
+              <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-medical-blue" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-700">Realized Collections by Payment Mode</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    Total: <strong className="text-emerald-700">{formatCurrency(analyticsData.totalPaid)}</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                  {analyticsData.methodData.length > 0 ? (
+                    analyticsData.methodData.map((item: any) => (
+                      <div 
+                        key={item.name} 
+                        className="bg-white border border-slate-200/70 rounded-xl p-2.5 shadow-2xs hover:shadow-xs transition-shadow"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-500 truncate">{item.name}</span>
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                        </div>
+                        <p className="text-sm font-black text-slate-800 mt-1">{formatCurrency(item.value)}</p>
+                        <p className="text-[9px] font-medium text-slate-400 mt-0.5">
+                          {analyticsData.totalPaid > 0 ? `${((item.value / analyticsData.totalPaid) * 100).toFixed(1)}% share` : '0%'}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-2 text-xs text-slate-400 italic">
+                      No payments recorded across modes yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Analytical Charts Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
@@ -3708,38 +3757,53 @@ export default function Billing() {
                 </Card>
 
                 {/* Payment Method Distribution */}
-                <Card className="border-none shadow-sm">
+                <Card className="border-none shadow-sm flex flex-col">
                   <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                     <div>
                       <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                         <CreditCard className="w-4 h-4 text-purple-600" />
                         Transactions by Payment Mode
                       </CardTitle>
-                      <CardDescription className="text-xs">Realized transactional totals grouped by channel</CardDescription>
+                      <CardDescription className="text-xs">Realized transactional totals grouped by payment channel</CardDescription>
                     </div>
                   </CardHeader>
-                  <CardContent className="h-[280px]">
+                  <CardContent className="flex-1 flex flex-col justify-between">
                     {analyticsData.methodData.length > 0 ? (
-                      <div className="w-full h-full min-h-[220px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={analyticsData.methodData} margin={{ top: 15, right: 10, left: -20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                            <Tooltip 
-                              formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Total Collected']}
-                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}
-                            />
-                            <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={26}>
-                              {analyticsData.methodData.map((entry: any, index: number) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div className="space-y-3">
+                        <div className="w-full h-[200px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={analyticsData.methodData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                              <Tooltip 
+                                formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Total Collected']}
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}
+                              />
+                              <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={26}>
+                                {analyticsData.methodData.map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        {/* Itemized Legend & Breakdown */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                          {analyticsData.methodData.map((item: any) => (
+                            <div key={item.name} className="flex items-center justify-between text-xs bg-slate-50/60 px-2.5 py-1.5 rounded-lg">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                <span className="text-[11px] font-bold text-slate-700 truncate">{item.name}</span>
+                              </div>
+                              <span className="text-[11px] font-black text-slate-800 shrink-0 ml-1">₹{item.value.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
-                      <div className="h-full flex items-center justify-center text-slate-400 text-xs italic">
+                      <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-xs italic">
                         No payments recorded for distribution analysis
                       </div>
                     )}
@@ -3857,7 +3921,10 @@ export default function Billing() {
           if (filterPaymentMethod === 'cash') return method.includes('cash');
           if (filterPaymentMethod === 'upi') return method.includes('upi') || method.includes('qr');
           if (filterPaymentMethod === 'card') return method.includes('card');
-          if (filterPaymentMethod === 'insurance') return method.includes('insurance');
+          if (filterPaymentMethod === 'net_banking') return method.includes('net') || method.includes('bank') || method.includes('transfer') || method.includes('neft') || method.includes('rtgs');
+          if (filterPaymentMethod === 'cheque') return method.includes('cheque') || method.includes('check') || method.includes('dd');
+          if (filterPaymentMethod === 'insurance') return method.includes('insurance') || method.includes('tpa');
+          if (filterPaymentMethod === 'multi') return method.includes('multi') || method.includes('split');
           if (filterPaymentMethod === 'na') return method === 'n/a' || method === 'na' || !method;
           return false;
         }).sort((a, b) => {
@@ -4094,9 +4161,12 @@ export default function Billing() {
                   <SelectContent>
                     <SelectItem value="all">All Modes</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="upi">UPI</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
-                    <SelectItem value="insurance">Insurance</SelectItem>
+                    <SelectItem value="upi">UPI / QR</SelectItem>
+                    <SelectItem value="card">Credit / Debit Card</SelectItem>
+                    <SelectItem value="net_banking">Net Banking / Transfer</SelectItem>
+                    <SelectItem value="cheque">Cheque / DD</SelectItem>
+                    <SelectItem value="insurance">Insurance / TPA</SelectItem>
+                    <SelectItem value="multi">Multi-mode</SelectItem>
                     <SelectItem value="na">N/A / Others</SelectItem>
                   </SelectContent>
                 </Select>
@@ -4262,20 +4332,38 @@ export default function Billing() {
                           <TableCell className="whitespace-nowrap">
                             {(() => {
                               const rawMethod = bill.payment_method || bill.payment_mode || bill.paymentMode || 'N/A';
+                              const refNo = bill.payment_reference || bill.payment_ref_no || bill.paymentRefNo || '';
                               const mLower = String(rawMethod).toLowerCase();
+                              let badgeComponent = null;
+
                               if (mLower.includes('upi') || mLower.includes('qr')) {
-                                return <Badge className="text-[10px] font-black uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">UPI / QR</Badge>;
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">UPI / QR</Badge>;
+                              } else if (mLower.includes('card')) {
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">Card</Badge>;
+                              } else if (mLower.includes('cash')) {
+                                badgeComponent = <Badge variant="secondary" className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200/60">Cash</Badge>;
+                              } else if (mLower.includes('insurance') || mLower.includes('tpa')) {
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-pink-50 text-pink-700 border border-pink-200 shadow-2xs">Insurance</Badge>;
+                              } else if (mLower.includes('net') || mLower.includes('bank') || mLower.includes('transfer') || mLower.includes('neft') || mLower.includes('rtgs')) {
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">Net Banking</Badge>;
+                              } else if (mLower.includes('cheque') || mLower.includes('check') || mLower.includes('dd')) {
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">Cheque</Badge>;
+                              } else if (mLower.includes('multi') || mLower.includes('split')) {
+                                badgeComponent = <Badge className="text-[10px] font-black uppercase bg-teal-50 text-teal-700 border border-teal-200 shadow-2xs">Multi-mode</Badge>;
+                              } else {
+                                badgeComponent = <Badge variant="outline" className="text-[10px] font-bold uppercase">{rawMethod}</Badge>;
                               }
-                              if (mLower.includes('card')) {
-                                return <Badge className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">Card</Badge>;
-                              }
-                              if (mLower.includes('cash')) {
-                                return <Badge variant="secondary" className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200/60">Cash</Badge>;
-                              }
-                              if (mLower.includes('insurance')) {
-                                return <Badge className="text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">Insurance</Badge>;
-                              }
-                              return <Badge variant="outline" className="text-[10px] font-bold uppercase">{rawMethod}</Badge>;
+
+                              return (
+                                <div className="flex flex-col items-start gap-0.5">
+                                  {badgeComponent}
+                                  {refNo && (
+                                    <span className="text-[9px] font-medium text-slate-400 font-mono tracking-tight" title={`Ref: ${refNo}`}>
+                                      Ref: {refNo.length > 12 ? `${refNo.substring(0, 10)}...` : refNo}
+                                    </span>
+                                  )}
+                                </div>
+                              );
                             })()}
                           </TableCell>
                           <TableCell className="text-right">
@@ -4598,11 +4686,27 @@ export default function Billing() {
                                         return (
                                           <div key={bill.id} className="bg-white border rounded-lg p-4 shadow-sm hover:border-slate-300 transition-all">
                                             <div className="flex justify-between items-start mb-3 border-b pb-2">
-                                              <div>
-                                                <span className="text-xs font-black text-medical-blue uppercase bg-blue-50 px-2 py-0.5 rounded mr-2">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-xs font-black text-medical-blue uppercase bg-blue-50 px-2 py-0.5 rounded">
                                                   {bill.type || 'HOSPITAL'} BILL
                                                 </span>
                                                 <span className="text-xs text-slate-400 font-bold">{getSequentialInvoiceId(bill)}</span>
+                                                {(() => {
+                                                  const rawMethod = bill.payment_method || bill.payment_mode || bill.paymentMode;
+                                                  if (!rawMethod) return null;
+                                                  const mLower = String(rawMethod).toLowerCase();
+                                                  let colorClasses = "bg-slate-100 text-slate-700 border-slate-200";
+                                                  if (mLower.includes('upi') || mLower.includes('qr')) colorClasses = "bg-purple-50 text-purple-700 border-purple-200";
+                                                  else if (mLower.includes('card')) colorClasses = "bg-blue-50 text-blue-700 border-blue-200";
+                                                  else if (mLower.includes('insurance')) colorClasses = "bg-pink-50 text-pink-700 border-pink-200";
+                                                  else if (mLower.includes('net') || mLower.includes('bank')) colorClasses = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                                                  else if (mLower.includes('cheque')) colorClasses = "bg-amber-50 text-amber-700 border-amber-200";
+                                                  return (
+                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${colorClasses}`}>
+                                                      {rawMethod}
+                                                    </span>
+                                                  );
+                                                })()}
                                               </div>
                                               <div className="text-right">
                                                 <span className="text-sm font-bold text-slate-800">

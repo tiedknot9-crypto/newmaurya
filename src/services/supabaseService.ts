@@ -374,7 +374,12 @@ function cleanAppointmentForPostgres(apt: any) {
     apt.discount_given_by !== undefined || 
     apt.discountGivenBy !== undefined || 
     apt.refund_given_by !== undefined || 
-    apt.refundGivenBy !== undefined;
+    apt.refundGivenBy !== undefined ||
+    apt.payment_method !== undefined ||
+    apt.paymentMode !== undefined ||
+    apt.payment_mode !== undefined ||
+    apt.payment_ref_no !== undefined ||
+    apt.paymentRefNo !== undefined;
 
   if (hasUrgencyFields) {
     let urgencyVal = cleaned.urgency || 'Routine';
@@ -708,7 +713,7 @@ function cleanInvoiceForPostgres(inv: any) {
   const validColumns = [
     'id', 'patient_id', 'invoice_number', 'total_amount', 'discount_amount',
     'tax_amount', 'payable_amount', 'paid_amount', 'payment_status', 'payment_method',
-    'tpa_approval_status', 'issued_by', 'created_at', 'updated_at'
+    'payment_reference', 'payment_remarks', 'tpa_approval_status', 'issued_by', 'created_at', 'updated_at'
   ];
   
   const result: any = {};
@@ -1766,6 +1771,8 @@ const rawSupabaseService = {
           'discount_amount', 'discountAmount', 
           'discount_given_by', 'discountGivenBy',
           'refund_given_by', 'refundGivenBy',
+          'payment_method', 'paymentMode', 'payment_mode',
+          'payment_ref_no', 'paymentRefNo',
           'type', 'urgency'
         ];
         for (const k of keysToMerge) {
@@ -6009,18 +6016,22 @@ function executeOfflineQuery(key: string, args: any[]): any {
       cached = cached.filter((h: any) => !ward || h.ward === ward);
     } else if (key === 'getAppointments') {
       const patientsList = storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS);
-      cached = cached.map((apt: any) => {
+      cached = cached.map((rawApt: any) => {
+        const apt = mapAppointmentFromPostgres(rawApt);
         const pid = apt.patient_id || apt.patientId;
         const p = patientsList.find((p_item: any) => p_item.id === pid || p_item.mrn === pid);
         return {
           ...apt,
-          patients: p ? { name: p.name, mrn: p.mrn, age: p.age, gender: p.gender } : null,
+          patients: p ? { name: p.name, mrn: p.mrn, age: p.age, gender: p.gender } : (apt.patients || null),
           appointment_date: apt.appointment_date || apt.date || new Date().toISOString().split('T')[0],
           appointment_time: apt.appointment_time || apt.time || '10:00 AM',
           patient_id: pid,
           doctor_id: apt.doctor_id || apt.doctorId,
           urgency: apt.urgency || 'Routine',
-          status: apt.status || 'Scheduled'
+          status: apt.status || 'Scheduled',
+          payment_method: apt.payment_method || apt.paymentMode || apt.payment_mode || 'Cash',
+          paymentMode: apt.payment_method || apt.paymentMode || apt.payment_mode || 'Cash',
+          payment_ref_no: apt.payment_ref_no || apt.paymentRefNo || ''
         };
       }).filter((apt: any) => {
         const pat = apt.patients || { id: apt.patient_id || apt.patientId, name: apt.patientName || apt.patient_name };

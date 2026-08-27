@@ -3230,23 +3230,50 @@ export default function OPD() {
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div className="flex flex-col gap-1">
-                              <Badge 
-                                variant="outline" 
-                                className={`${
-                                  apt.payment_status === 'Refunded' 
-                                    ? 'bg-slate-100 text-slate-600 border-slate-200' 
-                                    : apt.payment_status === 'Paid' 
-                                      ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                      : 'bg-rose-50 text-rose-600 border-rose-100'
-                                } border-none w-fit py-0.5 px-2 text-[10px] font-bold`}
-                              >
-                                {apt.payment_status === 'Refunded' 
-                                  ? 'Refunded' 
-                                  : (apt.payment_status || 'Pending') === 'Paid' 
-                                    ? 'Paid' 
-                                    : 'Pending'
-                                }
-                              </Badge>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Badge 
+                                  variant="outline" 
+                                  className={`${
+                                    apt.payment_status === 'Refunded' 
+                                      ? 'bg-slate-100 text-slate-600 border-slate-200' 
+                                      : (apt.payment_status || 'Pending') === 'Paid' 
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                        : 'bg-rose-50 text-rose-600 border-rose-100'
+                                  } border-none w-fit py-0.5 px-2 text-[10px] font-bold`}
+                                >
+                                  {apt.payment_status === 'Refunded' 
+                                    ? 'Refunded' 
+                                    : (apt.payment_status || 'Pending') === 'Paid' 
+                                      ? 'Paid' 
+                                      : 'Pending'
+                                  }
+                                </Badge>
+
+                                {((apt.payment_status || 'Pending') === 'Paid' || apt.payment_method || apt.paymentMode) && (() => {
+                                  const rawMethod = apt.payment_method || apt.paymentMode || apt.payment_mode || 'Cash';
+                                  const mLower = String(rawMethod).toLowerCase();
+                                  let colorClasses = "bg-slate-100 text-slate-700 border-slate-200";
+                                  if (mLower.includes('upi') || mLower.includes('qr')) colorClasses = "bg-purple-50 text-purple-700 border-purple-200";
+                                  else if (mLower.includes('card')) colorClasses = "bg-blue-50 text-blue-700 border-blue-200";
+                                  else if (mLower.includes('insurance') || mLower.includes('tpa')) colorClasses = "bg-pink-50 text-pink-700 border-pink-200";
+                                  else if (mLower.includes('net') || mLower.includes('bank')) colorClasses = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                                  else if (mLower.includes('cheque') || mLower.includes('check')) colorClasses = "bg-amber-50 text-amber-700 border-amber-200";
+                                  else if (mLower.includes('cash')) colorClasses = "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+                                  return (
+                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${colorClasses}`}>
+                                      {rawMethod}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+
+                              {(apt.payment_ref_no || apt.paymentRefNo) && (
+                                <span className="text-[9px] font-medium text-slate-400 font-mono tracking-tight" title={`Ref: ${apt.payment_ref_no || apt.paymentRefNo}`}>
+                                  Ref: {apt.payment_ref_no || apt.paymentRefNo}
+                                </span>
+                              )}
+
                               <div className="text-[11px] space-y-0.5 text-slate-600 font-medium">
                                 <div>Base Fee: <span className="font-semibold text-slate-800">₹{apt.fee || appointmentFee}</span></div>
                                 {(apt.discount_amount || apt.discountAmount || 0) > 0 && (
