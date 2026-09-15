@@ -166,6 +166,9 @@ export default function Billing() {
         const clearedTimestamp = billingClearedAt ? new Date(billingClearedAt).getTime() : 0;
 
         if (appointmentsData) {
+          // Track which existing invoices have already been matched to an appointment
+          const matchedInvoiceIds = new Set<string>();
+
           appointmentsData.forEach((apt: any) => {
             const virtId = `virtual-inv-opd-${apt.id}`;
             if (clearedVirtuals.includes(virtId)) return;
@@ -181,15 +184,39 @@ export default function Billing() {
             const pId = apt.patient_id || apt.patientId;
             const aptDateStr = getLocalDateStr(apt.appointment_date || apt.created_at);
 
-            const hasInvoice = enrichedInvoices.some((inv: any) => {
-              const invPid = inv.patient_id || inv.patientId;
-              const cleanInvPid = toDeterministicUuid(invPid);
-              const cleanAptPid = toDeterministicUuid(pId);
-              const invDateStr = getLocalDateStr(inv.created_at || inv.date);
-              return cleanInvPid === cleanAptPid && (invDateStr === aptDateStr || inv.type === 'OPD');
+            // 1. Direct ID or reference linkage
+            let existingInvoice = enrichedInvoices.find((inv: any) => {
+              if (matchedInvoiceIds.has(inv.id)) return false;
+              if (inv.id === apt.id || inv.id === `virtual-inv-opd-${apt.id}`) return true;
+              if (inv.appointment_id && inv.appointment_id === apt.id) return true;
+              if (inv.invoice_number && apt.id && String(inv.invoice_number).includes(String(apt.id))) return true;
+              return false;
             });
 
-            if (!hasInvoice) {
+            // 2. Patient match with specific OPD consultation invoice on the same date
+            if (!existingInvoice) {
+              existingInvoice = enrichedInvoices.find((inv: any) => {
+                if (matchedInvoiceIds.has(inv.id)) return false;
+                const invPid = inv.patient_id || inv.patientId;
+                const cleanInvPid = toDeterministicUuid(invPid);
+                const cleanAptPid = toDeterministicUuid(pId);
+                if (cleanInvPid !== cleanAptPid) return false;
+
+                const isOpdType = (inv.type || '').toUpperCase() === 'OPD' ||
+                  String(inv.invoice_number || '').startsWith('INV-OPD') ||
+                  (inv.invoice_items || []).some((it: any) => 
+                    ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes((it.category || it.item_type || '').toUpperCase())
+                  );
+                if (!isOpdType) return false;
+
+                const invDateStr = getLocalDateStr(inv.created_at || inv.date);
+                return invDateStr === aptDateStr;
+              });
+            }
+
+            if (existingInvoice) {
+              matchedInvoiceIds.add(existingInvoice.id);
+            } else {
               const baseFee = Number(apt.fee || apt.appointmentFee || 500);
               const discount = Number(apt.discount_amount || apt.discountAmount || 0);
               const feeToCollect = Math.max(0, baseFee - discount);
@@ -201,6 +228,7 @@ export default function Billing() {
 
               const virtualInv = {
                 id: `virtual-inv-opd-${apt.id}`,
+                appointment_id: apt.id,
                 patient_id: pId,
                 invoice_number: `INV-OPD-V-${apt.id}`,
                 status: isPaid ? 'Paid' : aptPaymentStatus === 'Refunded' ? 'Refunded' : 'Unpaid',
@@ -209,7 +237,8 @@ export default function Billing() {
                 discount_amount: discount,
                 payable_amount: feeToCollect,
                 paid_amount: isPaid ? feeToCollect : 0,
-                payment_method: apt.payment_method || apt.paymentMethod || 'Cash',
+                payment_method: apt.payment_method || apt.paymentMethod || apt.payment_mode || apt.paymentMode || 'Cash',
+                payment_mode: apt.payment_mode || apt.paymentMode || apt.payment_method || apt.paymentMethod || 'Cash',
                 payment_remarks: apt.paymentRemarks || '',
                 type: 'OPD',
                 description: opdDesc,
@@ -229,7 +258,7 @@ export default function Billing() {
                   total_price: baseFee,
                   category: 'OPD'
                 }],
-                created_at: apt.created_at || new Date().toISOString(),
+                created_at: apt.created_at || apt.appointment_date || new Date().toISOString(),
                 patients: matchedPatient ? {
                   id: matchedPatient.id,
                   name: matchedPatient.name,

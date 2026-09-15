@@ -240,6 +240,7 @@ export default function OPD() {
     onConfirm: () => {},
   });
   const [users, setUsers] = useState<any[]>(() => storage.get(STORAGE_KEYS.USERS, MOCK_USERS));
+  const [invoices, setInvoices] = useState<any[]>(() => storage.get(STORAGE_KEYS.BILLING, []));
   const [newPatient, setNewPatient] = useState({ 
     name: '', 
     phone: '', 
@@ -349,15 +350,17 @@ export default function OPD() {
       setLoading(true);
     }
     try {
-      const [patientsData, appointmentsData, prescriptionsData, staffData] = await Promise.all([
+      const [patientsData, appointmentsData, prescriptionsData, staffData, invoicesData] = await Promise.all([
         supabaseService.getPatients(),
         supabaseService.getAppointments(),
         supabaseService.getPrescriptions(),
-        supabaseService.getStaff()
+        supabaseService.getStaff(),
+        supabaseService.getInvoices()
       ]);
       
       if (patientsData) setPatients(patientsData);
       if (staffData && staffData.length > 0) setUsers(staffData);
+      if (invoicesData) setInvoices(invoicesData);
       if (appointmentsData) {
         const staffList = staffData || users || [];
         const doctorsList = staffList.filter((u: any) => u.role?.toUpperCase() === 'DOCTOR' || u.role?.toUpperCase() === 'SUPER_ADMIN' || u.role?.toUpperCase() === 'SURGEON');
@@ -1465,6 +1468,7 @@ export default function OPD() {
         const discountVal = Number(newAppointment.discountAmount || 0);
         const payableVal = Math.max(0, calculatedTotal - discountVal);
         const invoiceData = {
+          appointment_id: synced.id,
           patient_id: newAppointment.patientId,
           patient_name: patient?.name || undefined,
           invoice_number: `INV-OPD-${Date.now()}`,
@@ -1680,6 +1684,7 @@ export default function OPD() {
             const discount = Number(payModalApt.discount_amount || payModalApt.discountAmount || 0);
             const feeToCollect = Math.max(0, baseFee - discount);
             const invoiceData = {
+              appointment_id: payModalApt.id,
               patient_id: patientId,
               invoice_number: `INV-OPD-${Date.now()}`,
               status: 'Paid',
@@ -1704,6 +1709,7 @@ export default function OPD() {
             const created = await supabaseService.createInvoice(invoiceData, invoiceItems);
             if (created) {
               updatedBills = [created, ...updatedBills];
+              setInvoices(updatedBills);
             }
           }
 
@@ -2783,7 +2789,7 @@ export default function OPD() {
       </div>
 
       {activeTab === 'summary' ? (
-        <OPDSummaryView appointments={appointments} users={users} />
+        <OPDSummaryView appointments={appointments} users={users} invoices={invoices} />
       ) : (
         <Card className="border-none shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">

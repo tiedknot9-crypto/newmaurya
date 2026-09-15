@@ -89,10 +89,15 @@ export function OPDCollectionTab({
       const dateStr = getLocalDateStr(aptDate);
       
       const matchedBill = bills.find((b: any) => {
+        if (b.appointment_id && b.appointment_id === apt.id) return true;
+        if (b.id === apt.id || b.id === `virtual-inv-opd-${apt.id}`) return true;
+        if (apt.id && b.invoice_number && String(b.invoice_number).includes(String(apt.id))) return true;
+
         const bPid = b.patient_id || b.patientId;
         const isMatchP = bPid === pId || (pId && String(bPid).includes(String(pId)));
         const isOpdInv = b.type === 'OPD' || String(b.invoice_number || '').includes('OPD');
-        return isMatchP && isOpdInv;
+        const bDateStr = getLocalDateStr(b.created_at || b.date);
+        return isMatchP && isOpdInv && bDateStr === dateStr;
       });
 
       const paymentMethod = matchedBill?.payment_method || matchedBill?.paymentMode || apt.payment_method || apt.payment_mode || apt.paymentMode || 'Cash';
