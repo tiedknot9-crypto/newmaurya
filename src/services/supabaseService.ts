@@ -699,6 +699,14 @@ function cleanInvoiceForPostgres(inv: any) {
     cleaned.issued_by = cleaned.created_by;
   }
   
+  // Normalize payment mode / method across aliases
+  const payModeVal = cleaned.payment_method || cleaned.payment_mode || cleaned.paymentMode || 'Cash';
+  cleaned.payment_method = payModeVal;
+  cleaned.payment_mode = payModeVal;
+  if (!cleaned.payment_reference && cleaned.paymentRefNo) {
+    cleaned.payment_reference = cleaned.paymentRefNo;
+  }
+
   // calculate payable_amount and paid_amount strictly
   const gross = Number(cleaned.total_amount) || 0;
   const disc = Number(cleaned.discount_amount) || 0;
@@ -713,7 +721,7 @@ function cleanInvoiceForPostgres(inv: any) {
   const validColumns = [
     'id', 'patient_id', 'invoice_number', 'total_amount', 'discount_amount',
     'tax_amount', 'payable_amount', 'paid_amount', 'payment_status', 'payment_method',
-    'payment_reference', 'payment_remarks', 'tpa_approval_status', 'issued_by', 'created_at', 'updated_at'
+    'payment_mode', 'payment_reference', 'payment_remarks', 'tpa_approval_status', 'issued_by', 'created_at', 'updated_at'
   ];
   
   const result: any = {};
@@ -2054,12 +2062,33 @@ const rawSupabaseService = {
     try {
       const dbInv = cleanInvoiceForPostgres(invoice);
       await ensureForeignKeysExist(dbInv, invoice.patient_name || invoice.patientName || invoice.patients?.name);
-      const { data: invData, error: invError } = await supabase
-        .from('invoices')
-        .insert([dbInv])
-        .select();
       
-      if (invError) throw invError;
+      let invData: any = null;
+      let currentPayload = { ...dbInv };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data, error } = await supabase
+          .from('invoices')
+          .insert([currentPayload])
+          .select();
+        if (!error && data && data.length > 0) {
+          invData = data;
+          break;
+        }
+        if (error) {
+          const errMsg = error.message || '';
+          const match = errMsg.match(/Could not find the '([^']+)'/) ||
+                        errMsg.match(/column '([^']+)'/) ||
+                        errMsg.match(/column "([^"]+)"/);
+          if (match && match[1] && currentPayload[match[1]] !== undefined) {
+            delete currentPayload[match[1]];
+            continue;
+          }
+          throw error;
+        }
+        break;
+      }
+      
+      if (!invData || !invData[0]) throw new Error('Failed to insert invoice into database');
       
       const invoiceId = invData[0].id;
       const itemsToInsert = items.map(item => {
@@ -2153,13 +2182,31 @@ const rawSupabaseService = {
       delete dbInv.patients;
       await ensureForeignKeysExist(dbInv, invoice.patient_name || invoice.patientName || invoice.patients?.name);
 
-      const { data: invData, error: invError } = await supabase
-        .from('invoices')
-        .update(dbInv)
-        .eq('id', id)
-        .select();
-      
-      if (invError) throw invError;
+      let invData: any = null;
+      let currentPayload = { ...dbInv };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data, error } = await supabase
+          .from('invoices')
+          .update(currentPayload)
+          .eq('id', id)
+          .select();
+        if (!error && data && data.length > 0) {
+          invData = data;
+          break;
+        }
+        if (error) {
+          const errMsg = error.message || '';
+          const match = errMsg.match(/Could not find the '([^']+)'/) ||
+                        errMsg.match(/column '([^']+)'/) ||
+                        errMsg.match(/column "([^"]+)"/);
+          if (match && match[1] && currentPayload[match[1]] !== undefined) {
+            delete currentPayload[match[1]];
+            continue;
+          }
+          throw error;
+        }
+        break;
+      }
       
       if (items !== undefined) {
         const { error: deleteError } = await supabase

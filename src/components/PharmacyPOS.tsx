@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   Plus, 
@@ -313,6 +313,13 @@ export default function PharmacyPOS() {
   const [walkInDetails, setWalkInDetails] = useState({ name: '', phone: '', doctorName: '' });
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
+  const isSubmittingSaleRef = useRef(false);
+  const lastItemClickRef = useRef<{ id: string; time: number }>({ id: '', time: 0 });
+  const isAddingSetupRef = useRef(false);
+  const isAddingCustomLooseRef = useRef(false);
+  const isPrintingRef = useRef(false);
+  const isOpeningCheckoutRef = useRef(false);
   const [lastOrder, setLastOrder] = useState<{
     items: CartItem[];
     total: number;
@@ -362,55 +369,63 @@ export default function PharmacyPOS() {
   });
 
   const addCustomLooseToCart = () => {
-    if (!customLooseItem.name.trim()) {
-      toast.error('Medicine name is required');
-      return;
-    }
-    const price = parseFloat(customLooseItem.pricePerUnit);
-    if (isNaN(price) || price <= 0) {
-      toast.error('Valid price per unit is required');
-      return;
-    }
-    const qty = parseInt(customLooseItem.quantity);
-    if (isNaN(qty) || qty <= 0) {
-      toast.error('Valid quantity is required');
-      return;
-    }
-    const tax = parseFloat(customLooseItem.taxPercent) || 0;
+    if (isAddingCustomLooseRef.current) return;
+    isAddingCustomLooseRef.current = true;
+    try {
+      if (!customLooseItem.name.trim()) {
+        toast.error('Medicine name is required');
+        return;
+      }
+      const price = parseFloat(customLooseItem.pricePerUnit);
+      if (isNaN(price) || price <= 0) {
+        toast.error('Valid price per unit is required');
+        return;
+      }
+      const qty = parseInt(customLooseItem.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        toast.error('Valid quantity is required');
+        return;
+      }
+      const tax = parseFloat(customLooseItem.taxPercent) || 0;
 
-    const isInv = customLooseItem.isInventoryItem;
-    const itemId = customLooseItem.itemId;
-    const unitsPerStrip = customLooseItem.unitsPerStrip;
-    
-    const cartItemId = isInv ? `${itemId}-loose` : `custom-loose-${Date.now()}`;
-    
-    setCart([...cart, {
-      id: isInv ? itemId : cartItemId,
-      cartId: cartItemId,
-      name: isInv ? `${customLooseItem.name} (Loose)` : `${customLooseItem.name} (${customLooseItem.unitType} - Loose)`,
-      price: price,
-      quantity: qty,
-      isLoose: true,
-      unitsPerStrip: unitsPerStrip,
-      taxPercentage: tax
-    } as any]);
+      const isInv = customLooseItem.isInventoryItem;
+      const itemId = customLooseItem.itemId;
+      const unitsPerStrip = customLooseItem.unitsPerStrip;
+      
+      const cartItemId = isInv ? `${itemId}-loose` : `custom-loose-${Date.now()}`;
+      
+      setCart(prevCart => [...prevCart, {
+        id: isInv ? itemId : cartItemId,
+        cartId: cartItemId,
+        name: isInv ? `${customLooseItem.name} (Loose)` : `${customLooseItem.name} (${customLooseItem.unitType} - Loose)`,
+        price: price,
+        quantity: qty,
+        isLoose: true,
+        unitsPerStrip: unitsPerStrip,
+        taxPercentage: tax
+      } as any]);
 
-    setCartPulse(true);
-    setTimeout(() => setCartPulse(false), 300);
-    toast.success(`${qty} loose units of ${customLooseItem.name} added to cart`);
-    
-    setCustomLooseItem({
-      name: '',
-      pricePerUnit: '',
-      quantity: '1',
-      unitType: 'Tablet(s)',
-      taxPercent: '5',
-      isSelected: false,
-      isInventoryItem: false,
-      itemId: undefined,
-      unitsPerStrip: 10
-    });
-    setIsCustomLooseOpen(false);
+      setCartPulse(true);
+      setTimeout(() => setCartPulse(false), 300);
+      toast.success(`${qty} loose units of ${customLooseItem.name} added to cart`);
+      
+      setCustomLooseItem({
+        name: '',
+        pricePerUnit: '',
+        quantity: '1',
+        unitType: 'Tablet(s)',
+        taxPercent: '5',
+        isSelected: false,
+        isInventoryItem: false,
+        itemId: undefined,
+        unitsPerStrip: 10
+      });
+      setIsCustomLooseOpen(false);
+    } finally {
+      setTimeout(() => {
+        isAddingCustomLooseRef.current = false;
+      }, 350);
+    }
   };
 
   const fetchData = async () => {
@@ -443,6 +458,13 @@ export default function PharmacyPOS() {
   });
 
   const addToCart = (item: any) => {
+    // Prevent accidental multi-click additions on the same item within 350ms
+    const now = Date.now();
+    if (lastItemClickRef.current.id === item.id && now - lastItemClickRef.current.time < 350) {
+      return;
+    }
+    lastItemClickRef.current = { id: item.id, time: now };
+
     if (item.stock <= 0) {
       toast.error('Out of stock');
       return;
@@ -473,6 +495,13 @@ export default function PharmacyPOS() {
   };
 
   const handleItemClick = (item: any) => {
+    // Prevent accidental multi-click triggers
+    const now = Date.now();
+    if (lastItemClickRef.current.id === item.id && now - lastItemClickRef.current.time < 350) {
+      return;
+    }
+    lastItemClickRef.current = { id: item.id, time: now };
+
     if (item.is_loose_sale_enabled) {
       setBillingSetupItem(item);
       setBillingUnit('loose');
@@ -486,63 +515,73 @@ export default function PharmacyPOS() {
 
   const addBillingSetupToCart = () => {
     if (!billingSetupItem) return;
+    if (isAddingSetupRef.current) return;
+    isAddingSetupRef.current = true;
     
-    const qty = Math.max(1, Number(billingQty) || 1);
-    const isLoose = billingUnit === 'loose';
-    let price = isLoose 
-      ? (billingSetupItem.loose_selling_price || (billingSetupItem.selling_price / (billingSetupItem.units_per_strip || 10)))
-      : (billingSetupItem.selling_price || 0);
-    
-    if (customUnitPrice && !isNaN(parseFloat(customUnitPrice)) && parseFloat(customUnitPrice) >= 0) {
-      price = parseFloat(customUnitPrice);
-    }
-
-    const qtyText = isLoose ? 'Tablet(s)' : 'Strip(s)';
-    const cartItemId = `${billingSetupItem.id}-${billingUnit}`;
-    
-    const unitsPerStrip = billingSetupItem.units_per_strip || 10;
-    const totalUnitsAvailable = (billingSetupItem.stock * unitsPerStrip) + (billingSetupItem.loose_stock || 0);
-    const requestedUnits = isLoose ? qty : (qty * unitsPerStrip);
-    
-    if (requestedUnits > totalUnitsAvailable) {
-      toast.error(`Insufficient stock! Only ${totalUnitsAvailable} total tablets left.`);
-      return;
-    }
-    
-    const existingIndex = cart.findIndex(c => c.cartId === cartItemId);
-    if (existingIndex > -1) {
-      const newCart = [...cart];
-      const newQty = newCart[existingIndex].quantity + qty;
-      const newRequestedUnits = isLoose ? newQty : (newQty * unitsPerStrip);
+    try {
+      const qty = Math.max(1, Number(billingQty) || 1);
+      const isLoose = billingUnit === 'loose';
+      let price = isLoose 
+        ? (billingSetupItem.loose_selling_price || (billingSetupItem.selling_price / (billingSetupItem.units_per_strip || 10)))
+        : (billingSetupItem.selling_price || 0);
       
-      if (newRequestedUnits > totalUnitsAvailable) {
-        toast.error(`Cannot add. Only ${totalUnitsAvailable} total tablets left.`);
+      if (customUnitPrice && !isNaN(parseFloat(customUnitPrice)) && parseFloat(customUnitPrice) >= 0) {
+        price = parseFloat(customUnitPrice);
+      }
+
+      const qtyText = isLoose ? 'Tablet(s)' : 'Strip(s)';
+      const cartItemId = `${billingSetupItem.id}-${billingUnit}`;
+      
+      const unitsPerStrip = billingSetupItem.units_per_strip || 10;
+      const totalUnitsAvailable = (billingSetupItem.stock * unitsPerStrip) + (billingSetupItem.loose_stock || 0);
+      const requestedUnits = isLoose ? qty : (qty * unitsPerStrip);
+      
+      if (requestedUnits > totalUnitsAvailable) {
+        toast.error(`Insufficient stock! Only ${totalUnitsAvailable} total tablets left.`);
+        isAddingSetupRef.current = false;
         return;
       }
-      newCart[existingIndex].quantity = newQty;
-      newCart[existingIndex].price = price;
-      setCart(newCart);
-    } else {
-      setCart([...cart, {
-        id: billingSetupItem.id,
-        cartId: cartItemId,
-        name: `${billingSetupItem.name} (${billingUnit === 'loose' ? 'Loose' : 'Strip'})`,
-        price: price,
-        quantity: qty,
-        isLoose: isLoose,
-        unitsPerStrip: unitsPerStrip,
-        taxPercentage: (billingSetupItem.tax_percentage !== undefined && billingSetupItem.tax_percentage !== null && Number(billingSetupItem.tax_percentage) > 0) ? Number(billingSetupItem.tax_percentage) : Number(storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS)?.defaultTaxRate ?? 12),
-        batchNumber: billingSetupItem.batch_number || '',
-        expiryDate: billingSetupItem.expiry_date || '',
-        hsnCode: billingSetupItem.hsn_code || '',
-        mrp: billingSetupItem.mrp || billingSetupItem.selling_price || 0
-      } as any]);
+      
+      const existingIndex = cart.findIndex(c => c.cartId === cartItemId);
+      if (existingIndex > -1) {
+        const newCart = [...cart];
+        const newQty = newCart[existingIndex].quantity + qty;
+        const newRequestedUnits = isLoose ? newQty : (newQty * unitsPerStrip);
+        
+        if (newRequestedUnits > totalUnitsAvailable) {
+          toast.error(`Cannot add. Only ${totalUnitsAvailable} total tablets left.`);
+          isAddingSetupRef.current = false;
+          return;
+        }
+        newCart[existingIndex].quantity = newQty;
+        newCart[existingIndex].price = price;
+        setCart(newCart);
+      } else {
+        setCart([...cart, {
+          id: billingSetupItem.id,
+          cartId: cartItemId,
+          name: `${billingSetupItem.name} (${billingUnit === 'loose' ? 'Loose' : 'Strip'})`,
+          price: price,
+          quantity: qty,
+          isLoose: isLoose,
+          unitsPerStrip: unitsPerStrip,
+          taxPercentage: (billingSetupItem.tax_percentage !== undefined && billingSetupItem.tax_percentage !== null && Number(billingSetupItem.tax_percentage) > 0) ? Number(billingSetupItem.tax_percentage) : Number(storage.get('hms_pharmacy_settings', DEFAULT_PHARMACY_SETTINGS)?.defaultTaxRate ?? 12),
+          batchNumber: billingSetupItem.batch_number || '',
+          expiryDate: billingSetupItem.expiry_date || '',
+          hsnCode: billingSetupItem.hsn_code || '',
+          mrp: billingSetupItem.mrp || billingSetupItem.selling_price || 0
+        } as any]);
+      }
+      
+      setCartPulse(true);
+      setTimeout(() => setCartPulse(false), 300);
+      toast.success(`${qty} ${qtyText} of ${billingSetupItem.name} added to cart`);
+      setBillingSetupItem(null);
+    } finally {
+      setTimeout(() => {
+        isAddingSetupRef.current = false;
+      }, 350);
     }
-    
-    setCartPulse(true);
-    setTimeout(() => setCartPulse(false), 300);
-    toast.success(`${qty} ${qtyText} of ${billingSetupItem.name} added to cart`);
-    setBillingSetupItem(null);
   };
 
   const updateQuantity = (cartId: string, delta: number) => {
@@ -649,6 +688,10 @@ export default function PharmacyPOS() {
   }, 0);
 
   const handleCheckout = () => {
+    if (isOpeningCheckoutRef.current) return;
+    isOpeningCheckoutRef.current = true;
+    setTimeout(() => { isOpeningCheckoutRef.current = false; }, 400);
+
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -672,153 +715,171 @@ export default function PharmacyPOS() {
   };
 
   const completeSale = async () => {
+    // Prevent duplicate submission if already processing
+    if (isSubmittingSaleRef.current) {
+      return;
+    }
     if (cart.length === 0) return;
     if (!selectedPatientId || selectedPatientId === 'walk-in') {
       toast.error('Sales are restricted to OPD/IPD Patients only.');
       return;
     }
 
-    const selectedPatient = patients.find(p => p.id === selectedPatientId);
-    const patientName = selectedPatient?.name || 'Patient';
-    const patientPhone = selectedPatient?.phone || 'N/A';
-    const doctorName = 'Hospital OPD/IPD Doctor';
+    isSubmittingSaleRef.current = true;
+    setIsSubmittingSale(true);
 
-    let formattedPaymentMethod = paymentMode;
-    if (paymentMode === 'Multi-mode') {
-      const splitTotal = Number(multiSplit.cash) + Number(multiSplit.upi) + Number(multiSplit.card) + Number(multiSplit.other);
-      if (Math.abs(splitTotal - total) > 0.5) {
-        toast.error(`Multi-mode split sum (₹${splitTotal.toFixed(2)}) must equal Total Bill (₹${total.toFixed(2)})`);
-        return;
-      }
-      formattedPaymentMethod = `Multi-mode (Cash: ₹${multiSplit.cash}, UPI: ₹${multiSplit.upi}, Card: ₹${multiSplit.card}${multiSplit.other > 0 ? `, Other: ₹${multiSplit.other}` : ''})`;
-    }
+    try {
+      const selectedPatient = patients.find(p => p.id === selectedPatientId);
+      const patientName = selectedPatient?.name || 'Patient';
+      const patientPhone = selectedPatient?.phone || 'N/A';
+      const doctorName = 'Hospital OPD/IPD Doctor';
 
-    const isCredit = paymentMode === 'Credit';
-    const invoice = {
-      patient_id: selectedPatientId,
-      patient_name: patientName,
-      patient_phone: patientPhone,
-      prescribing_doctor: doctorName,
-      total_amount: subtotal,
-      payable_amount: discountedSubtotal,
-      paid_amount: isCredit ? 0 : total,
-      discount_amount: computedDiscountAmount,
-      tax_amount: tax,
-      payment_status: isCredit ? 'Unpaid' : 'Paid',
-      payment_method: formattedPaymentMethod,
-      status: isCredit ? 'Unpaid' : 'Settled',
-      type: 'Pharmacy',
-      date: new Date().toISOString()
-    };
-
-    const invoiceItems = cart.map(item => ({
-      item_id: item.id,
-      item_name: item.name,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity,
-      category: 'PHARMACY',
-      batch_number: item.batchNumber || item.batch_number || '',
-      expiry_date: item.expiryDate || item.expiry_date || '',
-      hsn_code: item.hsnCode || item.hsn_code || '',
-      tax_percentage: item.taxPercentage || item.tax_percentage || 0,
-      is_loose: !!item.isLoose
-    }));
-
-    const result = await supabaseService.createInvoice(invoice, invoiceItems);
-    if (result) {
-      // Accumulate stock changes per item to prevent concurrency issues
-      const finalItemChanges = new Map<string, { 
-        newStock: number; 
-        newLooseStock: number;
-        hasLooseUpdate: boolean;
-      }>();
-
-      for (const item of cart) {
-        const invItem = inventory.find(i => i.id === item.id);
-        if (!invItem) continue;
-
-        const unitsPerStrip = item.unitsPerStrip || invItem.units_per_strip || 10;
-        
-        // Retrieve current accumulated values or initialize from inventory
-        const current = finalItemChanges.get(item.id) || {
-          newStock: invItem.stock,
-          newLooseStock: invItem.loose_stock || 0,
-          hasLooseUpdate: !!invItem.is_loose_sale_enabled || !!item.isLoose
-        };
-
-        if (item.isLoose) {
-          const currentTotalUnits = (current.newStock * unitsPerStrip) + current.newLooseStock;
-          const remainingUnits = Math.max(0, currentTotalUnits - item.quantity);
-          current.newStock = Math.floor(remainingUnits / unitsPerStrip);
-          current.newLooseStock = remainingUnits % unitsPerStrip;
-          current.hasLooseUpdate = true;
-        } else {
-          current.newStock = Math.max(0, current.newStock - item.quantity);
+      let formattedPaymentMethod = paymentMode;
+      if (paymentMode === 'Multi-mode') {
+        const splitTotal = Number(multiSplit.cash) + Number(multiSplit.upi) + Number(multiSplit.card) + Number(multiSplit.other);
+        if (Math.abs(splitTotal - total) > 0.5) {
+          toast.error(`Multi-mode split sum (₹${splitTotal.toFixed(2)}) must equal Total Bill (₹${total.toFixed(2)})`);
+          return;
         }
-
-        finalItemChanges.set(item.id, current);
+        formattedPaymentMethod = `Multi-mode (Cash: ₹${multiSplit.cash}, UPI: ₹${multiSplit.upi}, Card: ₹${multiSplit.card}${multiSplit.other > 0 ? `, Other: ₹${multiSplit.other}` : ''})`;
       }
 
-      // Now run database updates and log transactions
-      for (const [itemId, changes] of finalItemChanges.entries()) {
-        const updatePayload: any = { 
-          stock: changes.newStock,
-          updated_at: new Date().toISOString()
-        };
-        if (changes.hasLooseUpdate) {
-          updatePayload.loose_stock = changes.newLooseStock;
+      const isCredit = paymentMode === 'Credit';
+      const invoice = {
+        patient_id: selectedPatientId,
+        patient_name: patientName,
+        patient_phone: patientPhone,
+        prescribing_doctor: doctorName,
+        total_amount: subtotal,
+        payable_amount: discountedSubtotal,
+        paid_amount: isCredit ? 0 : total,
+        discount_amount: computedDiscountAmount,
+        tax_amount: tax,
+        payment_status: isCredit ? 'Unpaid' : 'Paid',
+        payment_method: formattedPaymentMethod,
+        status: isCredit ? 'Unpaid' : 'Settled',
+        type: 'Pharmacy',
+        date: new Date().toISOString()
+      };
+
+      const invoiceItems = cart.map(item => ({
+        item_id: item.id,
+        item_name: item.name,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity,
+        category: 'PHARMACY',
+        batch_number: item.batchNumber || item.batch_number || '',
+        expiry_date: item.expiryDate || item.expiry_date || '',
+        hsn_code: item.hsnCode || item.hsn_code || '',
+        tax_percentage: item.taxPercentage || item.tax_percentage || 0,
+        is_loose: !!item.isLoose
+      }));
+
+      const result = await supabaseService.createInvoice(invoice, invoiceItems);
+      if (result) {
+        // Accumulate stock changes per item to prevent concurrency issues
+        const finalItemChanges = new Map<string, { 
+          newStock: number; 
+          newLooseStock: number;
+          hasLooseUpdate: boolean;
+        }>();
+
+        for (const item of cart) {
+          const invItem = inventory.find(i => i.id === item.id);
+          if (!invItem) continue;
+
+          const unitsPerStrip = item.unitsPerStrip || invItem.units_per_strip || 10;
+          
+          // Retrieve current accumulated values or initialize from inventory
+          const current = finalItemChanges.get(item.id) || {
+            newStock: invItem.stock,
+            newLooseStock: invItem.loose_stock || 0,
+            hasLooseUpdate: !!invItem.is_loose_sale_enabled || !!item.isLoose
+          };
+
+          if (item.isLoose) {
+            const currentTotalUnits = (current.newStock * unitsPerStrip) + current.newLooseStock;
+            const remainingUnits = Math.max(0, currentTotalUnits - item.quantity);
+            current.newStock = Math.floor(remainingUnits / unitsPerStrip);
+            current.newLooseStock = remainingUnits % unitsPerStrip;
+            current.hasLooseUpdate = true;
+          } else {
+            current.newStock = Math.max(0, current.newStock - item.quantity);
+          }
+
+          finalItemChanges.set(item.id, current);
         }
 
-        await supabaseService.updatePharmacyItem(itemId, updatePayload);
+        // Now run database updates and log transactions
+        for (const [itemId, changes] of finalItemChanges.entries()) {
+          const updatePayload: any = { 
+            stock: changes.newStock,
+            updated_at: new Date().toISOString()
+          };
+          if (changes.hasLooseUpdate) {
+            updatePayload.loose_stock = changes.newLooseStock;
+          }
 
-        // Find items in cart for this itemId to log transactions
-        const cartItemsForThisId = cart.filter(item => item.id === itemId);
-        for (const item of cartItemsForThisId) {
-          await supabaseService.logInventoryTransaction({
-            item_id: item.id,
-            transaction_type: 'SALE',
-            quantity: -item.quantity,
-            unit_price: item.price,
-            total_price: item.price * item.quantity,
-            reference_id: `INV-${result.id.slice(0, 8)}`,
-            performed_by: currentUser?.id,
-            notes: item.isLoose ? "Loose Unit Sale" : "Standard Unit Sale"
-          });
+          await supabaseService.updatePharmacyItem(itemId, updatePayload);
+
+          // Find items in cart for this itemId to log transactions
+          const cartItemsForThisId = cart.filter(item => item.id === itemId);
+          for (const item of cartItemsForThisId) {
+            await supabaseService.logInventoryTransaction({
+              item_id: item.id,
+              transaction_type: 'SALE',
+              quantity: -item.quantity,
+              unit_price: item.price,
+              total_price: item.price * item.quantity,
+              reference_id: `INV-${result.id.slice(0, 8)}`,
+              performed_by: currentUser?.id,
+              notes: item.isLoose ? "Loose Unit Sale" : "Standard Unit Sale"
+            });
+          }
         }
+
+        setLastOrder({
+          items: [...cart],
+          total,
+          subtotal,
+          discountAmount: computedDiscountAmount,
+          discountPercent: appliedDiscountPercent,
+          tax,
+          patient: patientName,
+          phone: patientPhone,
+          doctorName: doctorName,
+          date: new Date().toLocaleString(),
+          invoiceId: result.id.slice(0, 8).toUpperCase()
+        });
+
+        logAudit('PHARMACY_SALE', result.id, { patientName, totalAmount: total, itemsCount: cart.length });
+        setIsCheckoutOpen(false);
+        setIsSuccessOpen(true);
+        setCart([]);
+        setPatientSearchTerm('');
+        setSelectedPatientId('');
+        setDiscountValue('0');
+        setMultiSplit({ cash: 0, upi: 0, card: 0, other: 0 });
+        fetchData(); // Refresh inventory and patients
+        toast.success('Sale completed successfully');
+      } else {
+        toast.error('Failed to complete sale');
       }
-
-      setLastOrder({
-        items: [...cart],
-        total,
-        subtotal,
-        discountAmount: computedDiscountAmount,
-        discountPercent: appliedDiscountPercent,
-        tax,
-        patient: patientName,
-        phone: patientPhone,
-        doctorName: doctorName,
-        date: new Date().toLocaleString(),
-        invoiceId: result.id.slice(0, 8).toUpperCase()
-      });
-
-      logAudit('PHARMACY_SALE', result.id, { patientName, totalAmount: total, itemsCount: cart.length });
-      setIsCheckoutOpen(false);
-      setIsSuccessOpen(true);
-      setCart([]);
-      setPatientSearchTerm('');
-      setSelectedPatientId('');
-      setDiscountValue('0');
-      setMultiSplit({ cash: 0, upi: 0, card: 0, other: 0 });
-      fetchData(); // Refresh inventory and patients
-      toast.success('Sale completed successfully');
-    } else {
-      toast.error('Failed to complete sale');
+    } catch (error) {
+      console.error('Error completing sale:', error);
+      toast.error('An unexpected error occurred while processing the sale');
+    } finally {
+      isSubmittingSaleRef.current = false;
+      setIsSubmittingSale(false);
     }
   };
 
   const printReceipt = () => {
     if (!lastOrder) return;
+    if (isPrintingRef.current) return;
+    isPrintingRef.current = true;
+    setTimeout(() => { isPrintingRef.current = false; }, 1000);
     const hospitalInfo = storage.get<{
       name: string;
       address: string;
@@ -919,6 +980,9 @@ export default function PharmacyPOS() {
 
   const printTaxInvoice = (overridePageSize?: 'A4_FULL' | 'A4_HALF') => {
     if (!lastOrder) return;
+    if (isPrintingRef.current) return;
+    isPrintingRef.current = true;
+    setTimeout(() => { isPrintingRef.current = false; }, 1000);
 
     const patientDetails = {
       name: lastOrder.patient || 'Patient',
@@ -1140,6 +1204,8 @@ export default function PharmacyPOS() {
  
                         <div className="pt-1">
                           <Button 
+                            type="button"
+                            disabled={isOutOfStock}
                             className={`w-full gap-2 rounded-xl h-11 font-black shadow-sm transition-all duration-300 ${
                               isOutOfStock 
                                 ? 'bg-slate-100 text-slate-300 pointer-events-none' 
@@ -1149,6 +1215,7 @@ export default function PharmacyPOS() {
                             }`}
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (isOutOfStock) return;
                               handleItemClick(item);
                             }}
                           >
@@ -1408,6 +1475,7 @@ export default function PharmacyPOS() {
                           </Button>
                           <div className="flex items-center bg-slate-50/80 rounded-xl p-1 gap-2 border border-slate-100 group-hover:border-slate-200 transition-colors">
                             <button 
+                              type="button"
                               className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-lg transition-colors text-slate-500"
                               onClick={() => updateQuantity(item.cartId || item.id, -1)}
                             >
@@ -1429,6 +1497,7 @@ export default function PharmacyPOS() {
                               }}
                             />
                             <button 
+                              type="button"
                               className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 rounded-lg transition-colors text-slate-500"
                               onClick={() => updateQuantity(item.cartId || item.id, 1)}
                             >
@@ -1510,8 +1579,9 @@ export default function PharmacyPOS() {
             </div>
           </div>
           <Button 
+            type="button"
             className="w-full h-14 text-xl font-black bg-medical-blue hover:bg-medical-blue/90 shadow-xl shadow-medical-blue/30 rounded-2xl transition-all active:scale-[0.98]"
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || isSubmittingSale}
             onClick={handleCheckout}
           >
             Checkout & Pay
@@ -1839,7 +1909,10 @@ export default function PharmacyPOS() {
       </Dialog>
 
       {/* Checkout Dialog */}
-      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
+      <Dialog open={isCheckoutOpen} onOpenChange={(open) => {
+        if (isSubmittingSale) return; // Prevent closing while processing
+        setIsCheckoutOpen(open);
+      }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-slate-800">Complete Payment</DialogTitle>
@@ -1852,6 +1925,7 @@ export default function PharmacyPOS() {
                 <Button 
                   key={mode}
                   type="button"
+                  disabled={isSubmittingSale}
                   variant="outline" 
                   className={`h-14 font-black text-xs flex items-center justify-between px-4 border-2 rounded-xl transition-all ${
                     paymentMode === mode 
@@ -1882,6 +1956,7 @@ export default function PharmacyPOS() {
                     <Label className="text-[10px] font-bold text-slate-500">Cash (₹)</Label>
                     <Input 
                       type="number" 
+                      disabled={isSubmittingSale}
                       className="h-9 text-xs font-bold bg-white"
                       value={multiSplit.cash}
                       onChange={(e) => setMultiSplit(prev => ({ ...prev, cash: Number(e.target.value) }))}
@@ -1891,6 +1966,7 @@ export default function PharmacyPOS() {
                     <Label className="text-[10px] font-bold text-slate-500">UPI / QR (₹)</Label>
                     <Input 
                       type="number" 
+                      disabled={isSubmittingSale}
                       className="h-9 text-xs font-bold bg-white"
                       value={multiSplit.upi}
                       onChange={(e) => setMultiSplit(prev => ({ ...prev, upi: Number(e.target.value) }))}
@@ -1900,6 +1976,7 @@ export default function PharmacyPOS() {
                     <Label className="text-[10px] font-bold text-slate-500">Card (₹)</Label>
                     <Input 
                       type="number" 
+                      disabled={isSubmittingSale}
                       className="h-9 text-xs font-bold bg-white"
                       value={multiSplit.card}
                       onChange={(e) => setMultiSplit(prev => ({ ...prev, card: Number(e.target.value) }))}
@@ -1909,6 +1986,7 @@ export default function PharmacyPOS() {
                     <Label className="text-[10px] font-bold text-slate-500">Other / Credit (₹)</Label>
                     <Input 
                       type="number" 
+                      disabled={isSubmittingSale}
                       className="h-9 text-xs font-bold bg-white"
                       value={multiSplit.other}
                       onChange={(e) => setMultiSplit(prev => ({ ...prev, other: Number(e.target.value) }))}
@@ -1926,9 +2004,21 @@ export default function PharmacyPOS() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setIsCheckoutOpen(false)}>Cancel</Button>
-            <Button className="bg-medical-blue hover:bg-medical-blue/90 font-black rounded-xl" onClick={completeSale}>
-              Confirm & Complete Sale ({formatCurrency(total)})
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setIsCheckoutOpen(false)} disabled={isSubmittingSale}>Cancel</Button>
+            <Button 
+              type="button"
+              className="bg-medical-blue hover:bg-medical-blue/90 font-black rounded-xl" 
+              onClick={completeSale}
+              disabled={isSubmittingSale}
+            >
+              {isSubmittingSale ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing Sale...
+                </>
+              ) : (
+                `Confirm & Complete Sale (${formatCurrency(total)})`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

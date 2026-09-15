@@ -6,6 +6,14 @@
 -- ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS attending_doctor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 -- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_remarks TEXT;
+-- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_mode TEXT;
+-- ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_method TEXT;
+-- ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS payment_mode TEXT DEFAULT 'Cash';
+-- ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash';
+-- ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+-- ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_mode TEXT DEFAULT 'Cash';
+-- ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Cash';
+-- ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
 -- ALTER TABLE public.staff ADD COLUMN IF NOT EXISTS consultation_fee DECIMAL(10, 2) DEFAULT 0.00;
 -- ALTER TABLE public.hospital_info ADD COLUMN IF NOT EXISTS header_image TEXT;
@@ -395,6 +403,10 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   status TEXT DEFAULT 'Scheduled',
   fee DECIMAL(10, 2) DEFAULT 0.00,
   payment_status TEXT DEFAULT 'Pending',
+  payment_mode TEXT DEFAULT 'Cash',
+  payment_method TEXT DEFAULT 'Cash',
+  payment_reference TEXT,
+  discount_amount DECIMAL(10, 2) DEFAULT 0.00,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -627,6 +639,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
   paid_amount DECIMAL(10, 2) DEFAULT 0.00,
   payment_status TEXT DEFAULT 'Unpaid',
   payment_method TEXT,
+  payment_mode TEXT,
   payment_reference TEXT,
   payment_remarks TEXT,
   tpa_approval_status TEXT,
@@ -687,6 +700,9 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   expense_date DATE DEFAULT CURRENT_DATE,
   paid_to TEXT,
   status TEXT DEFAULT 'Paid',
+  payment_mode TEXT DEFAULT 'Cash',
+  payment_method TEXT DEFAULT 'Cash',
+  payment_reference TEXT,
   recorded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   attachment_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
