@@ -21,34 +21,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalDateStr } from '@/lib/utils';
 import { toast } from 'sonner';
+import { reconcileOPDAppointments, toDeterministicUuid } from '@/lib/billingUtils';
 
 interface OPDSummaryViewProps {
   appointments: any[];
   users: any[];
   invoices?: any[];
 }
-
-// Convert any date value to YYYY-MM-DD local string safely
-const getLocalDateStr = (dateVal: any): string => {
-  if (!dateVal) return new Date().toISOString().split('T')[0];
-  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal.trim())) {
-    return dateVal.trim();
-  }
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0];
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Deterministic UUID / ID comparison helper
-const toDeterministicUuid = (val: any): string => {
-  if (!val) return '';
-  return String(val).trim().toLowerCase().replace(/[^0-9a-z]/g, '');
-};
 
 export default function OPDSummaryView({ appointments = [], users = [], invoices = [] }: OPDSummaryViewProps) {
   const [summaryType, setSummaryType] = useState<'date' | 'doctor' | 'month' | 'year'>('date');
@@ -86,103 +67,7 @@ export default function OPDSummaryView({ appointments = [], users = [], invoices
 
   // 1. Process and Reconcile appointments with invoices
   const processedAppts = useMemo(() => {
-    const invoiceList = Array.isArray(invoices) ? invoices : [];
-
-    return appointments.map((apt: any) => {
-      const aptId = apt.id;
-      const pId = apt.patient_id || apt.patientId;
-      const aptDateStr = getLocalDateStr(apt.appointment_date || apt.date || apt.created_at);
-      const docName = apt.doctor || apt.doctorName || (users.find((u: any) => u.id === apt.doctor_id || u.id === apt.doctorId)?.name) || 'General Consultation';
-      const docObj = users.find((u: any) => u.name === docName || u.id === apt.doctor_id);
-
-      // Match corresponding invoice from Billing
-      let matchedInv = invoiceList.find((inv: any) => {
-        if (inv.appointment_id && inv.appointment_id === aptId) return true;
-        if (inv.id === aptId || inv.id === `virtual-inv-opd-${aptId}`) return true;
-        if (aptId && inv.invoice_number && String(inv.invoice_number).includes(String(aptId))) return true;
-        return false;
-      });
-
-      if (!matchedInv) {
-        matchedInv = invoiceList.find((inv: any) => {
-          const invPid = inv.patient_id || inv.patientId;
-          const cleanInvPid = toDeterministicUuid(invPid);
-          const cleanAptPid = toDeterministicUuid(pId);
-          if (cleanInvPid !== cleanAptPid) return false;
-
-          const isOpd = (inv.type || '').toUpperCase() === 'OPD' ||
-            String(inv.invoice_number || '').startsWith('INV-OPD') ||
-            (inv.invoice_items || []).some((it: any) =>
-              ['OPD', 'CONSULTATION', 'OPD/CONSULTANCY'].includes((it.category || it.item_type || '').toUpperCase())
-            );
-          if (!isOpd) return false;
-
-          const invDateStr = getLocalDateStr(inv.created_at || inv.date);
-          return invDateStr === aptDateStr;
-        });
-      }
-
-      const isCancelled = (apt.status || '').toLowerCase() === 'cancelled' ||
-                          (apt.payment_status || '').toLowerCase() === 'cancelled';
-
-      // Base consultation fee determination
-      let grossFee = Number(matchedInv?.total_amount ?? apt.fee);
-      if ((!grossFee || isNaN(grossFee)) && !isCancelled) {
-        grossFee = docObj?.consultationFee ? Number(docObj.consultationFee) : 500;
-      }
-      grossFee = Math.max(0, grossFee || 0);
-
-      const discountAmount = Number(matchedInv?.discount_amount ?? apt.discount_amount ?? apt.discountAmount ?? 0);
-      const billedAmount = isCancelled ? 0 : Math.max(0, grossFee - discountAmount);
-
-      const rawPaymentStatus = String(matchedInv?.status || matchedInv?.payment_status || apt.payment_status || apt.paymentStatus || 'Pending').toLowerCase();
-      const isPaid = !isCancelled && (
-        rawPaymentStatus === 'paid' || 
-        rawPaymentStatus === 'settled' ||
-        (matchedInv?.paid_amount && Number(matchedInv.paid_amount) >= billedAmount && billedAmount > 0)
-      );
-      const isRefunded = !isCancelled && (
-        rawPaymentStatus === 'refunded' || 
-        apt.payment_status === 'Refunded'
-      );
-
-      const paidAmount = isCancelled ? 0 : (isPaid ? (Number(matchedInv?.paid_amount) || billedAmount) : (isRefunded ? 0 : Number(matchedInv?.paid_amount || 0)));
-      const pendingDue = isCancelled || isRefunded ? 0 : Math.max(0, billedAmount - paidAmount);
-
-      const paymentStatus = isCancelled ? 'Cancelled' : isRefunded ? 'Refunded' : isPaid ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Pending');
-      const paymentMode = matchedInv?.payment_method || matchedInv?.payment_mode || apt.payment_method || apt.payment_mode || 'Cash';
-
-      const dateParts = aptDateStr.split('-');
-      const year = dateParts[0] || new Date().getFullYear().toString();
-      const monthNum = dateParts[1] || '01';
-      const monthNames = [
-        "January", "February", "March", "April", "May", "June", 
-        "July", "August", "September", "October", "November", "December"
-      ];
-      const monthName = monthNames[parseInt(monthNum, 10) - 1] || "January";
-
-      return {
-        ...apt,
-        cleanDate: aptDateStr,
-        cleanDoctor: docName,
-        doctorDepartment: docObj?.department || apt.doctorDepartment || apt.department || 'General Medicine',
-        grossFee,
-        discountAmount,
-        billedAmount,
-        paidAmount,
-        pendingDue,
-        isCancelled,
-        isRefunded,
-        isPaid,
-        paymentStatus,
-        paymentMode,
-        invoiceNumber: matchedInv?.invoice_number || `INV-OPD-V-${aptId}`,
-        year,
-        monthNum,
-        monthName,
-        monthYear: `${monthName} ${year}`
-      };
-    });
+    return reconcileOPDAppointments(appointments, invoices, users);
   }, [appointments, users, invoices]);
 
   // 2. Filter processed appointments based on user criteria

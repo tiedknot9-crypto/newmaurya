@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { isDummyPatient } from '@/services/supabaseService';
 import { getLocalDateStr } from '@/lib/utils';
+import { toDeterministicUuid } from '@/lib/billingUtils';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,7 +70,17 @@ export function OPDCollectionTab({
 
   // Map raw appointments to include patient and doctor details
   const mappedApts = useMemo(() => {
-    return appointments.map((apt: any) => {
+    const matchedBillIds = new Set<string>();
+
+    // Sort appointments chronologically
+    const sortedAppointments = [...appointments].sort((a: any, b: any) => {
+      const aTime = new Date(a.appointment_date || a.created_at || 0).getTime();
+      const bTime = new Date(b.appointment_date || b.created_at || 0).getTime();
+      if (aTime !== bTime) return aTime - bTime;
+      return (Number(a.token_number || a.tokenNumber) || 0) - (Number(b.token_number || b.tokenNumber) || 0);
+    });
+
+    return sortedAppointments.map((apt: any) => {
       const pId = apt.patient_id || apt.patientId;
       const matchedPatient = patients.find((p: any) => 
         p.id === pId || 
@@ -87,21 +98,68 @@ export function OPDCollectionTab({
       
       const aptDate = apt.appointment_date || apt.date || apt.created_at || '';
       const dateStr = getLocalDateStr(aptDate);
+      const docName = apt.doctor || apt.doctorName || doc?.name || '';
       
-      const matchedBill = bills.find((b: any) => {
+      // 1. Direct ID match
+      let matchedBill = bills.find((b: any) => {
+        if (matchedBillIds.has(b.id)) return false;
         if (b.appointment_id && b.appointment_id === apt.id) return true;
         if (b.id === apt.id || b.id === `virtual-inv-opd-${apt.id}`) return true;
         if (apt.id && b.invoice_number && String(b.invoice_number).includes(String(apt.id))) return true;
-
-        const bPid = b.patient_id || b.patientId;
-        const isMatchP = bPid === pId || (pId && String(bPid).includes(String(pId)));
-        const isOpdInv = b.type === 'OPD' || String(b.invoice_number || '').includes('OPD');
-        const bDateStr = getLocalDateStr(b.created_at || b.date);
-        return isMatchP && isOpdInv && bDateStr === dateStr;
+        return false;
       });
+
+      // 2. Patient match with specific doctor on same date
+      if (!matchedBill) {
+        matchedBill = bills.find((b: any) => {
+          if (matchedBillIds.has(b.id)) return false;
+          const cleanBPid = toDeterministicUuid(b.patient_id || b.patientId);
+          const cleanAPid = toDeterministicUuid(pId);
+          if (cleanBPid !== cleanAPid) return false;
+          const isOpdInv = b.type === 'OPD' || String(b.invoice_number || '').includes('OPD');
+          if (!isOpdInv) return false;
+          const bDateStr = getLocalDateStr(b.created_at || b.date);
+          if (bDateStr !== dateStr) return false;
+
+          const itemDesc = b.invoice_items?.[0]?.description || b.invoice_items?.[0]?.item_name || '';
+          if (docName && itemDesc.toLowerCase().includes(docName.toLowerCase().trim())) return true;
+          return false;
+        });
+      }
+
+      // 3. Fallback: Patient match on same date
+      if (!matchedBill) {
+        matchedBill = bills.find((b: any) => {
+          if (matchedBillIds.has(b.id)) return false;
+          const cleanBPid = toDeterministicUuid(b.patient_id || b.patientId);
+          const cleanAPid = toDeterministicUuid(pId);
+          if (cleanBPid !== cleanAPid) return false;
+          const isOpdInv = b.type === 'OPD' || String(b.invoice_number || '').includes('OPD');
+          if (!isOpdInv) return false;
+          const bDateStr = getLocalDateStr(b.created_at || b.date);
+          return bDateStr === dateStr;
+        });
+      }
+
+      if (matchedBill) {
+        matchedBillIds.add(matchedBill.id);
+      }
+
+      let finalDoctor = doc?.name || apt.doctor || apt.doctorName || 'GP / Duty Doctor';
+      if (matchedBill?.invoice_items && matchedBill.invoice_items.length > 0) {
+        const itemDesc = matchedBill.invoice_items[0].description || matchedBill.invoice_items[0].item_name || '';
+        const docMatch = itemDesc.match(/(?:Appointment|Consultation) Fee - (.+)/i);
+        if (docMatch && docMatch[1] && docMatch[1].trim()) {
+          finalDoctor = docMatch[1].trim();
+        }
+      }
 
       const paymentMethod = matchedBill?.payment_method || matchedBill?.paymentMode || apt.payment_method || apt.payment_mode || apt.paymentMode || 'Cash';
       const paymentRefNo = matchedBill?.payment_reference || apt.payment_ref_no || apt.paymentRefNo || '';
+
+      const fee = Number(matchedBill?.total_amount ?? apt.fee ?? 500);
+      const discountAmount = Number(matchedBill?.discount_amount ?? apt.discount_amount ?? apt.discountAmount ?? 0);
+      const paymentStatus = matchedBill?.payment_status || matchedBill?.status || apt.payment_status || 'Pending';
 
       return {
         ...apt,
@@ -109,14 +167,14 @@ export function OPDCollectionTab({
         patientName: matchedPatient?.name || apt.patientName || 'Unknown',
         patientPhone: matchedPatient?.phone || apt.patientPhone || 'N/A',
         patientMrn: matchedPatient?.mrn || apt.patientMrn || 'N/A',
-        doctor: doc?.name || apt.doctor || apt.doctorName || 'GP / Duty Doctor',
+        doctor: finalDoctor,
         doctorDepartment: doc?.department || apt.doctorDepartment || 'General Medicine',
         dateStr,
-        fee: Number(apt.fee || 500),
-        discountAmount: Number(apt.discount_amount || apt.discountAmount || 0),
+        fee,
+        discountAmount,
         discountGivenBy: apt.discount_given_by || apt.discountGivenBy || null,
         refundGivenBy: apt.refund_given_by || apt.refundGivenBy || null,
-        paymentStatus: apt.payment_status || 'Pending',
+        paymentStatus,
         paymentMethod,
         paymentRefNo
       };

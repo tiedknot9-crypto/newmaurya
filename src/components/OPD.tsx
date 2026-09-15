@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/select';
 import { MOCK_USERS, MOCK_PATIENTS, MOCK_APPOINTMENTS } from '@/mockData';
 import { formatDate } from '@/lib/utils';
+import { reconcileInvoicesAndAppointments } from '@/lib/billingUtils';
 import { toast } from 'sonner';
 import { getFilteredPatientsPool, matchPatient, getPatientDisplayName, getPatientDisplayId, isWalkInPatient } from '@/utils/patientSearch';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
@@ -360,7 +361,15 @@ export default function OPD() {
       
       if (patientsData) setPatients(patientsData);
       if (staffData && staffData.length > 0) setUsers(staffData);
-      if (invoicesData) setInvoices(invoicesData);
+
+      const reconciledBills = reconcileInvoicesAndAppointments(
+        invoicesData || [],
+        appointmentsData || [],
+        patientsData || [],
+        staffData || []
+      );
+      setInvoices(reconciledBills);
+
       if (appointmentsData) {
         const staffList = staffData || users || [];
         const doctorsList = staffList.filter((u: any) => u.role?.toUpperCase() === 'DOCTOR' || u.role?.toUpperCase() === 'SUPER_ADMIN' || u.role?.toUpperCase() === 'SURGEON');
