@@ -51,43 +51,16 @@ import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { syncOfflineDataWithSupabase, getSupabaseUnreachable, setSupabaseUnreachable, supabaseService } from '@/services/supabaseService';
 import { DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
 import { normalizeRole } from '@/utils/rbac';
-
-
+import { compressImageFile } from '@/utils/imageCompression';
 
 const resizeImage = (file: File, maxW: number, maxH: number, callback: (resized: string) => void) => {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
-      
-      if (width > height) {
-        if (width > maxW) {
-          height = Math.round((height * maxW) / width);
-          width = maxW;
-        }
-      } else {
-        if (height > maxH) {
-          width = Math.round((width * maxH) / height);
-          height = maxH;
-        }
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, width, height);
-        callback(canvas.toDataURL('image/png'));
-      } else {
-        callback(e.target?.result as string);
-      }
-    };
-    img.src = e.target?.result as string;
-  };
-  reader.readAsDataURL(file);
+  compressImageFile(file, { maxWidth: maxW, maxHeight: maxH, quality: 0.82 })
+    .then((compressed) => callback(compressed))
+    .catch(() => {
+      const reader = new FileReader();
+      reader.onload = (e) => callback(e.target?.result as string);
+      reader.readAsDataURL(file);
+    });
 };
 
 export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }: { currentUser?: any, onUserUpdate?: (user: any) => void, onHospitalUpdate?: (info: any) => void }) {
@@ -650,39 +623,57 @@ export default function Settings({ currentUser, onUserUpdate, onHospitalUpdate }
     syncFooterToDB();
   }, [prescriptionFooterImage]);
 
-  const handleHeaderUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleHeaderUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPrescriptionHeaderImage(reader.result as string);
-        toast.success('Prescription Header uploaded successfully');
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, { maxWidth: 1400, maxHeight: 800, quality: 0.82 });
+        setPrescriptionHeaderImage(compressed);
+        toast.success('Prescription Header optimized & uploaded successfully');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPrescriptionHeaderImage(reader.result as string);
+          toast.success('Prescription Header uploaded successfully');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleFooterUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFooterUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPrescriptionFooterImage(reader.result as string);
-        toast.success('Prescription Footer uploaded successfully');
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, { maxWidth: 1400, maxHeight: 800, quality: 0.82 });
+        setPrescriptionFooterImage(compressed);
+        toast.success('Prescription Footer optimized & uploaded successfully');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPrescriptionFooterImage(reader.result as string);
+          toast.success('Prescription Footer uploaded successfully');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleTemplateUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleTemplateUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setTemplateImage(reader.result as string);
-        toast.success('Document template updated successfully');
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, { maxWidth: 1400, maxHeight: 1000, quality: 0.82 });
+        setTemplateImage(compressed);
+        toast.success('Document template optimized & updated successfully');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setTemplateImage(reader.result as string);
+          toast.success('Document template updated successfully');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
   // Hospital Info State

@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
+import { compressImageFile } from '@/utils/imageCompression';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
 import { toast } from 'sonner';
@@ -1072,17 +1073,25 @@ View full details at: ${shareUrl}
     return filteredList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selectedPatient, clinicalNotes, prescriptions, staff, historyFilter]);
 
-  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      try {
+        const compressedUrl = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
         setUploadedFile({
           name: file.name,
-          url: event.target?.result as string
+          url: compressedUrl
         });
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setUploadedFile({
+            name: file.name,
+            url: event.target?.result as string
+          });
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -45,21 +45,32 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-import Dashboard from './components/Dashboard';
-import OPD from './components/OPD';
-import IPD from './components/IPD';
-import Maternity from './components/Maternity';
-import Expenses from './components/Expenses';
-import OTManagement from './components/OTManagement';
-import PatientOverview from './components/PatientOverview';
-import Lab from './components/Lab';
-import Login from './components/Login';
-import UserManual from './components/UserManual';
-import Billing from './components/Billing';
-import AdminSettings from './components/Settings';
-import Staff from './components/Staff';
-import Pharmacy from './components/Pharmacy';
-import PharmacyPOS from './components/PharmacyPOS';
+// Code-split heavy routes for rapid initial load and low memory consumption
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const OPD = lazy(() => import('./components/OPD'));
+const IPD = lazy(() => import('./components/IPD'));
+const Maternity = lazy(() => import('./components/Maternity'));
+const Expenses = lazy(() => import('./components/Expenses'));
+const OTManagement = lazy(() => import('./components/OTManagement'));
+const PatientOverview = lazy(() => import('./components/PatientOverview'));
+const Lab = lazy(() => import('./components/Lab'));
+const Login = lazy(() => import('./components/Login'));
+const UserManual = lazy(() => import('./components/UserManual'));
+const Billing = lazy(() => import('./components/Billing'));
+const AdminSettings = lazy(() => import('./components/Settings'));
+const Staff = lazy(() => import('./components/Staff'));
+const Pharmacy = lazy(() => import('./components/Pharmacy'));
+const PharmacyPOS = lazy(() => import('./components/PharmacyPOS'));
+
+function PageLoader() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[350px] h-full w-full gap-3 p-8 text-slate-500">
+      <div className="w-8 h-8 rounded-full border-3 border-medical-blue/20 border-t-medical-blue animate-spin" />
+      <p className="text-xs font-medium text-slate-400">Loading module...</p>
+    </div>
+  );
+}
+
 import { SyncStatusBadge } from './components/SyncStatusBadge';
 
 import { storage, STORAGE_KEYS } from '@/lib/storage';
@@ -731,10 +742,10 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <>
+      <Suspense fallback={<PageLoader />}>
         <Login onLogin={handleLogin} />
         <Toaster position="top-right" />
-      </>
+      </Suspense>
     );
   }
 
@@ -826,22 +837,24 @@ function AppLayout({ user, hospitalInfo, handleLogout, isMobileMenuOpen, setIsMo
 
         {/* Viewport */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <Routes>
-            <Route path="/" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'RADIOLOGIST']}><Dashboard /></ProtectedRoute>} />
-            <Route path="/opd" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS']}><OPD /></ProtectedRoute>} />
-            <Route path="/ipd" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS']}><IPD /></ProtectedRoute>} />
-            <Route path="/maternity" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Maternity /></ProtectedRoute>} />
-            <Route path="/ot" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'SURGEON', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><OTManagement /></ProtectedRoute>} />
-            <Route path="/lab" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'LAB_STAFF', 'ACCOUNTANT', 'ACCOUNTS', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'RADIOLOGIST', 'PATHOLOGIST', 'DOCTOR']}><Lab /></ProtectedRoute>} />
-            <Route path="/patient-overview" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'ACCOUNTANT', 'ACCOUNTS']}><PatientOverview userRole={user?.role} /></ProtectedRoute>} />
-            <Route path="/pharmacy" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><Pharmacy /></ProtectedRoute>} />
-            <Route path="/pharmacy/pos" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><PharmacyPOS /></ProtectedRoute>} />
-            <Route path="/expenses" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><Expenses /></ProtectedRoute>} />
-            <Route path="/billing" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Billing /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><AdminSettings currentUser={user} onUserUpdate={(updatedUser) => setUser(updatedUser)} onHospitalUpdate={(info) => setHospitalInfo(info)} /></ProtectedRoute>} />
-            <Route path="/staff" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN']}><Staff /></ProtectedRoute>} />
-            <Route path="/manual" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST']}><UserManual /></ProtectedRoute>} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'RADIOLOGIST']}><Dashboard /></ProtectedRoute>} />
+              <Route path="/opd" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS']}><OPD /></ProtectedRoute>} />
+              <Route path="/ipd" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'ACCOUNTANT', 'ACCOUNTS']}><IPD /></ProtectedRoute>} />
+              <Route path="/maternity" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Maternity /></ProtectedRoute>} />
+              <Route path="/ot" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'SURGEON', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><OTManagement /></ProtectedRoute>} />
+              <Route path="/lab" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'LAB_STAFF', 'ACCOUNTANT', 'ACCOUNTS', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'RADIOLOGIST', 'PATHOLOGIST', 'DOCTOR']}><Lab /></ProtectedRoute>} />
+              <Route path="/patient-overview" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'ACCOUNTANT', 'ACCOUNTS']}><PatientOverview userRole={user?.role} /></ProtectedRoute>} />
+              <Route path="/pharmacy" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><Pharmacy /></ProtectedRoute>} />
+              <Route path="/pharmacy/pos" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE']}><PharmacyPOS /></ProtectedRoute>} />
+              <Route path="/expenses" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><Expenses /></ProtectedRoute>} />
+              <Route path="/billing" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Billing /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><AdminSettings currentUser={user} onUserUpdate={(updatedUser) => setUser(updatedUser)} onHospitalUpdate={(info) => setHospitalInfo(info)} /></ProtectedRoute>} />
+              <Route path="/staff" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN']}><Staff /></ProtectedRoute>} />
+              <Route path="/manual" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST']}><UserManual /></ProtectedRoute>} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
     </div>

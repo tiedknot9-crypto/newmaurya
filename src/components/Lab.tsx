@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { compressImageFile } from '@/utils/imageCompression';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { printHtmlWithPreview } from '@/components/PrintPreviewModal';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
@@ -513,52 +514,82 @@ export default function Lab() {
   const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
-  const handleExternalUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleExternalUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!checkPermission()) return;
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      try {
+        const compressedUrl = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
         const patient = patients.find(p => p.id === selectedPatientId);
         const newReport = {
           id: `EXT-${Date.now()}`,
           patentName: patient?.name || 'Walk-in Patient',
           testName: file.name.split('.')[0],
           date: new Date().toISOString(),
-          url: event.target?.result as string
+          url: compressedUrl
         };
         const updated = [newReport, ...externalReports];
         setExternalReports(updated);
         storage.set(STORAGE_KEYS.EXTERNAL_REPORTS, updated);
-        toast.success('External report uploaded successfully');
-      };
-      reader.readAsDataURL(file);
+        toast.success('External report optimized & uploaded successfully');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const patient = patients.find(p => p.id === selectedPatientId);
+          const newReport = {
+            id: `EXT-${Date.now()}`,
+            patentName: patient?.name || 'Walk-in Patient',
+            testName: file.name.split('.')[0],
+            date: new Date().toISOString(),
+            url: event.target?.result as string
+          };
+          const updated = [newReport, ...externalReports];
+          setExternalReports(updated);
+          storage.set(STORAGE_KEYS.EXTERNAL_REPORTS, updated);
+          toast.success('External report uploaded successfully');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleRadiologyUpload = (e: ChangeEvent<HTMLInputElement>, orderId: string) => {
+  const handleRadiologyUpload = async (e: ChangeEvent<HTMLInputElement>, orderId: string) => {
     if (!checkPermission()) return;
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      try {
+        const compressedUrl = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
         const newFile = {
           id: `RAD-IMG-${Date.now()}`,
           orderId: orderId,
-          url: event.target?.result as string,
+          url: compressedUrl,
           type: 'X-Ray'
         };
         const updated = [newFile, ...radiologyFiles];
         setRadiologyFiles(updated);
         storage.set(STORAGE_KEYS.RADIOLOGY_FILES, updated);
-        toast.success('Radiology scan uploaded successfully');
-      };
-      reader.readAsDataURL(file);
+        toast.success('Radiology scan optimized & uploaded successfully');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const newFile = {
+            id: `RAD-IMG-${Date.now()}`,
+            orderId: orderId,
+            url: event.target?.result as string,
+            type: 'X-Ray'
+          };
+          const updated = [newFile, ...radiologyFiles];
+          setRadiologyFiles(updated);
+          storage.set(STORAGE_KEYS.RADIOLOGY_FILES, updated);
+          toast.success('Radiology scan uploaded successfully');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
   // Workstation interactive actions
-  const handleWorkstationUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleWorkstationUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!checkPermission()) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -566,22 +597,37 @@ export default function Lab() {
         toast.error('Please select an active radiology order first');
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64Url = reader.result as string;
+      try {
+        const compressedUrl = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
         const newFile = {
           id: `rf-${Date.now()}`,
           orderId: selectedRadioOrder,
-          url: base64Url,
+          url: compressedUrl,
           type: file.type
         };
         const updated = [newFile, ...radiologyFiles];
         setRadiologyFiles(updated);
         storage.set(STORAGE_KEYS.RADIOLOGY_FILES, updated);
-        setUploadedRadioUrl(base64Url);
-        toast.success('Radiology scan uploaded successfully to current order!');
-      };
-      reader.readAsDataURL(file);
+        setUploadedRadioUrl(compressedUrl);
+        toast.success('Radiology scan optimized & uploaded successfully to current order!');
+      } catch (err) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Url = reader.result as string;
+          const newFile = {
+            id: `rf-${Date.now()}`,
+            orderId: selectedRadioOrder,
+            url: base64Url,
+            type: file.type
+          };
+          const updated = [newFile, ...radiologyFiles];
+          setRadiologyFiles(updated);
+          storage.set(STORAGE_KEYS.RADIOLOGY_FILES, updated);
+          setUploadedRadioUrl(base64Url);
+          toast.success('Radiology scan uploaded successfully to current order!');
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

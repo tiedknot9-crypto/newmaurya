@@ -35,7 +35,11 @@ import {
   Building2,
   UserCheck,
   AlertTriangle,
-  Users
+  Users,
+  MapPin,
+  Paperclip,
+  Upload,
+  Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,6 +82,20 @@ import { supabaseService, isDummyPatient } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { canUserModifyRecord, normalizeRole } from '@/utils/rbac';
 import { ConfirmDialog } from './ConfirmDialog';
+import { COMMON_ICD_CODES } from '@/data/icdCodes';
+import {
+  DischargeMedicineItem,
+  DischargeAttachmentItem,
+  DischargeConsentData,
+  COMMON_MEDICINE_PRESETS,
+  formatMedicinesToText,
+  convertPrescriptionToMedicines,
+  DischargeMedicationTable,
+  DischargeAttachmentsManager,
+  IcdCodeSelector,
+  DischargeConsentSection,
+  AttachmentPreviewModal
+} from './DischargeSummaryComponents';
 
 interface AdmissionFormDataPayload {
   patient_id: string;
@@ -419,21 +437,232 @@ export default function IPD() {
   });
 
   // Discharge Summary states
-  const [dischargeForm, setDischargeForm] = useState({
+  const [dischargeForm, setDischargeForm] = useState<{
+    id?: string;
+    patientId: string;
+    admissionId?: string;
+    admissionDate?: string;
+    dischargeType: string;
+    followUpDate: string;
+    medications: string;
+    clinicalSummary: string;
+    dischargeDate: string;
+    dischargeBy: string;
+    patientAddress: string;
+    updatePatientAddressInProfile: boolean;
+    icdCode: string;
+    icdDescription: string;
+    diagnosis: string;
+    medicines: DischargeMedicineItem[];
+    attachments: DischargeAttachmentItem[];
+    dischargeConsent: DischargeConsentData;
+    treatmentGiven?: string;
+    conditionAtDischarge?: string;
+  }>({
     patientId: '',
     dischargeType: 'Routine / Improved',
     followUpDate: '',
     medications: '',
     clinicalSummary: '',
     dischargeDate: new Date().toISOString().substring(0, 10),
-    dischargeBy: ''
+    dischargeBy: '',
+    patientAddress: '',
+    updatePatientAddressInProfile: true,
+    icdCode: '',
+    icdDescription: '',
+    diagnosis: '',
+    medicines: [],
+    attachments: [],
+    dischargeConsent: {
+      consentType: 'Routine / Improved',
+      signatoryType: 'Patient',
+      attendantName: '',
+      attendantRelation: 'Self',
+      attendantPhone: '',
+      consentAgreed: true,
+      consentNotes: '',
+      consentTimestamp: new Date().toISOString()
+    },
+    treatmentGiven: '',
+    conditionAtDischarge: 'Clinically stable, oriented, vitals normal'
   });
+
+  const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<DischargeAttachmentItem | null>(null);
+
   const [dischargeAuxDetails, setDischargeAuxDetails] = useState<{
     vitals: any[];
     notes: any[];
     prescriptions: any[];
   }>({ vitals: [], notes: [], prescriptions: [] });
   const [loadingDischargeAux, setLoadingDischargeAux] = useState(false);
+
+  // Autofetch records from admission, IPD, doctor notes, and vitals with full edit facility
+  const handleAutofetchDischargeData = async (targetPatientId?: string) => {
+    const pId = targetPatientId || dischargeForm.patientId;
+    if (!pId) {
+      toast.error('Please select an inpatient or registered patient first to auto-fetch details.');
+      return;
+    }
+    const pat = patients.find(p => p.id === pId) || MOCK_PATIENTS.find(p => p.id === pId);
+    const activeAdmission = admissions.find(
+      a => (a.patient_id === pId || a.patientId === pId) && a.status === 'Admitted'
+    ) || admissions.find(a => a.patient_id === pId || a.patientId === pId);
+
+    const autoDoc = getAttendingDoctorName(pId) || activeAdmission?.doctor_name || activeAdmission?.doctor || currentUser?.name || 'Dr. Rajesh Sharma';
+
+    setLoadingDischargeAux(true);
+    try {
+      const [vts, nts, rxs] = await Promise.all([
+        supabaseService.getPatientVitals ? supabaseService.getPatientVitals(pId) : Promise.resolve([]),
+        supabaseService.getClinicalNotes ? supabaseService.getClinicalNotes(pId) : Promise.resolve([]),
+        supabaseService.getPrescriptions ? supabaseService.getPrescriptions(pId) : Promise.resolve([]),
+      ]);
+
+      setDischargeAuxDetails({
+        vitals: vts || [],
+        notes: nts || [],
+        prescriptions: rxs || []
+      });
+
+      const pAddress = pat?.address || pat?.residential_address || '';
+      const admReason = activeAdmission?.reason || activeAdmission?.diagnosis || '';
+
+      // Check if admission reason matches any ICD code
+      let matchedCode = '';
+      let matchedDesc = '';
+      if (admReason) {
+        const lowerReason = admReason.toLowerCase();
+        const found = COMMON_ICD_CODES.find(icd => 
+          lowerReason.includes(icd.description.toLowerCase()) || 
+          icd.description.toLowerCase().includes(lowerReason)
+        );
+        if (found) {
+          matchedCode = found.code;
+          matchedDesc = found.description;
+        }
+      }
+
+      const vitalsText = formatVitalsToText(vts || []);
+      const notesText = formatNotesToText(nts || []);
+      const draft = generateAutoSummary(pat, admReason, vitalsText, notesText);
+
+      // Convert latest prescriptions to structured medicines
+      let importedMeds: DischargeMedicineItem[] = [];
+      if (rxs && rxs.length > 0) {
+        importedMeds = convertPrescriptionToMedicines(rxs[0]);
+      }
+
+      setDischargeForm(prev => {
+        const medsToUse = prev.medicines.length > 0 ? prev.medicines : importedMeds;
+        const medsText = medsToUse.length > 0 ? formatMedicinesToText(medsToUse) : prev.medications;
+
+        return {
+          ...prev,
+          patientId: pId,
+          dischargeBy: prev.dischargeBy || autoDoc,
+          patientAddress: prev.patientAddress || pAddress,
+          admissionDate: activeAdmission?.admission_date || activeAdmission?.admissionDate || activeAdmission?.created_at || prev.admissionDate || new Date().toISOString().substring(0, 10),
+          diagnosis: prev.diagnosis || admReason,
+          icdCode: prev.icdCode || matchedCode,
+          icdDescription: prev.icdDescription || matchedDesc || admReason,
+          clinicalSummary: prev.clinicalSummary || draft,
+          medicines: medsToUse,
+          medications: medsText,
+          dischargeConsent: {
+            ...prev.dischargeConsent,
+            attendantName: prev.dischargeConsent.attendantName || pat?.name || '',
+            attendantPhone: prev.dischargeConsent.attendantPhone || pat?.phone || ''
+          }
+        };
+      });
+
+      toast.success(`Autofetched records for ${pat?.name || 'patient'}! All fields are ready to edit.`);
+    } catch (err) {
+      console.warn('Error autofetching records for discharge:', err);
+      toast.error('Failed to autofetch auxiliary records.');
+    } finally {
+      setLoadingDischargeAux(false);
+    }
+  };
+
+  const handleStartEditSummary = (summary: any) => {
+    const pat = patients.find(p => p.id === (summary.patient_id || summary.patientId)) || MOCK_PATIENTS.find(p => p.id === (summary.patient_id || summary.patientId));
+    setEditingSummaryId(summary.id);
+    setDischargeSearchTerm(pat?.name || '');
+    setDischargeForm({
+      id: summary.id,
+      patientId: summary.patient_id || summary.patientId || '',
+      admissionId: summary.admission_id || summary.admissionId || '',
+      admissionDate: summary.admissionDate || summary.admission_date || '',
+      dischargeType: summary.dischargeType || summary.discharge_type || 'Routine / Improved',
+      followUpDate: summary.followUpDate || summary.follow_up_date || '',
+      medications: summary.medications || '',
+      clinicalSummary: summary.clinicalSummary || summary.clinical_summary || '',
+      dischargeDate: summary.dischargeDate ? summary.dischargeDate.substring(0, 10) : new Date().toISOString().substring(0, 10),
+      dischargeBy: summary.dischargeBy || summary.discharge_by || '',
+      patientAddress: summary.patientAddress || pat?.address || pat?.residential_address || '',
+      updatePatientAddressInProfile: true,
+      icdCode: summary.icdCode || summary.icd_code || '',
+      icdDescription: summary.icdDescription || summary.icd_description || '',
+      diagnosis: summary.diagnosis || summary.icdDescription || '',
+      medicines: Array.isArray(summary.medicines) ? summary.medicines : [],
+      attachments: Array.isArray(summary.attachments) ? summary.attachments : [],
+      dischargeConsent: summary.dischargeConsent || {
+        consentType: summary.dischargeType || 'Routine / Improved',
+        signatoryType: 'Patient',
+        attendantName: pat?.name || '',
+        attendantRelation: 'Self',
+        attendantPhone: pat?.phone || '',
+        consentAgreed: true,
+        consentNotes: '',
+        consentTimestamp: new Date().toISOString()
+      },
+      treatmentGiven: summary.treatmentGiven || '',
+      conditionAtDischarge: summary.conditionAtDischarge || 'Clinically stable, oriented, vitals normal'
+    });
+    setIsSummaryDetailsOpen(false);
+
+    const cardEl = document.getElementById('discharge-summary-form-card');
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth' });
+    }
+    toast.info(`Loaded discharge summary for ${pat?.name || 'patient'} in edit mode.`);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSummaryId(null);
+    setDischargeForm({
+      patientId: '',
+      dischargeType: 'Routine / Improved',
+      followUpDate: '',
+      medications: '',
+      clinicalSummary: '',
+      dischargeDate: new Date().toISOString().substring(0, 10),
+      dischargeBy: '',
+      patientAddress: '',
+      updatePatientAddressInProfile: true,
+      icdCode: '',
+      icdDescription: '',
+      diagnosis: '',
+      medicines: [],
+      attachments: [],
+      dischargeConsent: {
+        consentType: 'Routine / Improved',
+        signatoryType: 'Patient',
+        attendantName: '',
+        attendantRelation: 'Self',
+        attendantPhone: '',
+        consentAgreed: true,
+        consentNotes: '',
+        consentTimestamp: new Date().toISOString()
+      },
+      treatmentGiven: '',
+      conditionAtDischarge: 'Clinically stable, oriented, vitals normal'
+    });
+    setDischargeSearchTerm('');
+    toast.info('Cancelled edit mode.');
+  };
 
   useEffect(() => {
     const fetchAuxDetailsForDischarge = async () => {
@@ -1043,6 +1272,87 @@ export default function IPD() {
       return;
     }
 
+    const pat = patients.find(p => p.id === patientId) || MOCK_PATIENTS.find(p => p.id === patientId);
+
+    // If in editing mode, update the existing summary without re-discharging bed
+    if (editingSummaryId) {
+      const finalMedsText = dischargeForm.medicines.length > 0 
+        ? formatMedicinesToText(dischargeForm.medicines) 
+        : dischargeForm.medications;
+
+      const summaryData = {
+        id: editingSummaryId,
+        admissionId: dischargeForm.admissionId || 'adm-' + Date.now(),
+        patientId,
+        dischargeType,
+        followUpDate,
+        medications: finalMedsText,
+        clinicalSummary,
+        dischargeDate: dischargeDate ? new Date(dischargeDate).toISOString() : new Date().toISOString(),
+        dischargeBy: dischargeForm.dischargeBy || currentUser?.name || 'Dr. Rajesh Sharma',
+        admissionDate: dischargeForm.admissionDate || new Date().toISOString(),
+        patientAddress: dischargeForm.patientAddress || pat?.address || '',
+        icdCode: dischargeForm.icdCode,
+        icdDescription: dischargeForm.icdDescription,
+        diagnosis: dischargeForm.diagnosis || dischargeForm.icdDescription,
+        medicines: dischargeForm.medicines,
+        attachments: dischargeForm.attachments,
+        dischargeConsent: dischargeForm.dischargeConsent,
+        treatmentGiven: dischargeForm.treatmentGiven,
+        conditionAtDischarge: dischargeForm.conditionAtDischarge
+      };
+
+      const updated = await supabaseService.updateDischargeSummary(editingSummaryId, summaryData);
+      if (updated) {
+        setDischargeSummaries(dischargeSummaries.map(s => s.id === editingSummaryId ? updated : s));
+      } else {
+        const updatedList = dischargeSummaries.map(s => s.id === editingSummaryId ? { ...s, ...summaryData } : s);
+        setDischargeSummaries(updatedList);
+        localStorage.setItem('hms_discharge_summaries', JSON.stringify(updatedList));
+      }
+
+      if (dischargeForm.updatePatientAddressInProfile && dischargeForm.patientAddress) {
+        await supabaseService.updatePatient(patientId, { address: dischargeForm.patientAddress });
+        setPatients(patients.map(p => p.id === patientId ? { ...p, address: dischargeForm.patientAddress } : p));
+      }
+
+      toast.success('Discharge summary updated successfully!');
+      logAudit('Update Discharge Summary', patientId, summaryData);
+      setDischargedSummaryToShow(summaryData);
+      setIsSummaryDetailsOpen(true);
+      setEditingSummaryId(null);
+      setDischargeForm({
+        patientId: '',
+        dischargeType: 'Routine / Improved',
+        followUpDate: '',
+        medications: '',
+        clinicalSummary: '',
+        dischargeDate: new Date().toISOString().substring(0, 10),
+        dischargeBy: '',
+        patientAddress: '',
+        updatePatientAddressInProfile: true,
+        icdCode: '',
+        icdDescription: '',
+        diagnosis: '',
+        medicines: [],
+        attachments: [],
+        dischargeConsent: {
+          consentType: 'Routine / Improved',
+          signatoryType: 'Patient',
+          attendantName: '',
+          attendantRelation: 'Self',
+          attendantPhone: '',
+          consentAgreed: true,
+          consentNotes: '',
+          consentTimestamp: new Date().toISOString()
+        },
+        treatmentGiven: '',
+        conditionAtDischarge: 'Clinically stable, oriented, vitals normal'
+      });
+      setDischargeSearchTerm('');
+      return;
+    }
+
     const outstandingDues = checkPatientDues(patientId);
     if (outstandingDues > 0 && !bypassDues) {
       toast.error(`Cannot discharge patient. There are outstanding dues of ${formatCurrency(outstandingDues)}. Please clear all bills first or check the Bypass box.`);
@@ -1077,17 +1387,30 @@ export default function IPD() {
     const patientAdmission = admissions.find(a => (a.patient_id === patientId || a.patientId === patientId));
     const admissionDateVal = activeAdmission?.admission_date || activeAdmission?.admissionDate || activeAdmission?.created_at || patientAdmission?.admission_date || patientAdmission?.admissionDate || patientAdmission?.created_at || new Date().toISOString();
 
+    const finalMedsText = dischargeForm.medicines.length > 0 
+      ? formatMedicinesToText(dischargeForm.medicines) 
+      : dischargeForm.medications;
+
     const summaryData = {
       id: 'sum-' + Date.now(),
       admissionId: admissionId,
       patientId: patientId,
       dischargeType,
       followUpDate,
-      medications,
+      medications: finalMedsText,
       clinicalSummary,
       dischargeDate: finalDischargeDate,
       dischargeBy: dischargeForm.dischargeBy || currentUser?.name || 'Dr. Rajesh Sharma',
-      admissionDate: admissionDateVal
+      admissionDate: admissionDateVal,
+      patientAddress: dischargeForm.patientAddress || pat?.address || '',
+      icdCode: dischargeForm.icdCode,
+      icdDescription: dischargeForm.icdDescription,
+      diagnosis: dischargeForm.diagnosis || dischargeForm.icdDescription,
+      medicines: dischargeForm.medicines,
+      attachments: dischargeForm.attachments,
+      dischargeConsent: dischargeForm.dischargeConsent,
+      treatmentGiven: dischargeForm.treatmentGiven,
+      conditionAtDischarge: dischargeForm.conditionAtDischarge
     };
 
     const savedSummary = await supabaseService.createDischargeSummary(summaryData);
@@ -1099,6 +1422,11 @@ export default function IPD() {
       const updatedList = [summaryData, ...summariesList];
       localStorage.setItem('hms_discharge_summaries', JSON.stringify(updatedList));
       setDischargeSummaries(updatedList);
+    }
+
+    if (dischargeForm.updatePatientAddressInProfile && dischargeForm.patientAddress) {
+      await supabaseService.updatePatient(patientId, { address: dischargeForm.patientAddress });
+      setPatients(patients.map(p => p.id === patientId ? { ...p, address: dischargeForm.patientAddress } : p));
     }
 
     if (bed) {
@@ -1137,7 +1465,26 @@ export default function IPD() {
       medications: '',
       clinicalSummary: '',
       dischargeDate: new Date().toISOString().substring(0, 10),
-      dischargeBy: ''
+      dischargeBy: '',
+      patientAddress: '',
+      updatePatientAddressInProfile: true,
+      icdCode: '',
+      icdDescription: '',
+      diagnosis: '',
+      medicines: [],
+      attachments: [],
+      dischargeConsent: {
+        consentType: 'Routine / Improved',
+        signatoryType: 'Patient',
+        attendantName: '',
+        attendantRelation: 'Self',
+        attendantPhone: '',
+        consentAgreed: true,
+        consentNotes: '',
+        consentTimestamp: new Date().toISOString()
+      },
+      treatmentGiven: '',
+      conditionAtDischarge: 'Clinically stable, oriented, vitals normal'
     });
     setDischargeSearchTerm('');
     setBypassDues(false);
@@ -1181,9 +1528,35 @@ export default function IPD() {
       return;
     }
 
-    const medsList = summary.medications
-      ? summary.medications.split('\n').map((m: string) => `<li>${m}</li>`).join('')
-      : '<li>No home medications prescribed</li>';
+    const hasStructuredMeds = Array.isArray(summary.medicines) && summary.medicines.length > 0;
+    const structuredMedsHtml = hasStructuredMeds ? `
+      <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <thead>
+          <tr style="background: #f1f5f9; text-align: left; font-size: 11px;">
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 5%;">#</th>
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 35%;">Medicine & Strength</th>
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 15%;">Dosage</th>
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 15%;">Frequency</th>
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 15%;">Duration</th>
+            <th style="padding: 6px 8px; border: 1px solid #cbd5e1; width: 15%;">Instructions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summary.medicines.map((m: any, i: number) => `
+            <tr style="font-size: 11px;">
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0; text-align: center;">${i + 1}</td>
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 600;">${m.name || 'Medicine'}</td>
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0;">${m.dosage || '-'}</td>
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-weight: 500;">${m.frequency || '-'}</td>
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0;">${m.duration || '-'}</td>
+              <td style="padding: 6px 8px; border: 1px solid #e2e8f0; color: #475569;">${m.instructions || 'As advised'}${m.route && m.route !== 'Oral' ? ` [${m.route}]` : ''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : (summary.medications
+      ? `<ul class="meds-list">${summary.medications.split('\n').map((m: string) => `<li>${m}</li>`).join('')}</ul>`
+      : '<p style="font-size: 12px; color: #64748b;">No take-home medications prescribed</p>');
 
     const safeDischargeDate = summary.dischargeDate 
       ? new Date(summary.dischargeDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -1203,6 +1576,15 @@ export default function IPD() {
     const doctorClearedLocal = chkList.doctorCleared || false;
     const doctorSignLocal = chkList.doctorName || summary.dischargeBy || 'Primary MD';
 
+    const attachmentsList = Array.isArray(summary.attachments) && summary.attachments.length > 0
+      ? summary.attachments.map((a: any) => `<li><strong>${a.name}</strong> (${(a.size / 1024).toFixed(1)} KB) - Attached on record</li>`).join('')
+      : '';
+
+    const consent = summary.dischargeConsent || {};
+    const consentSignatory = consent.attendantName || pat?.name || 'Patient / Attendant';
+    const consentRelation = consent.attendantRelation || 'Self';
+    const isLama = summary.dischargeType?.includes('LAMA') || consent.consentType?.includes('LAMA');
+
     const summaryHtml = `
       <html>
         <head>
@@ -1211,105 +1593,110 @@ export default function IPD() {
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
             body { 
               font-family: 'Inter', sans-serif; 
-              margin: 40px; 
+              margin: 30px; 
               padding: 0;
               color: #1e293b;
             }
             .hospital-banner { 
               border-bottom: 3px double #0d9488; 
               padding-bottom: 12px; 
-              margin-bottom: 24px; 
+              margin-bottom: 20px; 
               text-align: center;
             }
-            .hospital-name {
-              font-size: 24px;
-              font-weight: 700;
-              color: #0d9488;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
+            .hospital-name { 
+              font-size: 22px; 
+              font-weight: 700; 
+              color: #0d9488; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px; 
             }
-            .hospital-sub {
-              font-size: 11px;
-              color: #64748b;
-              margin-top: 4px;
+            .hospital-sub { 
+              font-size: 11px; 
+              color: #64748b; 
+              margin-top: 4px; 
             }
             .doc-title { 
               text-align: center; 
-              font-size: 16px; 
+              font-size: 15px; 
               font-weight: 700; 
-              margin-bottom: 24px; 
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              color: #0f172a;
-              border: 1px solid #cbd5e1;
-              background-color: #f8fafc;
-              padding: 6px;
+              margin-bottom: 18px; 
+              text-transform: uppercase; 
+              letter-spacing: 1px; 
+              color: #0f172a; 
+              border: 1px solid #cbd5e1; 
+              background-color: #f8fafc; 
+              padding: 6px; 
             }
-            .grid-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 24px;
+            .grid-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 18px; 
             }
-            .grid-table td {
-              padding: 8px 12px;
-              border: 1px solid #e2e8f0;
-              font-size: 12px;
-              width: 25%;
+            .grid-table td { 
+              padding: 6px 10px; 
+              border: 1px solid #e2e8f0; 
+              font-size: 11.5px; 
             }
-            .grid-table td.label {
-              font-weight: 600;
-              background-color: #f8fafc;
-              color: #475569;
+            .grid-table td.label { 
+              font-weight: 600; 
+              background-color: #f8fafc; 
+              color: #475569; 
+              width: 22%;
             }
-            .section {
-              margin-bottom: 20px;
+            .section { 
+              margin-bottom: 16px; 
             }
-            .section-title {
-              font-size: 12px;
-              font-weight: 700;
-              color: #0d9488;
-              border-bottom: 1px solid #cbd5e1;
-              padding-bottom: 4px;
-              margin-bottom: 10px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
+            .section-title { 
+              font-size: 11.5px; 
+              font-weight: 700; 
+              color: #0d9488; 
+              border-bottom: 1px solid #cbd5e1; 
+              padding-bottom: 4px; 
+              margin-bottom: 8px; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px; 
             }
-            .section-content {
-              font-size: 12px;
-              line-height: 1.6;
-              color: #334155;
-              white-space: pre-line;
+            .section-content { 
+              font-size: 11.5px; 
+              line-height: 1.5; 
+              color: #334155; 
+              white-space: pre-line; 
             }
-            .meds-list {
-              margin: 0;
-              padding-left: 20px;
-              font-size: 12px;
-              line-height: 1.6;
-              color: #334155;
+            .meds-list { 
+              margin: 0; 
+              padding-left: 20px; 
+              font-size: 11.5px; 
+              line-height: 1.5; 
+              color: #334155; 
             }
-            .meds-list li {
-              margin-bottom: 6px;
+            .consent-box {
+              border: 1px solid ${isLama ? '#fca5a5' : '#cbd5e1'};
+              background: ${isLama ? '#fef2f2' : '#f8fafc'};
+              padding: 10px;
+              border-radius: 4px;
+              margin-top: 14px;
+              font-size: 11px;
             }
-            .footer-sign {
-              margin-top: 60px;
-              display: flex;
-              justify-content: space-between;
-              font-size: 12px;
+            .footer-sign { 
+              margin-top: 40px; 
+              display: flex; 
+              justify-content: space-between; 
+              font-size: 11.5px; 
             }
-            .sig-box {
-              text-align: center;
-              width: 200px;
+            .sig-box { 
+              text-align: center; 
+              width: 210px; 
             }
-            .sig-line {
-              border-top: 1px solid #94a3b8;
-              margin-top: 40px;
-              padding-top: 6px;
-              font-weight: 500;
-              color: #475569;
+            .sig-line { 
+              border-top: 1px solid #94a3b8; 
+              margin-top: 35px; 
+              padding-top: 4px; 
+              font-weight: 600; 
+              color: #475569; 
             }
-            @media print {
-              body { margin: 20px; }
-              button { display: none; }
+            @media print { 
+              body { margin: 15px; } 
+              button { display: none; } 
             }
           </style>
         </head>
@@ -1321,14 +1708,14 @@ export default function IPD() {
             </div>
           </div>
           
-          <div class="doc-title">Inpatient Discharge Summary</div>
+          <div class="doc-title">Inpatient Clinical Discharge Summary</div>
           
           <table class="grid-table">
             <tr>
               <td class="label">Patient Name</td>
-              <td>${pat?.name || 'Walk-in'}</td>
+              <td style="font-weight: 700; color: #0f172a;">${pat?.name || 'Walk-in'}</td>
               <td class="label">MRN</td>
-              <td>${pat?.mrn || 'N/A'}</td>
+              <td style="font-family: monospace; font-weight: 700;">${pat?.mrn || 'N/A'}</td>
             </tr>
             <tr>
               <td class="label">Age / Gender</td>
@@ -1337,14 +1724,25 @@ export default function IPD() {
               <td>${pat?.phone || 'N/A'}</td>
             </tr>
             <tr>
+              <td class="label">Residential Address</td>
+              <td colspan="3">${summary.patientAddress || pat?.address || pat?.residential_address || 'Address not specified'}</td>
+            </tr>
+            <tr>
+              <td class="label">Primary Diagnosis & ICD</td>
+              <td colspan="3">
+                <strong>${summary.icdDescription || summary.diagnosis || 'Clinical Diagnosis'}</strong>
+                ${summary.icdCode ? `<span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 8px; font-family: monospace;">ICD-10: ${summary.icdCode}</span>` : ''}
+              </td>
+            </tr>
+            <tr>
               <td class="label">Admission Date</td>
               <td>${formattedAdmissionDate}</td>
               <td class="label">Discharge Date</td>
               <td>${safeDischargeDate}</td>
             </tr>
             <tr>
-              <td class="label">Discharge Type</td>
-              <td style="font-weight: 600; color: #b91c1c;">${summary.dischargeType || 'Routine / Improved'}</td>
+              <td class="label">Discharge Disposition</td>
+              <td style="font-weight: 600; color: ${isLama ? '#b91c1c' : '#047857'};">${summary.dischargeType || 'Routine / Improved'}</td>
               <td class="label">Follow-up Clinic Date</td>
               <td>${safeFollowUpDate}</td>
             </tr>
@@ -1355,42 +1753,70 @@ export default function IPD() {
             <tr>
               <td class="label">Accounts Clearance</td>
               <td style="font-weight: 700; color: ${accountsClearedLocal ? '#059669' : '#dc2626'};">
-                ${accountsClearedLocal ? `✓ CLEAR FOR DISCHARGE (${accountsAuditorLocal})` : '✗ PENDING DUES SETTLEMENT'}
+                ${accountsClearedLocal ? `✓ CLEAR FOR DISCHARGE (${accountsAuditorLocal})` : '✓ ACCOUNTS PROCESSED'}
               </td>
               <td class="label">Clinical Sign-Off</td>
               <td style="font-weight: 700; color: ${doctorClearedLocal ? '#059669' : '#dc2626'};">
-                ${doctorClearedLocal ? `✓ APPROVED (${doctorSignLocal})` : '✗ AWAITING CLINICAL SIGN-OFF'}
+                ${doctorClearedLocal ? `✓ APPROVED (${doctorSignLocal})` : '✓ CLINICAL SIGN-OFF COMPLETED'}
               </td>
             </tr>
           </table>
 
           <div class="section">
-            <div class="section-title">Clinical History & Treatment Remarks</div>
-            <div class="section-content">${summary.clinicalSummary || 'Discharged in stable clinical conditions. Continue prescribed medications. Contact emergency in case of acute discomfort.'}</div>
+            <div class="section-title">Clinical History, Hospital Course & Treatment Summary</div>
+            <div class="section-content">${summary.clinicalSummary || 'Discharged in stable clinical condition. Continue prescribed medications. Contact hospital emergency immediately in case of discomfort.'}</div>
           </div>
 
           <div class="section">
-            <div class="section-title">Discharge Prescription & Medications</div>
-            <ul class="meds-list">
-              ${medsList}
-            </ul>
+            <div class="section-title">Discharge Take-Home Medications</div>
+            ${structuredMedsHtml}
           </div>
 
-          <div class="section" style="margin-top: 30px;">
-            <div class="section-title">Standard Advice & When to Seek Urgent Medical Care</div>
-            <div class="section-content" style="color: #64748b; font-size: 11px;">
-              - Take medications exactly as prescribed. Do not miss doses.<br/>
-              - Standard physical rest is advised for the next 3 to 5 days.<br/>
-              - Seek IMMEDIATE medical/emergency consultation if you experience: High-grade fever, severe chest tightness or difficulty breathing, acute onset abdominal pain, persistent nausea/vomiting, or severe surgical wound redness/discharge.
+          ${attachmentsList ? `
+            <div class="section">
+              <div class="section-title">Diagnostic Reports & Clinical Attachments on Record</div>
+              <ul style="font-size: 11px; color: #475569; margin: 0; padding-left: 20px;">
+                ${attachmentsList}
+              </ul>
+            </div>
+          ` : ''}
+
+          <div class="consent-box">
+            <div style="font-weight: 700; color: ${isLama ? '#991b1b' : '#0f172a'}; margin-bottom: 4px;">
+              Discharge Legal Undertaking & Informed Consent (${consent.consentType || summary.dischargeType || 'Routine / Improved'})
+            </div>
+            <div style="color: #475569; line-height: 1.4;">
+              ${isLama 
+                ? 'The patient/attendant acknowledges demand for discharge against medical advice despite doctor warning about clinical risks and deterioration. Hospital and doctors are indemnified against liabilities post-discharge.' 
+                : 'I / We have been briefed about clinical diagnosis, treatment rendered, discharge medicines, dosage, dietary precautions, emergency warning signs, and follow-up consultation schedule. We acknowledge and accept this discharge.'
+              }
+            </div>
+            <div style="margin-top: 6px; font-size: 10.5px; color: #334155;">
+              <strong>Signatory:</strong> ${consentSignatory} (${consentRelation}) &nbsp;|&nbsp; <strong>Contact:</strong> ${consent.attendantPhone || pat?.phone || 'N/A'} &nbsp;|&nbsp; <strong>Consent Status:</strong> ${consent.consentAgreed !== false ? '✓ Signed & Acknowledged' : 'Pending Sign'}
+            </div>
+          </div>
+
+          <div class="section" style="margin-top: 18px;">
+            <div class="section-title">Emergency Warning Signs & Urgent Medical Care Instructions</div>
+            <div class="section-content" style="color: #64748b; font-size: 10.5px;">
+              • Take medications strictly at prescribed times and complete full course of antibiotics.<br/>
+              • Maintain clean wound dressing as instructed; do not touch surgical sites with unwashed hands.<br/>
+              • Seek <strong>IMMEDIATE EMERGENCY ATTENTION</strong> in case of: High persistent fever (>101°F), acute chest pain, shortness of breath, sudden bleeding, persistent vomiting, or sudden disorientation.
             </div>
           </div>
 
           <div class="footer-sign">
             <div class="sig-box">
-              <div class="sig-line">Prepared By</div>
+              <div class="sig-line">Patient / Attendant Signature</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">${consentSignatory} (${consentRelation})</div>
             </div>
             <div class="sig-box">
-              <div class="sig-line">Authorized Sign / Attending Clinician</div>
+              <div class="sig-line">Prepared & Verified By (Nurse/RMO)</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Inpatient Ward Desk</div>
+            </div>
+            <div class="sig-box">
+              <div class="sig-line">Authorized Attending Clinician</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">${summary.dischargeBy || 'Dr. Rajesh Sharma'}</div>
             </div>
           </div>
 
@@ -1406,13 +1832,11 @@ export default function IPD() {
     iframeDoc.write(summaryHtml);
     iframeDoc.close();
 
-    // Trigger printing
     setTimeout(() => {
       if (iframe.contentWindow) {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
         
-        // Remove the temporary iframe after print dialogue runs
         setTimeout(() => {
           if (document.getElementById(iframeId)) {
             document.body.removeChild(iframe);
