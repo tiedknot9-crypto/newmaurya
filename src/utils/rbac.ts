@@ -115,8 +115,6 @@ export const hasMenuAccess = (path: string, userRole: string | undefined | null)
       return ['ACCOUNTANT'].includes(norm);
     case '/staff':
       return false; // restricted to admins only
-    case '/manual':
-      return true; // open to all roles
     default:
       return true;
   }

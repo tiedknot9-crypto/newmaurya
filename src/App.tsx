@@ -21,7 +21,6 @@ import {
   Scissors,
   ClipboardList,
   Shield,
-  BookOpen,
   ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -55,7 +54,6 @@ const OTManagement = lazy(() => import('./components/OTManagement'));
 const PatientOverview = lazy(() => import('./components/PatientOverview'));
 const Lab = lazy(() => import('./components/Lab'));
 const Login = lazy(() => import('./components/Login'));
-const UserManual = lazy(() => import('./components/UserManual'));
 const Billing = lazy(() => import('./components/Billing'));
 const AdminSettings = lazy(() => import('./components/Settings'));
 const Staff = lazy(() => import('./components/Staff'));
@@ -77,7 +75,6 @@ export const routePreloaders: Record<string, () => Promise<any>> = {
   '/staff': () => import('./components/Staff'),
   '/expenses': () => import('./components/Expenses'),
   '/settings': () => import('./components/Settings'),
-  '/manual': () => import('./components/UserManual'),
 };
 
 function PageLoader() {
@@ -130,7 +127,6 @@ const navSections = [
     items: [
       { name: 'Admin Settings', icon: Settings, path: '/settings', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS'] },
       { name: 'Staff Management', icon: Users, path: '/staff', roles: ['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN'] },
-      { name: 'User Manual & Guide', icon: BookOpen, path: '/manual', roles: ['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST'] },
     ]
   }
 ];
@@ -785,7 +781,6 @@ export default function App() {
               import('./components/Staff'),
               import('./components/Expenses'),
               import('./components/Settings'),
-              import('./components/UserManual'),
               import('./components/PharmacyPOS'),
             ]);
           } catch {
@@ -924,7 +919,8 @@ function AppLayout({ user, hospitalInfo, handleLogout, isMobileMenuOpen, setIsMo
               <Route path="/billing" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ACCOUNTANT', 'ACCOUNTS', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK']}><Billing /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN', 'ACCOUNTANT', 'ACCOUNTS']}><AdminSettings currentUser={user} onUserUpdate={(updatedUser) => setUser(updatedUser)} onHospitalUpdate={(info) => setHospitalInfo(info)} /></ProtectedRoute>} />
               <Route path="/staff" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'ADMIN', 'HOSPITAL_ADMIN']}><Staff /></ProtectedRoute>} />
-              <Route path="/manual" element={<ProtectedRoute user={user} allowedRoles={['SUPER_ADMIN', 'DOCTOR', 'RECEPTIONIST', 'RECEPTION', 'FRONT_DESK', 'NURSE', 'LAB_STAFF', 'PHARMACIST', 'ACCOUNTANT', 'ACCOUNTS', 'SURGEON', 'RADIOLOGIST']}><UserManual /></ProtectedRoute>} />
+              <Route path="/manual" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </div>
