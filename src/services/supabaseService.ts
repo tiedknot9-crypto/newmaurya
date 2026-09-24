@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { storage, STORAGE_KEYS } from '../lib/storage';
 import { getLocalDateStr } from '../lib/utils';
 import { DEFAULT_PHARMACY_SETTINGS } from '../lib/pharmacyInvoicePrint';
+import { isOldPharmacyTestData } from '../utils/cleanOldPharmacyData';
 import { 
   MOCK_PRESCRIPTIONS, 
   MOCK_NURSE_SHIFTS, 
@@ -1542,18 +1543,6 @@ export function normalizeBed(b: any) {
 
 export function normalizeDischargeSummary(d: any) {
   if (!d) return d;
-  let clinicalText = d.clinical_summary || d.clinicalSummary || '';
-  let meta: any = {};
-  const metaMatch = clinicalText.match(/<!-- HMS_META: ([\s\S]*?) -->/);
-  if (metaMatch) {
-    try {
-      meta = JSON.parse(metaMatch[1]);
-      clinicalText = clinicalText.replace(/\n\n<!-- HMS_META:[\s\S]*?-->/g, '').trim();
-    } catch (e) {
-      console.warn('Failed parsing HMS_META in discharge summary:', e);
-    }
-  }
-
   return {
     ...d,
     id: d.id,
@@ -1566,24 +1555,13 @@ export function normalizeDischargeSummary(d: any) {
     followUpDate: d.follow_up_date || d.followUpDate || '',
     follow_up_date: d.follow_up_date || d.followUpDate || '',
     medications: d.medications || '',
-    clinicalSummary: clinicalText,
-    clinical_summary: clinicalText,
+    clinicalSummary: d.clinical_summary || d.clinicalSummary || '',
     dischargeDate: d.discharge_date || d.dischargeDate || new Date().toISOString(),
     discharge_date: d.discharge_date || d.dischargeDate || new Date().toISOString(),
     dischargeBy: d.discharge_by || d.dischargeBy || 'Dr. Rajesh Sharma',
     discharge_by: d.discharge_by || d.dischargeBy || 'Dr. Rajesh Sharma',
     admissionDate: d.admission_date || d.admissionDate || '',
-    admission_date: d.admission_date || d.admissionDate || '',
-    // Rich metadata
-    icdCode: d.icdCode || d.icd_code || meta.icdCode || '',
-    icdDescription: d.icdDescription || d.icd_description || meta.icdDescription || '',
-    diagnosis: d.diagnosis || meta.diagnosis || '',
-    medicines: Array.isArray(d.medicines) && d.medicines.length > 0 ? d.medicines : (meta.medicines || []),
-    attachments: Array.isArray(d.attachments) && d.attachments.length > 0 ? d.attachments : (meta.attachments || []),
-    dischargeConsent: d.dischargeConsent || d.discharge_consent || meta.dischargeConsent || null,
-    patientAddress: d.patientAddress || d.patient_address || meta.patientAddress || '',
-    treatmentGiven: d.treatmentGiven || meta.treatmentGiven || '',
-    conditionAtDischarge: d.conditionAtDischarge || meta.conditionAtDischarge || ''
+    admission_date: d.admission_date || d.admissionDate || ''
   };
 }
 
@@ -2046,16 +2024,17 @@ const rawSupabaseService = {
         return sanitizeInvoiceIpdBilling(mappedInv);
       }).filter((inv: any) => {
         const pat = inv.patients || { id: inv.patient_id || inv.patientId, name: inv.patient_name || inv.patientName };
-        return !isDummyPatient(pat);
+        return !isDummyPatient(pat) && !isOldPharmacyTestData(inv);
       }) : [];
 
       const billingClearedAt = storage.get<string | null>('hms_billing_cleared_at', null);
       const defaultVal = billingClearedAt ? [] : MOCK_BILLING;
       const localInvoices = storage.get(STORAGE_KEYS.BILLING, defaultVal) || [];
       
-      // Merge: any local/mock invoice that is not present in DB
+      // Merge: any local/mock invoice that is not present in DB, excluding old pharmacy test data
       const offlineInvoices = localInvoices.filter((li: any) => {
         if (!li) return false;
+        if (isOldPharmacyTestData(li)) return false;
         const liId = String(li.id || '');
         const liNum = String(li.invoice_number || li.invoiceNumber || '');
         return !dbInvoices.some((di: any) => {
@@ -2076,7 +2055,7 @@ const rawSupabaseService = {
       const cached = storage.get(STORAGE_KEYS.BILLING, defaultVal) || [];
       return cached.map(mapInvoiceFromPostgres).filter((inv: any) => {
         const pat = inv.patients || { id: inv.patient_id || inv.patientId, name: inv.patient_name || inv.patientName };
-        return !isDummyPatient(pat);
+        return !isDummyPatient(pat) && !isOldPharmacyTestData(inv);
       });
     }
   },
@@ -4871,30 +4850,13 @@ const rawSupabaseService = {
 
   createDischargeSummary: async (summary: any) => {
     try {
-      const meta: any = {};
-      if (summary.icdCode) meta.icdCode = summary.icdCode;
-      if (summary.icdDescription) meta.icdDescription = summary.icdDescription;
-      if (summary.diagnosis) meta.diagnosis = summary.diagnosis;
-      if (summary.medicines && summary.medicines.length > 0) meta.medicines = summary.medicines;
-      if (summary.attachments && summary.attachments.length > 0) meta.attachments = summary.attachments;
-      if (summary.dischargeConsent) meta.dischargeConsent = summary.dischargeConsent;
-      if (summary.patientAddress) meta.patientAddress = summary.patientAddress;
-      if (summary.treatmentGiven) meta.treatmentGiven = summary.treatmentGiven;
-      if (summary.conditionAtDischarge) meta.conditionAtDischarge = summary.conditionAtDischarge;
-
-      let clinicalText = summary.clinicalSummary || summary.clinical_summary || '';
-      clinicalText = clinicalText.replace(/\n\n<!-- HMS_META:[\s\S]*?-->/g, '').trim();
-      const packedClinicalSummary = Object.keys(meta).length > 0
-        ? `${clinicalText}\n\n<!-- HMS_META: ${JSON.stringify(meta)} -->`
-        : clinicalText;
-
       const dbSummary: any = {
         admission_id: summary.admissionId || summary.admission_id || null,
         patient_id: summary.patientId || summary.patient_id,
         discharge_type: summary.dischargeType || summary.discharge_type || 'Routine / Improved',
         follow_up_date: summary.followUpDate || summary.follow_up_date || null,
         medications: summary.medications || '',
-        clinical_summary: packedClinicalSummary,
+        clinical_summary: summary.clinicalSummary || summary.clinical_summary || '',
         discharge_date: summary.dischargeDate || summary.discharge_date || new Date().toISOString(),
         discharge_by: summary.dischargeBy || summary.discharge_by || 'Dr. Rajesh Sharma'
       };
@@ -4905,16 +4867,10 @@ const rawSupabaseService = {
       
       const data = await selfHealingQuery('insert', 'discharge_summaries', dbSummary);
       if (data && data[0]) {
-        const normalized = normalizeDischargeSummary({
+        return normalizeDischargeSummary({
           ...summary,
           ...data[0]
         });
-        // Also update local cache
-        const list = storage.get('hms_discharge_summaries', []);
-        const filtered = list.filter((item: any) => item.id !== normalized.id);
-        filtered.unshift(normalized);
-        storage.set('hms_discharge_summaries', filtered);
-        return normalized;
       }
       return null;
     } catch (error: any) {
@@ -4929,92 +4885,6 @@ const rawSupabaseService = {
       list.unshift(newD);
       storage.set('hms_discharge_summaries', list);
       return newD;
-    }
-  },
-
-  updateDischargeSummary: async (id: string, updates: any) => {
-    try {
-      const meta: any = {};
-      if (updates.icdCode !== undefined) meta.icdCode = updates.icdCode;
-      if (updates.icdDescription !== undefined) meta.icdDescription = updates.icdDescription;
-      if (updates.diagnosis !== undefined) meta.diagnosis = updates.diagnosis;
-      if (updates.medicines !== undefined) meta.medicines = updates.medicines;
-      if (updates.attachments !== undefined) meta.attachments = updates.attachments;
-      if (updates.dischargeConsent !== undefined) meta.dischargeConsent = updates.dischargeConsent;
-      if (updates.patientAddress !== undefined) meta.patientAddress = updates.patientAddress;
-      if (updates.treatmentGiven !== undefined) meta.treatmentGiven = updates.treatmentGiven;
-      if (updates.conditionAtDischarge !== undefined) meta.conditionAtDischarge = updates.conditionAtDischarge;
-
-      let clinicalText = updates.clinicalSummary !== undefined ? updates.clinicalSummary : (updates.clinical_summary || '');
-      clinicalText = clinicalText.replace(/\n\n<!-- HMS_META:[\s\S]*?-->/g, '').trim();
-      const packedClinicalSummary = Object.keys(meta).length > 0
-        ? `${clinicalText}\n\n<!-- HMS_META: ${JSON.stringify(meta)} -->`
-        : clinicalText;
-
-      const dbUpdates: any = {};
-      if (updates.dischargeType || updates.discharge_type) dbUpdates.discharge_type = updates.dischargeType || updates.discharge_type;
-      if (updates.followUpDate !== undefined) dbUpdates.follow_up_date = updates.followUpDate || null;
-      if (updates.medications !== undefined) dbUpdates.medications = updates.medications;
-      if (updates.clinicalSummary !== undefined || updates.clinical_summary !== undefined || Object.keys(meta).length > 0) {
-        dbUpdates.clinical_summary = packedClinicalSummary;
-      }
-      if (updates.dischargeDate || updates.discharge_date) dbUpdates.discharge_date = updates.dischargeDate || updates.discharge_date;
-      if (updates.dischargeBy || updates.discharge_by) dbUpdates.discharge_by = updates.dischargeBy || updates.discharge_by;
-
-      if (isUuid(id)) {
-        await selfHealingQuery('update', 'discharge_summaries', dbUpdates, { id });
-      }
-
-      const list = storage.get('hms_discharge_summaries', []);
-      const index = list.findIndex((item: any) => item.id === id);
-      const existing = index !== -1 ? list[index] : {};
-      const updatedItem = normalizeDischargeSummary({
-        ...existing,
-        ...updates,
-        id
-      });
-      if (index !== -1) {
-        list[index] = updatedItem;
-      } else {
-        list.unshift(updatedItem);
-      }
-      storage.set('hms_discharge_summaries', list);
-      return updatedItem;
-    } catch (error: any) {
-      console.warn('Database discharge summary update error, updating local cache:', error.message);
-      const list = storage.get('hms_discharge_summaries', []);
-      const index = list.findIndex((item: any) => item.id === id);
-      const existing = index !== -1 ? list[index] : {};
-      const updatedItem = normalizeDischargeSummary({
-        ...existing,
-        ...updates,
-        id
-      });
-      if (index !== -1) {
-        list[index] = updatedItem;
-      } else {
-        list.unshift(updatedItem);
-      }
-      storage.set('hms_discharge_summaries', list);
-      return updatedItem;
-    }
-  },
-
-  deleteDischargeSummary: async (id: string) => {
-    try {
-      if (isUuid(id)) {
-        await supabase.from('discharge_summaries').delete().eq('id', id);
-      }
-      const list = storage.get('hms_discharge_summaries', []);
-      const filtered = list.filter((item: any) => item.id !== id);
-      storage.set('hms_discharge_summaries', filtered);
-      return true;
-    } catch (error: any) {
-      console.warn('Error deleting discharge summary:', error.message);
-      const list = storage.get('hms_discharge_summaries', []);
-      const filtered = list.filter((item: any) => item.id !== id);
-      storage.set('hms_discharge_summaries', filtered);
-      return true;
     }
   },
 

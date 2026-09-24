@@ -68,6 +68,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Link, useSearchParams } from 'react-router-dom';
 import { generatePharmacyInvoiceHtml, generatePharmacyReturnReceiptHtml, DEFAULT_PHARMACY_SETTINGS } from '@/lib/pharmacyInvoicePrint';
+import { isOldPharmacyTestData, purgeOldPharmacyData } from '@/utils/cleanOldPharmacyData';
 
 export const PHARMACY_CATEGORIES = [
   { id: 'Medicine', name: 'Medicine (Tablets, Syrups, Standard Pharma)', defaultTax: 12, defaultHsn: '3004', badge: 'GST 12%' },
@@ -199,7 +200,54 @@ export default function Pharmacy() {
     }
   };
 
+  const handleDeletePharmacyBill = (bill: any) => {
+    setDeleteConfirm({
+      isOpen: true,
+      title: `Delete Bill ${bill.sequenceNumber || bill.invoice_number || bill.id}`,
+      description: `Are you sure you want to permanently delete this pharmacy bill for ${bill.patient_name || 'Walk-in Customer'}? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await supabaseService.deleteInvoice(bill.id);
+          
+          const sessionBills = storage.get<any[]>(STORAGE_KEYS.BILLING, []);
+          const updated = sessionBills.filter((b: any) => String(b.id) !== String(bill.id));
+          storage.set(STORAGE_KEYS.BILLING, updated);
+
+          const pharmaBills = storage.get<any[]>(STORAGE_KEYS.PHARMACY_BILLS, []);
+          if (Array.isArray(pharmaBills)) {
+            storage.set(STORAGE_KEYS.PHARMACY_BILLS, pharmaBills.filter((b: any) => String(b.id) !== String(bill.id)));
+          }
+
+          setBills(prev => prev.filter(b => b.id !== bill.id));
+          toast.success(`Pharmacy bill ${bill.sequenceNumber || ''} deleted successfully`);
+        } catch (e: any) {
+          console.error(e);
+          toast.error('Failed to delete pharmacy bill');
+        }
+      }
+    });
+  };
+
+  const handleClearOldPharmacyBills = () => {
+    setDeleteConfirm({
+      isOpen: true,
+      title: 'Remove Old Test Pharmacy Records',
+      description: 'Are you sure you want to remove old demo/test pharmacy billing records from August 2026? Active patient invoices will not be affected.',
+      onConfirm: async () => {
+        try {
+          purgeOldPharmacyData();
+          setBills(prev => prev.filter(b => !isOldPharmacyTestData(b)));
+          toast.success('Old pharmacy test records removed successfully');
+          fetchData();
+        } catch (e) {
+          toast.error('Failed to clear old pharmacy data');
+        }
+      }
+    });
+  };
+
   const fetchData = async () => {
+    purgeOldPharmacyData();
     if (inventory.length === 0) {
       setLoading(true);
     }
@@ -214,7 +262,12 @@ export default function Pharmacy() {
     ]);
 
     if (invData) setInventory(invData);
-    if (invoicesData) setBills(invoicesData.filter(inv => inv.type === 'Pharmacy' || inv.invoice_items?.some((item: any) => item.category === 'PHARMACY')));
+    if (invoicesData) {
+      const pharmaBills = invoicesData
+        .filter(inv => inv.type === 'Pharmacy' || inv.invoice_items?.some((item: any) => item.category?.toUpperCase() === 'PHARMACY'))
+        .filter(inv => !isOldPharmacyTestData(inv));
+      setBills(pharmaBills);
+    }
     if (patientsData) setPatients(patientsData);
     if (admissionsData) setAdmissions(admissionsData);
     if (purchaseReturnsData && purchaseReturnsData.length > 0) setPurchaseReturns(purchaseReturnsData);
@@ -2469,14 +2522,28 @@ export default function Pharmacy() {
                   <CardDescription className="text-xs">View and manage pharmacy sales, filter by date range and payment mode.</CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-2xl">
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider block">Total Billed Amount</span>
-                    <span className="text-xl font-black text-emerald-700 leading-none">{formatCurrency(filteredBillsTotalAmount)}</span>
+                <div className="flex items-center gap-3">
+                  {!isAccountant && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-xs font-bold gap-1.5 h-10 rounded-xl"
+                      onClick={handleClearOldPharmacyBills}
+                      title="Clear old test records"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Clear Old Data
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-2xl">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider block">Total Billed Amount</span>
+                      <span className="text-xl font-black text-emerald-700 leading-none">{formatCurrency(filteredBillsTotalAmount)}</span>
+                    </div>
+                    <Badge variant="outline" className="bg-white text-emerald-800 border-emerald-300 font-bold ml-2 text-xs">
+                      {filteredBills.length} Bills
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="bg-white text-emerald-800 border-emerald-300 font-bold ml-2 text-xs">
-                    {filteredBills.length} Bills
-                  </Badge>
                 </div>
               </div>
 
@@ -2615,6 +2682,17 @@ export default function Pharmacy() {
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.success('Downloading invoice...')}>
                                 <Download className="w-4 h-4" />
                               </Button>
+                              {!isAccountant && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50" 
+                                  title="Delete Pharmacy Bill"
+                                  onClick={() => handleDeletePharmacyBill(bill)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

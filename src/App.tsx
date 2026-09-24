@@ -78,6 +78,7 @@ import { MOCK_PATIENTS, MOCK_USERS } from './mockData';
 import { User as UserType } from './types';
 import { supabaseService, syncOfflineDataWithSupabase } from '@/services/supabaseService';
 import { hasMenuAccess, normalizeRole } from '@/utils/rbac';
+import { purgeOldPharmacyData } from '@/utils/cleanOldPharmacyData';
 
 const navSections = [
   {
@@ -662,6 +663,9 @@ export default function App() {
         localStorage.setItem(clearedKey, 'true');
         console.log('Successfully completed one-time clean database purge.');
       }
+
+      // Purge old pharmacy test data (August 2026 test bills)
+      purgeOldPharmacyData();
     } catch (err) {
       console.warn('Error during one-time database purge:', err);
     }
