@@ -56,10 +56,13 @@ import { ConfirmDialog } from './ConfirmDialog';
 export default function Maternity() {
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   const isDeleteForbidden = false;
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => storage.get<any[]>(STORAGE_KEYS.PATIENTS, []) || []);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [newborns, setNewborns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedPatients = storage.get<any[]>(STORAGE_KEYS.PATIENTS, []);
+    return !cachedPatients || cachedPatients.length === 0;
+  });
   const [newDelivery, setNewDelivery] = useState({ 
     motherId: '', 
     date: '', 

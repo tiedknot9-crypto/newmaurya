@@ -47,13 +47,17 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { supabaseService } from '@/services/supabaseService';
 import { useDataSync } from '@/hooks/useDataSync';
 import { storage, STORAGE_KEYS } from '@/lib/storage';
+import { MOCK_USERS } from '@/mockData';
 import { canUserModifyRecord, normalizeRole } from '@/utils/rbac';
 
 export default function Staff() {
   const currentUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
   const isAccountant = normalizeRole(currentUser?.role) === 'ACCOUNTANT';
-  const [staff, setStaff] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<any[]>(() => storage.get<any[]>(STORAGE_KEYS.USERS, MOCK_USERS) || []);
+  const [loading, setLoading] = useState(() => {
+    const cachedUsers = storage.get<any[]>(STORAGE_KEYS.USERS, []);
+    return !cachedUsers || cachedUsers.length === 0;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);

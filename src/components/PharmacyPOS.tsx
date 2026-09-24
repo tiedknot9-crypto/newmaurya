@@ -351,7 +351,10 @@ export default function PharmacyPOS() {
   const [inventory, setInventory] = useState<any[]>(() => storage.get(STORAGE_KEYS.INVENTORY, MOCK_INVENTORY) || []);
   const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedInv = storage.get<any[]>(STORAGE_KEYS.INVENTORY, []);
+    return !cachedInv || cachedInv.length === 0;
+  });
   const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
 
   const [cartPulse, setCartPulse] = useState(false);

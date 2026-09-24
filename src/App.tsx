@@ -62,11 +62,35 @@ const Staff = lazy(() => import('./components/Staff'));
 const Pharmacy = lazy(() => import('./components/Pharmacy'));
 const PharmacyPOS = lazy(() => import('./components/PharmacyPOS'));
 
+// Instant route prefetcher map
+export const routePreloaders: Record<string, () => Promise<any>> = {
+  '/': () => import('./components/Dashboard'),
+  '/opd': () => import('./components/OPD'),
+  '/ipd': () => import('./components/IPD'),
+  '/pharmacy': () => import('./components/Pharmacy'),
+  '/pharmacy/pos': () => import('./components/PharmacyPOS'),
+  '/billing': () => import('./components/Billing'),
+  '/lab': () => import('./components/Lab'),
+  '/patient-overview': () => import('./components/PatientOverview'),
+  '/ot': () => import('./components/OTManagement'),
+  '/maternity': () => import('./components/Maternity'),
+  '/staff': () => import('./components/Staff'),
+  '/expenses': () => import('./components/Expenses'),
+  '/settings': () => import('./components/Settings'),
+  '/manual': () => import('./components/UserManual'),
+};
+
 function PageLoader() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[350px] h-full w-full gap-3 p-8 text-slate-500">
-      <div className="w-8 h-8 rounded-full border-3 border-medical-blue/20 border-t-medical-blue animate-spin" />
-      <p className="text-xs font-medium text-slate-400">Loading module...</p>
+    <div className="p-6 space-y-6 animate-pulse">
+      <div className="h-24 rounded-3xl bg-slate-200/70 w-full" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="h-20 rounded-2xl bg-slate-200/60" />
+        <div className="h-20 rounded-2xl bg-slate-200/60" />
+        <div className="h-20 rounded-2xl bg-slate-200/60" />
+        <div className="h-20 rounded-2xl bg-slate-200/60" />
+      </div>
+      <div className="h-80 rounded-2xl bg-slate-200/50" />
     </div>
   );
 }
@@ -206,6 +230,8 @@ function SidebarContent({ onLogout, user, hospitalInfo }: { onLogout: () => void
                     <Link
                       key={item.name}
                       to={item.path}
+                      onMouseEnter={() => routePreloaders[item.path]?.()}
+                      onTouchStart={() => routePreloaders[item.path]?.()}
                       className={`group relative flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
                         isActive 
                           ? 'bg-blue-600 text-white shadow-md shadow-blue-200/80' 
@@ -733,6 +759,48 @@ export default function App() {
 
     if (isAuthenticated) {
       initializeDatabase();
+    }
+  }, [isAuthenticated]);
+
+  // Background idle prefetching of navigation route modules
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timer = setTimeout(() => {
+        const preloadModules = async () => {
+          try {
+            // Preload high-priority clinical and billing modules first
+            await Promise.allSettled([
+              import('./components/Dashboard'),
+              import('./components/OPD'),
+              import('./components/Pharmacy'),
+              import('./components/Billing'),
+              import('./components/IPD'),
+            ]);
+            // Preload secondary modules
+            await Promise.allSettled([
+              import('./components/Lab'),
+              import('./components/PatientOverview'),
+              import('./components/OTManagement'),
+              import('./components/Maternity'),
+              import('./components/Staff'),
+              import('./components/Expenses'),
+              import('./components/Settings'),
+              import('./components/UserManual'),
+              import('./components/PharmacyPOS'),
+            ]);
+          } catch {
+            // Silent error on prefetch
+          }
+        };
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(preloadModules, { timeout: 3000 });
+        } else {
+          preloadModules();
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated]);
 

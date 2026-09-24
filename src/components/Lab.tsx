@@ -366,7 +366,10 @@ export default function Lab() {
   const [activeTab, setActiveTab] = useState<'pathology' | 'radiology' | 'external'>('pathology');
   const [pathologyMode, setPathologyMode] = useState<'standard' | 'masters' | 'workbench' | 'reports' | 'advanced'>('standard');
   const [mainTab, setMainTab] = useState<'orders' | 'billing' | 'appointments' | 'setup'>('orders');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedPatients = storage.get<any[]>(STORAGE_KEYS.PATIENTS, []);
+    return !cachedPatients || cachedPatients.length === 0;
+  });
   const [patients, setPatients] = useState<any[]>(() => (storage.get(STORAGE_KEYS.PATIENTS, MOCK_PATIENTS) || []).filter((p: any) => !isDummyPatient(p)));
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [patientCategoryFilter, setPatientCategoryFilter] = useState<'ALL' | 'OPD' | 'IPD'>('ALL');

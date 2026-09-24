@@ -96,7 +96,10 @@ export default function Pharmacy() {
     return storage.get(STORAGE_KEYS.PHARMACY_RETURNS, []);
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedInv = storage.get<any[]>(STORAGE_KEYS.INVENTORY, []);
+    return !cachedInv || cachedInv.length === 0;
+  });
   const templateImage = storage.get(STORAGE_KEYS.TEMPLATE_IMAGE, null);
 
   const [pharmacySettings, setPharmacySettings] = useState<any>(() => {

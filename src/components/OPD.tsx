@@ -178,7 +178,11 @@ export default function OPD() {
     }
   };
   const [isTokenSuccessOpen, setIsTokenSuccessOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedPatients = storage.get<any[]>(STORAGE_KEYS.PATIENTS, []);
+    const cachedApts = storage.get<any[]>(STORAGE_KEYS.APPOINTMENTS, []);
+    return (!cachedPatients || cachedPatients.length === 0) && (!cachedApts || cachedApts.length === 0);
+  });
   const [selectedDoctorFilter, setSelectedDoctorFilter] = useState<string>(() => {
     const sessionUser = storage.get(STORAGE_KEYS.SESSION_USER, null);
     if (sessionUser && (sessionUser.role?.toUpperCase() === 'DOCTOR' || sessionUser.role?.toUpperCase() === 'SURGEON')) {

@@ -56,7 +56,10 @@ export default function OTManagement() {
   const [staff, setStaff] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('theatres');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedPatients = storage.get<any[]>(STORAGE_KEYS.PATIENTS, []);
+    return !cachedPatients || cachedPatients.length === 0;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [consentSearchQuery, setConsentSearchQuery] = useState('');
   const [consentTypeFilter, setConsentTypeFilter] = useState<'all' | 'combined' | 'operation' | 'anesthesia'>('all');
